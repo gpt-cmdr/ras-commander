@@ -430,3 +430,46 @@ RasGeometry.set_station_elevation("01", river, reach, station, sta_elev)
 GeomPreprocessor.clear_geompre_files()
 success = RasCmdr.compute_plan("01", dest_folder="./modified_run")
 ```
+
+
+## Inspect and remove unassigned legacy boundary lines
+
+`GeomBcLines.inspect_bc_line_blocks(geom_file)` reads UTF-8 geometry text without
+requiring a compiled boundary layer. It returns exact boundary names, flow-area
+associations, ordered X/Y coordinates, optional stored type text and an
+`area_association_status`. Coordinates retain source units; CRS and vertical
+reference are not inferred. Blank area associations remain `unassigned`.
+Malformed blocks fail before mutation.
+
+When the compiled boundary group is absent, `HdfBndry.get_bc_lines()` returns an
+empty geospatial frame that retains available source CRS and reports
+`boundary_condition_lines.status = "not_present_in_hdf"` in its attributes. It
+does not prove that authored boundaries are absent or unused.
+
+Before removing a drawing record, verify the selected plan's active names with
+`RasUnsteady.extract_boundary_and_tables()` and review the source geometry. Use a
+separate byte-identical clone. This example assumes the verified active names
+are `Inlet` and `Outlet`, and only `Unused drawing` has a blank area association:
+
+```python
+import hashlib
+from pathlib import Path
+from ras_commander.geom import GeomBcLines
+
+source = Path("delivered/Model.g01")
+clone = Path("runs/review-01/Model.g01")  # Existing independent input copy.
+receipt = GeomBcLines.delete_unassigned_bc_lines(
+    clone,
+    ["Unused drawing"],
+    source_geometry=source,
+    expected_geometry_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+    active_boundary_names=["Inlet", "Outlet"],
+)
+```
+
+The operation rejects assigned or active names, malformed block boundaries,
+source aliases and redirected paths. Nonredirecting directory mount points used
+by Wine remain valid. It preserves bytes outside removed blocks, keeps a backup
+and returns source/before/after hashes. Native preprocessing and engineering
+review are required before using the candidate hydraulically. Removal never
+supplies a missing boundary condition or establishes engineering approval.

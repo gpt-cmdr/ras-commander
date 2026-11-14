@@ -48,6 +48,7 @@ ras_commander.geom.GeomReferenceFeatures.add_reference_lines : Sibling
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Optional, Union
@@ -69,6 +70,43 @@ _BC_NAME_KEY = "BC Line Name="
 _BC_STORAGE_AREA_KEY = "BC Line Storage Area="
 _BC_TEXT_POSITION_KEY = "BC Line Text Position="
 _TEXT_POSITION_SENTINEL = " 1.79769313486232E+308 , 1.79769313486232E+308 "
+
+
+def _unaliased_geometry_file(value: str | Path) -> Path:
+    """Reject redirected/shared geometry below the trusted filesystem anchor.
+
+    A Wine drive anchor may be a Unix bridge reparse point. A descendant
+    reparse directory is accepted only when its canonical path is unchanged;
+    no file reparse point or redirected directory receives that exception.
+    """
+    path = Path(value).absolute()
+    anchor = Path(path.anchor)
+    for component in [path, *path.parents]:
+        if component == anchor:
+            continue
+        info = component.lstat()
+        reparse = bool(
+            getattr(info, "st_file_attributes", 0)
+            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        )
+        # Wine exposes container bind mounts as directory reparse points even
+        # though they do not redirect the selected path. A true junction or
+        # symlink resolves elsewhere and remains forbidden. File reparse points
+        # never receive this exception, even if their canonical spelling agrees.
+        nonredirecting_mount = (
+            reparse
+            and stat.S_ISDIR(info.st_mode)
+            and component.resolve(strict=True) == component.absolute()
+        )
+        if stat.S_ISLNK(info.st_mode) or (reparse and not nonredirecting_mount):
+            raise ValueError(
+                "BC repair paths cannot contain symlinks or redirecting reparse points below "
+                f"the filesystem anchor: {component}"
+            )
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("BC repair requires a regular geometry file without hardlink aliases")
+    return path.resolve(strict=True)
 
 
 def _build_bc_line_block(
@@ -180,6 +218,264 @@ def _bc_line_insertion_index(file_lines: List[str]) -> int:
 
 class GeomBcLines:
     """Read and author BC line geometry in `.g##` text files; do not instantiate."""
+
+    @staticmethod
+    @log_call
+    def inspect_bc_line_blocks(geom_file: str | Path) -> pd.DataFrame:
+        """Read complete authored BC blocks without mutation or CRS inference.
+
+        Coordinates retain source units. Blank legacy area associations remain
+        explicitly unassigned. Every block requires one area, arc and closing
+        text-position record. Unknown metadata, extra numeric payload, duplicate
+        terminators and non-BC features inside a block are errors.
+
+        Args:
+            geom_file (str or Path): Source HEC-RAS text geometry file.
+
+        Returns:
+            pd.DataFrame: One row per authored BC line, in file order. Columns
+            are ``name``, ``area_2d``, ``coordinates`` (ordered N-by-2 X/Y pairs
+            in source horizontal units), ``authored_type`` (str or None), and
+            ``area_association_status`` (``assigned`` or ``unassigned``).
+            Attributes include ``source_sha256``, an explicit unverified CRS,
+            source-unit metadata and zero-based half-open ``bc_block_spans``.
+            An input without BC lines returns the same columns with zero rows.
+
+        Raises:
+            ValueError: A block is malformed, incomplete, duplicated or has
+                nonfinite coordinates. Strict UTF-8 decoding errors are not
+                replaced or hidden.
+            OSError: The source cannot be read.
+        """
+        import hashlib
+
+        raw = Path(geom_file).read_bytes()
+        lines = raw.decode("utf-8", errors="strict").splitlines(keepends=True)
+        starts = [i for i, line in enumerate(lines) if line.startswith(_BC_NAME_KEY)]
+        if any(
+            line.startswith("BC Line ") for line in lines[: starts[0] if starts else len(lines)]
+        ):
+            raise ValueError("BC metadata has no opening BC line name")
+        records, spans, seen = [], {}, set()
+        positions = ("BC Line Start Position=", "BC Line Middle Position=", "BC Line End Position=")
+        for position, start in enumerate(starts):
+            limit = starts[position + 1] if position + 1 < len(starts) else len(lines)
+            closing = [
+                i for i in range(start + 1, limit) if lines[i].startswith(_BC_TEXT_POSITION_KEY)
+            ]
+            if len(closing) != 1:
+                raise ValueError("BC block requires exactly one closing text-position record")
+            end = closing[0] + 1
+            if any(line.startswith("BC Line ") for line in lines[end:limit]):
+                raise ValueError("BC metadata occurs outside its completed block")
+            name = lines[start][len(_BC_NAME_KEY) :].strip()
+            if not name or name in seen:
+                raise ValueError("Empty or duplicate BC line name: " + name)
+            seen.add(name)
+            area, coordinates, authored_type = None, None, None
+            seen_keys = set()
+            cursor = start + 1
+            while cursor < end - 1:
+                line = lines[cursor].rstrip("\r\n")
+                if not line.strip():
+                    cursor += 1
+                    continue
+                if line.startswith(_BC_STORAGE_AREA_KEY):
+                    key = _BC_STORAGE_AREA_KEY
+                    value = line[len(key) :].strip()
+                    if key in seen_keys:
+                        raise ValueError("Duplicate BC storage-area record")
+                    seen_keys.add(key)
+                    area = value
+                elif line.startswith("BC Line Type="):
+                    key = "BC Line Type="
+                    if key in seen_keys:
+                        raise ValueError("Duplicate authored BC type")
+                    seen_keys.add(key)
+                    authored_type = line[len(key) :].strip()
+                elif line.startswith(positions):
+                    key = next(key for key in positions if line.startswith(key))
+                    if key in seen_keys:
+                        raise ValueError("Duplicate BC position record")
+                    seen_keys.add(key)
+                    values = [float(value.strip()) for value in line[len(key) :].split(",")]
+                    if len(values) != 2 or not np.isfinite(values).all():
+                        raise ValueError("Malformed BC position metadata")
+                elif line.startswith("BC Line Arc="):
+                    if coordinates is not None:
+                        raise ValueError("Duplicate BC arc")
+                    count = int(line.split("=", 1)[1].strip())
+                    if count < 2:
+                        raise ValueError("BC arc requires at least two points")
+                    parsed, next_record = _parse_reference_line_coordinates(
+                        lines, cursor + 1, count, start, feature_label="BC line"
+                    )
+                    coordinates = [list(pair) for pair in parsed]
+                    cursor = next_record
+                    continue
+                else:
+                    raise ValueError("Unexpected geometry record inside BC block: " + line[:80])
+                cursor += 1
+            if area is None or coordinates is None:
+                raise ValueError("BC line lacks area or arc: " + name)
+            records.append(
+                {
+                    "name": name,
+                    "area_2d": area,
+                    "coordinates": coordinates,
+                    "authored_type": authored_type,
+                    "area_association_status": "assigned" if area else "unassigned",
+                }
+            )
+            spans[name] = [start, end]
+        frame = pd.DataFrame(
+            records,
+            columns=["name", "area_2d", "coordinates", "authored_type", "area_association_status"],
+        )
+        frame.attrs.update(
+            source_sha256=hashlib.sha256(raw).hexdigest(),
+            units="authored horizontal units; no conversion",
+            crs="unverified",
+            bc_block_spans=spans,
+        )
+        return frame
+
+    @staticmethod
+    @log_call
+    def delete_unassigned_bc_lines(
+        geom_file: str | Path,
+        names: list[str],
+        *,
+        source_geometry: str | Path,
+        expected_geometry_sha256: str,
+        active_boundary_names: list[str],
+    ) -> dict[str, Any]:
+        """Delete exact unassigned legacy BC blocks on a hash-bound clone only.
+
+        Assigned BCs and names used by active flow conditions are forbidden.
+        Preserve all bytes outside the selected complete blocks, including all
+        remaining coordinates, elevations, units, CRS, datum and forcing.
+        A full backup is retained beside the clone. Native preprocessing and
+        engineering review remain required; this receipt is not approval.
+
+        Args:
+            geom_file (str or Path): Independent writable clone geometry file.
+                Source and clone paths must be regular, unaliased files with
+                no symlinks, redirected directory components or file reparse
+                points. Canonically unchanged directory mount points and the
+                filesystem anchor may be Wine filesystem bridges.
+            names (list[str]): Unique exact names of unassigned lines to remove.
+            source_geometry (str or Path): Delivered geometry, read only.
+                The clone must lie outside this source directory and match
+                the source bytes initially.
+            expected_geometry_sha256 (str): Approved source/clone SHA-256.
+            active_boundary_names (list[str]): Exact names from the selected
+                flow inventory; no selected name may appear in this list.
+
+        Returns:
+            dict[str, Any]: ``ras-delete-unassigned-bc-lines/v1`` receipt with
+            source/clone and removed-block hashes, backup path, removed names
+            and point counts, remaining names, byte/source preservation checks,
+            ``native_rebuild_required=true`` and ``hydraulic_approval=false``.
+            Coordinates and elevations retain source units without conversion.
+
+        Raises:
+            ValueError: Inputs alias a source or another file, contain links,
+                fail source/hash checks, identify malformed or assigned lines,
+                or include an active line. No source bytes are modified.
+            OSError: Geometry or backup/candidate files cannot be read/written.
+        """
+        import hashlib
+        import uuid
+
+        path = _unaliased_geometry_file(geom_file)
+        source = _unaliased_geometry_file(source_geometry)
+        if path.samefile(source) or path.is_relative_to(source.parent):
+            raise ValueError("Geometry repair requires a clone outside source directory")
+        raw = path.read_bytes()
+        source_raw = source.read_bytes()
+        before_sha = hashlib.sha256(raw).hexdigest()
+        if (
+            before_sha != expected_geometry_sha256
+            or hashlib.sha256(source_raw).hexdigest() != expected_geometry_sha256
+        ):
+            raise ValueError("Source/clone geometry hash mismatch")
+        if (
+            not isinstance(names, list)
+            or not names
+            or len(names) != len(set(names))
+            or any(not isinstance(name, str) or not name for name in names)
+        ):
+            raise ValueError("Unique exact unassigned BC names are required")
+        if not isinstance(active_boundary_names, list) or any(
+            not isinstance(name, str) for name in active_boundary_names
+        ):
+            raise ValueError("Active flow boundary names must be explicit strings")
+        inventory = GeomBcLines.inspect_bc_line_blocks(path)
+        by_name = {row["name"]: row for row in inventory.to_dict(orient="records")}
+        if set(names) - set(by_name):
+            raise ValueError("Unknown unassigned BC name")
+        if any(by_name[name]["area_2d"] for name in names):
+            raise ValueError("Cannot delete an assigned BC line")
+        if set(names) & set(active_boundary_names):
+            raise ValueError("Cannot delete a BC referenced by an active flow condition")
+        lines = raw.decode("utf-8", errors="strict").splitlines(keepends=True)
+        spans = []
+        removed = []
+        for name in names:
+            hit = inventory.attrs["bc_block_spans"].get(name)
+            if hit is None:
+                raise ValueError("BC block not found after inventory")
+            start, end = hit
+            if not lines[end - 1].lstrip().startswith(_BC_TEXT_POSITION_KEY) or any(
+                line.startswith(_BC_NAME_KEY) for line in lines[start + 1 : end]
+            ):
+                raise ValueError("Unterminated or overlapping BC block")
+            spans.append((start, end))
+            removed.append(
+                {
+                    "name": name,
+                    "area_2d": "",
+                    "block_sha256": hashlib.sha256("".join(lines[start:end]).encode()).hexdigest(),
+                    "point_count": len(by_name[name]["coordinates"]),
+                }
+            )
+        for start, end in sorted(spans, reverse=True):
+            del lines[start:end]
+        candidate = "".join(lines).encode("utf-8")
+        backup = path.with_name(path.name + ".unassigned-bc-backup-" + uuid.uuid4().hex)
+        temporary = path.with_name("." + path.name + ".bc-repair-" + uuid.uuid4().hex)
+        backup.write_bytes(raw)
+        try:
+            with temporary.open("xb") as stream:
+                stream.write(candidate)
+            after_inventory = GeomBcLines.inspect_bc_line_blocks(temporary)
+            expected = [
+                row for row in inventory.to_dict(orient="records") if row["name"] not in names
+            ]
+            if after_inventory.to_dict(orient="records") != expected:
+                raise ValueError("Remaining authored boundary metadata changed")
+            if source.read_bytes() != source_raw or path.read_bytes() != raw:
+                raise ValueError("Source or clone changed during BC repair")
+            os.replace(temporary, path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        return {
+            "schema": "ras-delete-unassigned-bc-lines/v1",
+            "geometry_file": str(path),
+            "source_geometry": str(source),
+            "before_sha256": before_sha,
+            "after_sha256": hashlib.sha256(candidate).hexdigest(),
+            "backup_path": str(backup),
+            "removed": removed,
+            "remaining_boundary_names": [row["name"] for row in expected],
+            "active_boundary_names": list(active_boundary_names),
+            "other_geometry_bytes_preserved": True,
+            "source_unchanged": True,
+            "native_rebuild_required": True,
+            "hydraulic_approval": False,
+        }
 
     @staticmethod
     @log_call

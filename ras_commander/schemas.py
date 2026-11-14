@@ -2194,3 +2194,39 @@ DATAFRAME_SCHEMAS["dss_grid_zonal_statistics"] = {
     ],
     "note": "The column set is fixed: zonal_statistics always returns all eight statistics, whatever grid_to_point's statistics argument would select. A statistic with no valid cell is NaN unless raw=True, which keeps the stored missing marker. The str columns are object dtype on pandas 2. The frame is the engine's result, returned unchanged; attrs are empty.",
 }
+
+
+DATAFRAME_SCHEMAS["geometry_bc_line_blocks"] = {
+    "description": "Authored boundary lines in source coordinates/units; blank area associations remain unassigned.",
+    "accessor": "GeomBcLines.inspect_bc_line_blocks(geom_file)",
+    "source": "ras_commander.geom.GeomBcLines.GeomBcLines.inspect_bc_line_blocks()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {
+            "name": "name",
+            "dtype": "str",
+            "description": "Exact unpadded boundary name; unique in the file.",
+        },
+        {
+            "name": "area_2d",
+            "dtype": "str",
+            "description": "Authored flow-area association; empty means unassigned.",
+        },
+        {
+            "name": "coordinates",
+            "dtype": "list[list[float]]",
+            "description": "Ordered source X/Y pairs; no CRS or unit conversion.",
+        },
+        {
+            "name": "authored_type",
+            "dtype": "str | None",
+            "description": "Stored type text when present; never inferred from HDF.",
+        },
+        {
+            "name": "area_association_status",
+            "dtype": "str",
+            "description": "assigned or unassigned, from the authored area field.",
+        },
+    ],
+}
