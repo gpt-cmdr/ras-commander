@@ -11,9 +11,11 @@ alone does not identify a development checkout.
 
 - **Corrected notebook 731's DSS export.** Its earlier grids, from HEC-Vortex or the
   native importer's `align="vortex"`, had 7 corner cells missing in every record. They
-  were not NOAA NoData. Vortex rounds the output origin to whole cells, which left those
-  cells outside the cropped source and moved the stored storm totals by up to 0.05 in
-  (RMSE 0.018 in on totals near 14 in) from a warp of the complete NOAA grid. No model
+  were not NOAA NoData: they were corners of an unsnapped rectangular output lattice
+  that lay outside the reprojected crop, so the warp left them missing. Separately,
+  rounding the declared origin to whole cells on write moved the whole array, missing
+  cells included, by less than one cell, which put the stored storm totals up to
+  0.05 in (RMSE 0.018 in on totals near 14 in) from a warp of the complete NOAA grid. No model
   cell was missing. The native route now writes to a stated envelope (the model
   footprint snapped to whole cells, plus one cell). The notebook stops on any missing
   cell, on a difference above 0.005 in from the complete-grid warp, and on any mesh

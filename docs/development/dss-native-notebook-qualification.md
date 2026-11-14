@@ -60,17 +60,29 @@ files, and the HEC-RAS results.
 
 !!! warning "Correction (2026-11-14): 731 DSS grids before the stated-envelope fix"
     Every 731 export recorded in this report before 2026-11-14 used HEC-Vortex 0.13.3
-    or the native importer's `align="vortex"` option, which reproduces it. Both take
-    GDAL's suggested output extent and round its origin to whole cells, which moves
-    every warped value. On the public preset both wrote the same 144 records of
-    13 × 11 cells with **7 corner cells missing in every record**. Those cells are not
-    NOAA NoData: reading the complete `se100yr24ha` grid at each cell centre gives
-    13.7 to 14.3 in, and the cropped source has no NoData. They are lattice cells left
-    outside the cropped source. Against a GDAL bilinear warp of the complete NOAA grid
-    onto the same lattice, the stored storm totals differed by up to 0.050 in (RMSE
-    0.018 in, on totals near 14 in); a GDAL warp of the importer's own cropped input
-    also differed from them by up to 0.031 in, so the move, not the crop, explains most of
-    it. The notebook's footprint check (no missing cell over the model polygon) passed,
+    or the native importer's `align="vortex"` option, which reproduces it. On the
+    public preset both wrote the same 144 records of 13 × 11 cells with **7 corner cells
+    missing in every record**. Those cells are not NOAA NoData: reading the complete
+    `se100yr24ha` grid at each declared cell centre gives 13.7 to 14.3 in, and the
+    cropped source has no NoData. Two separate effects are involved:
+
+    1. **Missing corners, from the warp.** Both routes warp the cropped source onto
+       GDAL's suggested rectangular extent, which is not snapped to whole cells. Seven
+       corner cells of that rectangle fall outside the reprojected crop's coverage, so
+       they are missing in the warped array before anything is written. A review
+       control (a GDAL warp of the cropped source onto the unrounded suggested lattice
+       with the stored 13 × 11 dimensions) leaves exactly the same 7 cells missing.
+    2. **Displacement, from the write.** When the records are serialized, the declared
+       origin is rounded to whole cells. The data is not resampled, so the whole array,
+       missing cells included, is declared less than one cell from where it was
+       sampled. The same control puts the shift at about 735 m north and 65 m west; the
+       engine does not report its planned transform, so this is an estimate, not an
+       engine measurement.
+
+    Against a GDAL bilinear warp of the complete NOAA grid onto the stored lattice, the
+    stored storm totals differed by up to 0.050 in (RMSE 0.018 in, on totals near
+    14 in); a GDAL warp of the importer's own cropped input also differed from them by
+    up to 0.031 in, so the displacement, not the crop, explains most of it. The notebook's footprint check (no missing cell over the model polygon) passed,
     and the missing cells were outside it. Those runs are **execution and DSS read-back
     evidence whose grids failed source-spatial qualification**. "Equal cell for cell"
     between the two routes means both moved the grid the same way. From 2026-11-14 the
@@ -392,8 +404,10 @@ Committed outputs are the default lane's.
 | 731 Atlas 14 shared temporal pattern | Native export onto a stated envelope; missing-cell, full-source warp and mesh gates; `"native"` becomes the default route | pass | pass | stops at the missing-cell gate (by design) | 79 / 29 / 54 (note I) |
 | 728 Extend gridded DSS forcing window | Plain sums with explicit missing-cell counts and gates; mesh centre and stencil gate | pass | pass | — | 703 / 156 (note J) |
 
-**Note I, 731.** Cause of the 7 missing cells: not NOAA NoData, but the output extent
-(see the correction at the top). The native route now passes `envelope=`: the model
+**Note I, 731.** The 7 missing cells were not NOAA NoData. They were corner cells of an
+unsnapped rectangular lattice that fell outside the reprojected crop during the warp;
+separately, rounding the declared origin on write displaced every value (see the
+correction at the top). The native route now passes `envelope=`: the model
 footprint in SHG, snapped outward to whole 2,000 m cells, plus one cell
 (`FORCING_MARGIN_CELLS`). On the public preset that is 10 × 9 cells from (558000, 774000).
 With an envelope, the importer's records equal a GDAL bilinear warp of its own cropped
@@ -404,8 +418,9 @@ input to 2.1e-7 in. The notebook now:
   onto the stored lattice, with an exact transformer (`tolerance=0`), and stops above
   0.005 in: maximum 1.66e-3 in, RMSE 1.8e-4 in. The tolerance allows for GDAL's
   downsampling kernel, which widens with the source-to-target scale, so cropped and
-  complete sources differ by about 1e-3 in near the crop; a moved grid (0.05 in here) or a
-  crop too small for the lattice exceeds it;
+  complete sources differ by about 1e-3 in near the crop. The old displaced grid (0.05 in
+  here) exceeded it, as would a crop too small for the lattice; one tolerance does not
+  guarantee detecting every possible shift on every rainfall field;
 - requires every physical mesh cell centre (19,711) and its four-centre bilinear stencil
   to fall on present lattice cells: 0 fail.
 

@@ -57,3 +57,12 @@ def test_committed_preset_run_passes_missing_cell_full_source_and_mesh_gates():
         assert expected in text
     for private in ("C:\\Users\\", "D:\\", "H:\\", "AppData", "/home/", "/Users/"):
         assert private not in text
+
+
+def test_correction_separates_missing_corners_from_origin_rounding():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    markdown = "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "markdown")
+    # The 7 cells were missing after the warp; origin rounding on write only moved them.
+    assert "left outside the cropped source after the origin was rounded" not in markdown
+    assert "so they were missing before anything was written" in markdown
+    assert "rounding the declared origin to whole cells moved the whole array" in markdown

@@ -199,9 +199,11 @@ are measurements on those inputs, not a proof over all inputs. In a run of noteb
 731 on the public NewOrleansMetro example with NOAA's Volume 9 100-year 24-hour
 grid, the native (with `align="vortex"`) and HEC-Vortex 0.13.3 routes wrote the same
 144 records, equal cell for cell; the stored null value was the only difference (label
-W2 below). Equal here means both moved the grid the same way: that rounded origin left
-7 corner cells missing and displaced the stored totals by up to 0.05 in from a warp of
-the complete NOAA grid. The notebook now states an envelope instead; see the
+W2 below). Equal here means both behaved the same way, in two separate steps. The warp
+onto GDAL's unsnapped rectangular extent left 7 corner cells outside the reprojected
+crop, so they were missing. Rounding the declared origin to whole cells on write then
+moved the whole array, missing cells included, which displaced the stored totals by up
+to 0.05 in from a warp of the complete NOAA grid. The notebook now states an envelope instead; see the
 [notebook qualification report](development/dss-native-notebook-qualification.md).
 
 ### Intended differences {#dss-intended-differences}
