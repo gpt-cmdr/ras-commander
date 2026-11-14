@@ -270,7 +270,8 @@ Two new notebooks teach the native engine, and three existing ones were revised.
 Each was run with the same harness as above on `ras-commander-fast-dss` 0.1.2 from
 PyPI (CPython 3.12.11; 916 on CPython 3.13.5 for `qpkit`), HEC-RAS 7.0 through
 `RasCmdr` only, and HEC-Vortex 0.13.3 for the Vortex routes. "default" means
-`RAS_COMMANDER_DSS_BACKEND` unset, so `RasDss` uses `java`; notebooks 322, 731 and
+`RAS_COMMANDER_DSS_BACKEND` unset, so `RasDss` used `java` (the default before
+2026-11-14; see "Native default" below); notebooks 322, 731 and
 732 select the native engine explicitly where they teach it. Committed outputs are
 the default-lane runs.
 
@@ -358,6 +359,42 @@ runs, into a separate file no plan uses; it reproduces the 126 cells missing in 
 keeps them missing, and reports the mesh-impact and full-source figures given in the
 correction, so the notebook prints that it is not spatially qualified. Committed outputs are
 the default lane's (CPython 3.13.5 kernel for `qpkit`, ras-commander-fast-dss 0.1.2).
+
+## Native default: default-lane reruns (2026-11-14)
+
+With `RasDss.backend` defaulting to `auto`, the default lane (`RAS_COMMANDER_DSS_BACKEND` unset)
+now resolves to `native` wherever ras-commander-fast-dss is installed. The DSS notebooks below
+were rerun on that lane.
+
+- **Software.** ras-commander-fast-dss 0.1.2 from PyPI, HEC-RAS 7.0 through `RasCmdr` only, and
+  HEC-Vortex 0.13.3 for 917's Vortex route.
+- **Harness.** The harness described above, with the same kernels: CPython 3.12.11, and 3.13.5
+  for 916 and 926, which need `qpkit`.
+- **Comparison.** Each run was compared with the committed outputs, and for 310, 312, 313, 318
+  and 918 with a forced-`java` run of the same notebook. Run-root paths, timestamps and kernel
+  identifiers were normalized.
+- **Committed outputs.**
+  - Committed only where the output changes because of the new default: 322 and 731.
+  - Those two were executed in a kernel whose `ras-commander` metadata matches the source
+    (0.123.0).
+  - All other committed outputs are unchanged. Notebooks that print absolute run paths keep
+    their earlier outputs.
+
+| NB | Default lane | JVM loaded | Change against `java` / committed | Outputs committed | Wall time (s) |
+|---|---|---|---|---|---|
+| 310, 313, 318 | pass | no | One INFO line, `DSS backend: native (ras-commander-fast-dss 0.1.2)`; data identical to a forced-`java` run | no (they print absolute run paths) | 11 / 12 / 8 |
+| 312 | pass | no | The same INFO line and stdout/stderr ordering; data and HEC-RAS steps identical to a forced-`java` run | no (absolute run paths) | 95 |
+| 322 | pass | yes, only in its own `java`/`shadow` comparison cell | `default backend: native` (was `java`); shadow 2 comparisons, both `identical` | **yes** | 14 |
+| 728 | pass | no | The source DSS file is now written natively, so its printed SHA-256 differs; every other output is unchanged | no | 243 |
+| 731 | pass | no | Grid read-back runs on the native route: one INFO line, and `metadata` adds `crs_qualified` and `native`. The banner names `RasDss.read_timeseries()` | **yes** | 67 |
+| 732 | pass | no | None: the notebook pins `native` | no | 79 |
+| 916 | pass | no | None | no | 2651 (host under load) |
+| 918 | pass | no | None | no | 4 |
+| 926 | pass | no | None (fixed cycle 2026-11-05 00Z) | no | 651 |
+| 917 | pass | no | `RasDss backend: native (class default)` (was `java`); the MRMS grids are written by HEC-Vortex as before and read back natively; the grid catalog row order follows each Vortex run | **yes** | 3272 (shared kernel); committed run below |
+
+No notebook behaves differently on the native default, apart from the documented differences
+of the native backend. No run needed Java except 322's deliberate comparison cell.
 
 ## Skipped notebooks
 
