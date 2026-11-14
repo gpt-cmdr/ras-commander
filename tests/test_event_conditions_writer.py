@@ -309,3 +309,28 @@ def test_failed_backup_copy_is_removed_and_retry_succeeds(case, monkeypatch):
     assert not list(case[1].parent.glob('*.tmp'))
     write(case)
     assert case[1].with_name('p.hdf.events.bak').read_bytes() == original
+
+
+@pytest.mark.parametrize('path', [
+    'Event Conditions', 'Event Conditions/Unsteady',
+    'Event Conditions/Unsteady/Boundary Conditions'])
+@pytest.mark.parametrize('kind', ['external', 'soft', 'dangling'])
+def test_event_write_path_rejects_links_without_mutating_files(case, path, kind):
+    other = case[1].parent / 'other.hdf'
+    with h5py.File(other, 'w') as f:
+        f.create_group('empty')
+    with h5py.File(case[1], 'r+') as f:
+        if '/' in path:
+            f.require_group(path.rsplit('/', 1)[0])
+        if kind == 'soft':
+            f.create_group('other')
+            f[path] = h5py.SoftLink('/other')
+        else:
+            f[path] = h5py.ExternalLink(str(other), '/empty' if kind == 'external' else '/missing')
+    original, external = case[1].read_bytes(), other.read_bytes()
+    with pytest.raises(ValueError, match='owned hard-linked'):
+        write(case)
+    assert case[1].read_bytes() == original
+    assert other.read_bytes() == external
+    assert not case[1].with_name('p.hdf.events.bak').exists()
+    assert not list(case[1].parent.glob('*.tmp'))

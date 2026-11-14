@@ -28,6 +28,19 @@ def _date_stamp(moment, *, start=False):
     return f'{moment.day:02d}{month}{moment.year:04d} {clock}'
 
 
+def _require_owned_event_path(hdf, path):
+    group = hdf
+    for name in path.split('/'):
+        link = group.get(name, getlink=True)
+        if link is None:
+            return
+        if not isinstance(link, h5py.HardLink):
+            raise ValueError('Event write path must contain only owned hard-linked groups')
+        group = group[name]
+        if not isinstance(group, h5py.Group):
+            raise ValueError('Event write path must contain only groups')
+
+
 def _require_matching_geometry(source, destination, areas):
     def equal(a, b):
         if a.dtype.names:
@@ -230,6 +243,7 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
         if _text(existing.attrs.get('Units System', '')) != unit_labels[units]:
             raise ValueError('Destination units must match requested units')
         _require_matching_geometry(geometry, existing, areas)
+        _require_owned_event_path(existing, group_path)
         if group_path in existing and len(existing[group_path]):
             raise ValueError('Destination already has boundary forcing; use a fresh staged copy')
     fd, temporary = tempfile.mkstemp(prefix=target.name+'.', suffix='.tmp', dir=target.parent)
@@ -238,6 +252,7 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
     try:
         shutil.copy2(target, temporary)
         with h5py.File(temporary, 'r+') as output:
+            _require_owned_event_path(output, group_path)
             root = output.require_group(group_path)
             for area, name, node, data, faces, points, fractions, slope in prepared:
                 kind = 'Flow Hydrographs' if data.ndim == 2 else 'Normal Depths'
