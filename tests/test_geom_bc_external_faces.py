@@ -359,3 +359,37 @@ def test_writer_rejects_external_raw_dataset_storage(tmp_path):
     assert path.read_bytes() == before
     assert raw.read_bytes() == external
     assert not list(tmp_path.glob('*.bak'))
+
+
+@pytest.mark.parametrize('target', ['Geometry', 'Geometry/Boundary Condition Lines',
+                                    'Geometry/Boundary Condition Lines/Attributes',
+                                    'Geometry/Boundary Condition Lines/External Faces'])
+def test_shared_hard_links_rejected_before_staging(tmp_path, target):
+    path = make_mesh(tmp_path)
+    GeomBcLines.write_external_faces(path, experimental=True)
+    with h5py.File(path, 'r+') as f:
+        f['saved_alias'] = f[target]
+    before = path.read_bytes()
+    backups = set(tmp_path.glob('*.bak'))
+    with pytest.raises(ValueError, match='shared hard-linked'):
+        GeomBcLines.write_external_faces(path, experimental=True)
+    assert path.read_bytes() == before
+    assert set(tmp_path.glob('*.bak')) == backups
+    assert not list(tmp_path.glob('bc-faces-*'))
+
+
+def test_backup_digest_failure_removes_unverified_copy(tmp_path, monkeypatch):
+    import shutil
+    path = make_mesh(tmp_path)
+    before = path.read_bytes()
+    copy = shutil.copyfileobj
+    def corrupt(source, output, *args, **kwargs):
+        copy(source, output, *args, **kwargs)
+        if isinstance(output.name, int):
+            output.write(b'corrupted backup')
+    monkeypatch.setattr(shutil, 'copyfileobj', corrupt)
+    with pytest.raises(RuntimeError, match='changed during BC binding backup'):
+        GeomBcLines.write_external_faces(path, experimental=True)
+    assert path.read_bytes() == before
+    assert not list(tmp_path.glob('*.bak'))
+    assert not list(tmp_path.glob('bc-faces-*'))

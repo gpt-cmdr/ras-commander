@@ -1575,6 +1575,8 @@ class GeomBcLines:
                 group = group[name]
                 if not isinstance(group, h5py.Group):
                     raise ValueError('BC write path requires groups')
+                if h5py.h5o.get_info(group.id).rc != 1:
+                    raise ValueError('BC write path contains a shared hard-linked group')
             for name in ('Attributes', 'External Faces'):
                 link = group.get(name, getlink=True)
                 if link is None:
@@ -1585,6 +1587,8 @@ class GeomBcLines:
                 if (not isinstance(dataset, h5py.Dataset) or dataset.external
                         or dataset.is_virtual):
                     raise ValueError('BC target requires owned dataset storage')
+                if h5py.h5o.get_info(dataset.id).rc != 1:
+                    raise ValueError('BC target contains a shared hard-linked dataset')
 
         native_dtype = np.dtype([(name, '<i4') for name in
                                  ('BC Line ID', 'Face Index', 'FP Start Index', 'FP End Index')]
@@ -1650,10 +1654,10 @@ class GeomBcLines:
             try:
                 with os.fdopen(backup_fd, 'wb') as output, path.open('rb') as source:
                     shutil.copyfileobj(source, output)
+                if digest(backup) != original_hash or digest(path) != original_hash:
+                    raise RuntimeError('Geometry HDF changed during BC binding backup')
             except BaseException:
                 backup.unlink(missing_ok=True)
                 raise
-            if digest(backup) != original_hash or digest(path) != original_hash:
-                raise RuntimeError('Geometry HDF changed during BC binding backup')
             os.replace(staged, path)
         return {**result, 'geom_hdf': path, 'backup_path': backup}
