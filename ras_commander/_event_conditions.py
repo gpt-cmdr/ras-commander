@@ -18,6 +18,46 @@ def _text(value):
     return value.decode('latin-1').rstrip('\x00 ') if isinstance(value, bytes) else str(value)
 
 
+def _date_stamp(moment, *, start=False):
+    midnight = start and moment.hour == moment.minute == 0
+    if midnight:
+        moment -= timedelta(days=1)
+    month = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')[moment.month - 1]
+    clock = '2400' if midnight else f'{moment.hour:02d}{moment.minute:02d}'
+    return f'{moment.day:02d}{month}{moment.year:04d} {clock}'
+
+
+def _require_matching_geometry(source, destination, areas):
+    def equal(a, b):
+        if a.dtype.names:
+            return all(equal(a[name], b[name]) for name in a.dtype.names)
+        return np.array_equal(a, b, equal_nan=a.dtype.kind in 'fc')
+
+    paths = ['Geometry/2D Flow Areas/Attributes',
+             'Geometry/Boundary Condition Lines/Attributes',
+             'Geometry/Boundary Condition Lines/External Faces']
+    for area in areas:
+        paths.extend(f'Geometry/2D Flow Areas/{area}/{name}' for name in
+                     ('Faces FacePoint Indexes', 'FacePoints Coordinate'))
+    # These native tables, when present, also define face/cell identity.
+    optional = ['Geometry/Boundary Condition Lines/' + name for name in
+                ('Polyline Info', 'Polyline Parts', 'Polyline Points')]
+    for area in areas:
+        optional.extend(f'Geometry/2D Flow Areas/{area}/{name}' for name in
+                        ('Cells Center Coordinate', 'Faces Cell Indexes',
+                         'Cells FacePoint Indexes'))
+    paths.extend(path for path in optional if path in source or path in destination)
+    for path in paths:
+        if path not in source or path not in destination:
+            raise ValueError(f'Destination geometry mismatch: missing {path}')
+        a, b = source[path], destination[path]
+        if (not isinstance(a, h5py.Dataset) or not isinstance(b, h5py.Dataset)
+                or a.shape != b.shape or a.dtype != b.dtype
+                or not equal(a[()], b[()])):
+            raise ValueError(f'Destination geometry mismatch: {path}')
+
+
 def _parse(path):
     boundaries = {}
     current = None
@@ -182,11 +222,12 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
                 raise ValueError('Flow distribution slope exceeds float32 range')
             prepared.append((area, name, areas.index(area)+1, data, faces.astype('int32'), points.astype('int32'), fraction[keep].astype('float32'), slope))
     group_path = 'Event Conditions/Unsteady/Boundary Conditions'
-    with h5py.File(target, 'r') as existing:
+    with h5py.File(target, 'r') as existing, h5py.File(geom_hdf, 'r') as geometry:
         if re.match(r'^HEC-RAS 7\.0\.1(?:\s|$)', _text(existing.attrs.get('File Version', ''))) is None:
             raise ValueError('Destination must declare HEC-RAS 7.0.1')
         if _text(existing.attrs.get('Units System', '')) != unit_labels[units]:
             raise ValueError('Destination units must match requested units')
+        _require_matching_geometry(geometry, existing, areas)
         if group_path in existing and len(existing[group_path]):
             raise ValueError('Destination already has boundary forcing; use a fresh staged copy')
     fd, temporary = tempfile.mkstemp(prefix=target.name+'.', suffix='.tmp', dir=target.parent)
@@ -210,11 +251,12 @@ def _write_events(plan_hdf, geom_hdf, flow_file, start_time, end_time, units, ta
                     ds.attrs['Interval'] = np.bytes_('Days')
                     ds.attrs['EG Slope For Distributing Flow'] = slope
                     for key, moment in (('Start Date', start_time), ('End Date', end_time)):
-                        stamp = (moment-timedelta(days=1)).strftime('%d%b%Y 2400') if key == 'Start Date' and moment.hour == moment.minute == 0 else moment.strftime('%d%b%Y %H%M')
+                        stamp = _date_stamp(moment, start=key == 'Start Date')
                         ds.attrs[key] = np.bytes_(stamp)
         # Exclusive backup creation never overwrites a prior retained copy.
         backup = target.with_name(target.name+'.events.bak')
-        with backup.open('xb') as saved, target.open('rb') as original:
+        backup_fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(backup_fd, 'wb') as saved, target.open('rb') as original:
             shutil.copyfileobj(original, saved)
         os.replace(temporary, target)
     finally:

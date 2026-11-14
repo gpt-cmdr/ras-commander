@@ -83,7 +83,8 @@ class RasPreprocess:
         """Write experimental 7.0.1 2D boundary forcing from flow text.
 
         Args:
-            plan_hdf: Existing staged HDF without boundary forcing.
+            plan_hdf: Existing staged HDF without boundary forcing, containing
+                the same area order, mesh and boundary tables as geom_hdf.
             geom_hdf: Compiled geometry with External Faces and BC Length.
             flow_file: Unsteady text containing flow hydrographs or normal depth.
             start_time: Naive local datetime defining hydrograph day zero.
