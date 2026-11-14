@@ -20,6 +20,13 @@ import pytest
 
 from ras_commander import RasDss, RasUtils
 
+
+@pytest.fixture(autouse=True)
+def _java_backend(monkeypatch):
+    """These tests stub the Java writer internals; they test the java backend."""
+    monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    monkeypatch.setattr(RasDss, "backend", "java")
+
 FAMILY = "/SHG/TEST/PRECIPITATION///C04-SOURCE/"
 RECORDS = [
     "/SHG/TEST/PRECIPITATION/01JAN2020:0000/01JAN2020:0100/C04-SOURCE/",
@@ -278,6 +285,7 @@ def test_public_signature_is_additive_and_keyword_scoped() -> None:
         "x_shift",
         "y_shift",
         "overwrite",
+        "sync",
     ]
     for name in (
         "time_shift_minutes",
@@ -285,6 +293,7 @@ def test_public_signature_is_additive_and_keyword_scoped() -> None:
         "x_shift",
         "y_shift",
         "overwrite",
+        "sync",
     ):
         assert signature.parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
 

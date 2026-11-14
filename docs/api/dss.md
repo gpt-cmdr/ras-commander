@@ -74,12 +74,35 @@ curve, stored precision by default (`float32` PD, `float64` PDD). `attrs` carry
 #### read_grid(dss_file, pathname, *, allow_unqualified_native=False)
 Read one exact grid record as a dictionary (`data` float32, row zero south,
 `row_order="south_up"`). Under `backend="native"` it raises
-`DssCapabilityError` unless the installed dss-commander advertises qualified
-grid CRS strings or `allow_unqualified_native=True` is passed.
+`DssCapabilityError` unless the installed ras-commander-fast-dss advertises qualified
+grid CRS strings (`grid_srs_monolith_parity`) or
+`allow_unqualified_native=True` is passed.
 
 #### get_capabilities()
 DataFrame of `operation`, `java`, `native`, `shadow` and `note`: which
 backend supports each public DSS operation.
+
+#### write_paired_data(dss_file, pathname, x_values, y_values=None, x_units=None, y_units=None, x_type=None, y_type=None, labels=None, create_if_missing=True, *, x_precision=None, y_precision=None, value_type="auto", dss_version=None)
+Write one paired-data record with one or more curves, as a new record or a whole
+replacement.
+
+**Parameters:**
+- `dss_file` (str|Path): Path to DSS file
+- `pathname` (str): DSS pathname with exactly six parts
+- `x_values` (array|DataFrame|Series): The ordinates, or the frame from
+  `read_paired_data` (then omit `y_values`; its `attrs` supply metadata left as `None`)
+- `y_values` (array): The curves: 1-D, or 2-D with shape `(len(x_values), n_curves)`
+- `x_units`, `y_units`, `x_type`, `y_type` (str): Units and axis types. Blank if `None`
+  and not in `attrs`
+- `labels` (list): Curve names, one per curve. Default: a frame's string column names
+- `create_if_missing` (bool): Create a missing file, default `True`
+- `x_precision`, `y_precision` (int): Display precision, both -1 or both 0-9
+- `value_type` (str): `"auto"` (float32 input stores PD, type 200; anything else PDD,
+  type 205), `"float"` or `"double"`
+- `dss_version` (int): 6 or 7 for a new file; an existing file must match
+
+**Returns:** `None`. A failed write raises. See
+[Writes](../user-guide/dss-native-backend.md#writes) for what the native writer refuses.
 
 #### write_timeseries(dss_file, pathname, times, values, ..., dss_version=None)
 Write a single time series to DSS.
@@ -102,6 +125,32 @@ HEC-RAS model clock and remove timezone metadata before writing.
 For simulations spanning a daylight-saving fallback, choose a fixed-offset or
 otherwise strictly increasing model clock; merely stripping timezone metadata
 from a repeated local hour creates ambiguous duplicate model times.
+
+Backends: `java` writes through HEC Monolith. `native` writes through
+ras-commander-fast-dss (no JVM; `DssCapabilityError` when the wheel has no writers) and
+keeps the same file, version and missing-value rules. `shadow` writes with
+Java and compares a native repeat on a temporary copy. The native writer
+refuses some input that Java truncates (see
+[Writes](../user-guide/dss-native-backend.md#writes)).
+
+#### repair(src, dest, *, sync=None)
+Copy the readable records of a damaged DSS7 file into a new DSS7 file through
+ras-commander-fast-dss 0.1.1 or later (`sync=` from 0.1.2), on every backend (there is no Java
+equivalent). `src` is opened read-only; `dest` must not exist. A partial
+recovery is still published, so always check `complete` and `not_copied` in the
+returned `dict`. See
+[Interrupted writes and `repair`](../native-engine.md#dss-repair).
+
+**Parameters:**
+- `src` (str|Path): Existing DSS7 file
+- `dest` (str|Path): New file to create
+- `sync` (keyword, optional): The engine's flush policy (`"end"`, `"step"`,
+  `"none"`, `True` or `False`), passed unchanged; `None` leaves the engine default
+
+**Returns:** The engine's result `dict` (`records_copied`, `not_copied`,
+`ledger`, `complete`, ...). Raises `FileExistsError` if `dest` exists,
+`ImportError` without ras-commander-fast-dss and `DssCapabilityError` when the
+installed engine has no `repair`.
 
 #### get_file_version(dss_file)
 Return the HEC-DSS major file version. Uses the selected backend; a non-DSS
@@ -129,7 +178,9 @@ Write a time-varying spatial grid series to DSS.
   files. The default `None` preserves the bridge's current default. An explicit
   value must match an existing file. Explicit DSS6 writes use the Monolith's
   version-specific safe precipitation-compression base/scale ordering unless
-  those values are supplied in `grid_info`.
+  those values are supplied in `grid_info`. The `native` backend needs no such
+  workaround: it stores `compression_base` and `compression_scale_factor` as
+  named (see [Writes](../user-guide/dss-native-backend.md#writes)).
 
 **Returns:** List of DSS pathnames written.
 
@@ -290,6 +341,21 @@ Get DSS file information.
 **Returns:** Dict with filepath, filename, file size, total pathname count, and
 a preview of the first five catalog rows.
 
+## RasDssGrid
+
+Gridded import and grid tools for DSS files: thin wrappers around the
+`ras_commander_fast_dss.gridded` namespace. Every method runs on the optional
+ras-commander-fast-dss engine, whatever `RasDss.backend` is, and returns the
+engine's result unchanged. See
+[Engine-only operations](../user-guide/dss-native-backend.md#engine-only-operations) and
+notebook [732](../notebooks/732_native_gridded_import_and_grid_tools.md).
+
+::: ras_commander.dss.RasDssGrid.RasDssGrid
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
 ## Usage
 
 ```python
@@ -375,7 +441,7 @@ keyword aliases are not added in this release.
 `read_timeseries()` accepts `start_date` and `end_date`. The Java backend
 returns the complete series without applying those filters; the native and
 shadow backends apply the window (see
-[DSS Read Backends](../user-guide/dss-native-backend.md)). Returned
+[DSS Read and Write Backends](../user-guide/dss-native-backend.md)). Returned
 `attrs` retain pathname, units, type, interval, and source path.
 
 Java DSS handles are write-capable. Check that a source exists before opening it;
@@ -410,10 +476,17 @@ source immutability is required. These APIs do not guarantee read-only file acce
         - get_info
         - is_pathname_available
         - is_valid_pathname
+        - read_associated_location
         - read_grid
+        - read_location
         - read_multiple_timeseries
+        - read_profile
         - read_timeseries
+        - repair
         - shutdown_jvm
         - write_grid_timeseries
+        - write_location
+        - write_paired_data
+        - write_profile
         - write_timeseries
         - write_timeseries_from_dataframe

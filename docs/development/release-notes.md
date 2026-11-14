@@ -9,6 +9,201 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Notebook 916 now drives HEC-RAS with native hourly HRRR forcing.** The qpkit route
+  it used before left 69 forcing cells missing in every hour for its HRRR cycle, which
+  the notebook read as zero rain, and did not match a full-source warp of the same HRRR
+  messages. The notebook now imports HRRR's one-hour APCP messages with
+  `RasDssGrid.import_gridded`, validates every hourly grid against a full-source GDAL
+  warp, and stops if a forcing cell is missing or a mesh cell samples none. The qpkit
+  route remains only as a disclosed comparison. Earlier 916 runs in the
+  [qualification report](dss-native-notebook-qualification.md) are labelled as execution
+  and read-back evidence whose forcing failed spatial qualification.
+- **`RasDssGrid.zonal_statistics` has a schema contract.** `schemas.py`
+  (`SCHEMA_VERSION` 1.33) registers `dss_grid_zonal_statistics`: thirteen fixed columns
+  (`zone`, `variable`, `units`, `start`, `end` and the eight statistics) on a default
+  RangeIndex, one row per frame and zone.
+
+- **The DSS extras move to `ras-commander-fast-dss` 0.1.2.** The `dss`,
+  `dss-native` and `all` extras now request `ras-commander-fast-dss>=0.1.2,<0.2`,
+  with the same platform marker (no macOS wheels; build from source there).
+  `java` remains the default backend. What changes for RAS Commander users
+  ([engine changelog](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/CHANGELOG.md);
+  [details](../native-engine.md#dss-0-1-2)):
+  `sync=True` now means one flush per write call (`"end"`, the engine default);
+  `"step"` is the 0.1.1 per-step behaviour and `"none"`/`False` does not flush.
+  A `DssFile` session holds one native handle after its first write: close it
+  before renaming, replacing or deleting the file. Gridded import reads Stage IV
+  GRIB1, PRISM BIL and packages, SNODAS and GeoTIFFs with a nodata-only
+  `.aux.xml`, and uses every core by default (pathnames, grid values and metadata
+  equal those of `threads=1`; file bytes can differ by write timestamps). DSS6
+  irregular-pattern writes need an engine opt-in that RasDss does not pass, so
+  they are refused.
+- **Engine wrappers for the native-only operations.** New static class
+  `RasDssGrid` (gridded import of files, arrays and local Zarr v2; calculator,
+  raster calculator, sanitizer, clipper, normalizer, time shift and resampling,
+  window/nearest/min-max reads and grid-to-point/zonal statistics). New
+  `RasDss.read_profile`, `write_profile`, `read_location`,
+  `read_associated_location` and `write_location`. Each runs on the native engine
+  on every backend, is gated on the engine's `FEATURES`, passes its options
+  through and returns the engine's result unchanged.
+- **`sync=` on the RasDss writers and `RasDss.repair`.** `write_timeseries`,
+  `write_timeseries_from_dataframe`, `write_paired_data`,
+  `write_grid_timeseries`, `copy_grid_with_zero_tail`, `write_precip_grid_arrays`,
+  the profile and location writers and `repair` pass `sync=` to the engine
+  unchanged; unstated, the engine's default applies. `java` does not use it.
+  `get_capabilities().attrs` adds `native_write_sync_available` and
+  `native_write_sync_modes_available`.
+- **A refused file replacement names the session rule.** When a caller's
+  `DssFile` session holds the destination of `copy_grid_with_zero_tail(overwrite=True)`
+  or `write_precip_grid_arrays(overwrite=True)`, the `PermissionError` says to close
+  the session first; the destination is unchanged.
+- **DSS performance section.** [DSS performance](../native-engine.md#dss-performance)
+  replaces the placeholder. It states which calls use the default `java` backend
+  and which use the native engine, and summarizes internal evaluations on a
+  private corpus without figures; the engine's `benchmarks/bench_public.py`
+  reproduces measurements on generated data. The section now has its own anchor,
+  so links to the HDF [Performance](../native-engine.md#performance) section
+  resolve to the HDF benchmark again. A DSS read speed-up figure was removed from
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md).
+- **HEC-RAS 4.0 and 4.1 acceptance tests for native DSS6 boundaries.**
+  `tests/test_rasdss_ras4_dss6_acceptance.py` rewrites the BaldEagleDamBrk
+  boundary file of HEC's 4.x example archive natively and checks that HEC-RAS 4.0
+  and 4.1 (through `RasControl`) produce identical `.b##` input, messages and
+  results, including five DSS6 merge/extend cases against HEC Monolith merges. The
+  tests skip without HEC-RAS 4.x, its example archive, an accepted TCU or the
+  engine. `RasControl.cleanup_orphans` and `force_cleanup_all` no longer end in
+  `UnicodeEncodeError` on a cp1252 console.
+- **The DSS extras move to `ras-commander-fast-dss` 0.1.1.** The `dss`,
+  `dss-native` and `all` extras now request `ras-commander-fast-dss>=0.1.1,<0.2`.
+  The platform marker matches the 0.1.1 wheels: CPython on Windows x64 and
+  Linux x86_64 and aarch64. macOS is no longer in the marker, because 0.1.1
+  publishes no macOS wheels; macOS users can build the engine from source with
+  `pip install ras-commander-fast-dss`. `java` remains the default backend.
+  0.1.1 fixes how an interrupted DSS7 write is completed (the guarantee covers
+  process death, not power loss), adds an opt-in `sync=False` on the engine's
+  writers and adds `repair`, and speeds up DSS7 reads and catalog filtering
+  ([engine changelog](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/CHANGELOG.md)).
+- **New `RasDss.repair(src, dest)`.** A thin wrapper around
+  `ras_commander_fast_dss.repair`: it copies the readable records of a damaged
+  DSS7 file that the engine's discovery procedure reaches into a new file and
+  returns the engine's report. It runs natively on every backend, refuses an
+  existing `dest`, and logs a warning when `complete` is `False`; a partial
+  recovery is still published, so check `complete` and `not_copied`.
+  `get_capabilities()` adds a `repair` row and
+  `attrs["native_repair_available"]`. For `sync=` on the RasDss writers and
+  `repair`, see the entries above and
+  [Interrupted writes, `sync=` and `repair`](../native-engine.md#dss-repair).
+- **`ras-commander-fast-dss` 0.1.0 is published, and the DSS extras install it.**
+  FAST-DSS is on PyPI
+  ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);
+  source: [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)).
+  The `dss`, `dss-native` and `all` extras now request
+  `ras-commander-fast-dss>=0.1.0,<0.2` on CPython for the published wheel
+  platforms (Windows x64, Linux x86_64 and aarch64, macOS arm64 and x86_64). It
+  is not a core dependency, `dss-native` keeps pydsstools, and `java` remains
+  the default backend. The `native` backend's `ImportError` and the MRMS
+  importer's install hint now say `pip install ras-commander-fast-dss` or
+  `pip install "ras-commander[dss]"`. [Native Rust Engines](../native-engine.md#dss-attributions)
+  adds a DSS attributions and acknowledgments section.
+- **FAST-DSS documented as a released engine.** The DSS section of
+  [Native Rust Engines](../native-engine.md#dss-engine) now covers reads and
+  writes, the [gridded importer and tools](../native-engine.md#gridded-import-and-tools)
+  that replace HEC-Vortex, the backends and how to choose one, the intended
+  differences, the notebook qualification and the HEC-RAS acceptance results.
+  Install with `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0).
+  The DSS performance section is reserved for measured timings.
+- **WPC QPF through the FAST-DSS importer.** The gridded precipitation guide adds
+  [WPC QPF to DSS with FAST-DSS](../user-guide/gridded-precipitation.md#wpc-qpf-to-dss-with-fast-dss),
+  which reads WPC's published GRIB2 without `qpkit`, HEC-Vortex, Java or GDAL.
+  Notebook 926's `qpkit` route is unchanged.
+- **Notebook 731 has a native DSS export route.** `DSS_EXPORT_ROUTE = "native"`
+  projects the Float32 interval NetCDF to SHG DSS with the FAST-DSS importer;
+  `"vortex"` stays the default. `SOURCE_BUFFER_PERCENT` (default 10) sets the
+  crop buffer, which small models need to raise for bilinear edges.
+  `tests/test_atlas14_native_dss_export.py` covers the route.
+- **Notebook 926 can re-run a fixed WPC cycle.** Set
+  `RAS_COMMANDER_WPC_QPF_CYCLE=YYYYMMDDHH` to use that cycle's GRIB files,
+  downloading only missing ones; `RAS_COMMANDER_WPC_QPF_GRIB_DIR` shares one GRIB
+  folder between runs. Live current-day mode stays the default.
+- **Notebooks 916, 917 and 926 run again after #534.** With ghost cells excluded
+  from results by default, 916 and 926 match them with
+  `get_mesh_cell_points(..., include_ghost_cells=False)`, and 917, which checks
+  that boundary cells receive no rain, reads results with
+  `include_ghost_cells=True`.
+- **Notebook 318 no longer deletes the shared example-projects folder.** Its
+  clean-up removes only the project it extracted.
+- **HEC-RAS acceptance tests for `RasDss`-written DSS files.**
+  `tests/test_rasdss_hecras_acceptance.py` runs real example plans through
+  `RasCmdr.compute_plan` on grids and boundary time series written by the Java
+  and native backends. It skips without the local HEC-RAS version.
+- **`RasDss.extract_boundary_timeseries` resolves `DSS File=dss`.** HEC-RAS opens
+  that bare value as the project's `.dss` file. It previously returned no data
+  for those boundaries and logged a warning, on every backend.
+- **`RasDss.write_paired_data` adds a paired-data writer.** It writes one
+  record with any number of curves on the `java`, `native` and `shadow`
+  backends, from arrays or from the DataFrame that `read_paired_data` returns.
+  Java and native write the same records, and both read them back equal, on
+  DSS6 and DSS7. The native writer refuses some input the Java path truncates
+  or replaces, such as DSS6 units over 8 characters; see
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md#intended-differences).
+- **HEC Monolith messages can no longer corrupt DSS files.** Monolith prints
+  through a stdout handle that it caches at its first message. If the process
+  then redirects file descriptor 1, as pytest's output capture does, Windows
+  can give that handle to the next DSS file opened, and later messages are
+  written into the file. On DSS6 this returned wrong values (5 of 30 reads in a
+  reproducer). `RasDss` now connects the library's messages to a private
+  temporary file before the first Java DSS call, so they no longer reach the
+  console. `RasDss.hec_message_level` sets their level (default 1). Failure
+  lines are logged at WARNING as `HEC-DSS library reported: ...`.
+- **Failed Java DSS writes now raise.** `write_timeseries` and
+  `write_timeseries_from_dataframe` returned normally from a DSS6 write to a
+  read-only file, with nothing written. On DSS7, time-series writes to a damaged
+  file could return normally and leave a record that could not be read. Java
+  writers now refuse read-only files with `RuntimeError` before any Java call,
+  raise on library failure messages, and confirm time-series and paired-data
+  records in the file's catalog, which adds a catalog read to each of those
+  writes. `write_grid_timeseries` raises `RuntimeError`, not a bare Java
+  exception, when it cannot create a new file. Under `shadow`, these errors
+  reach the caller as other Java write errors do. Writing to a damaged DSS6 file
+  can still crash the JVM inside HEC's library; see
+  [Failed Java writes](../user-guide/dss-native-backend.md#failed-java-writes).
+- **`RasDss.read_paired_data` releases the file under `java`.** It left the DSS
+  file open after reading.
+- **The native DSS engine is renamed `ras-commander-fast-dss`.** `RasDss`
+  imports `ras_commander_fast_dss` (FAST-DSS) for the `native` and `shadow`
+  backends; the earlier development name `dss_commander` is no longer
+  recognized and has no compatibility alias. Install it with
+  `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0; the DSS
+  extras install it, see above). `java` remains the default. The
+  [Native Rust Engines](../native-engine.md#dss-engine) page now describes the
+  DSS engine.
+- **`RasDss` writes run on the native backend.** Under `RasDss.backend =
+  "native"`, `write_timeseries`, `write_timeseries_from_dataframe`,
+  `write_paired_data`, `write_grid_timeseries`, `copy_grid_with_zero_tail` and
+  `write_precip_grid_arrays` write through the optional ras-commander-fast-dss engine
+  without a JVM. They need a ras-commander-fast-dss build with writer support
+  (`native_writes_available()`); otherwise they raise `DssCapabilityError` and
+  never fall back to Java. `RasDss.get_capabilities()` reports the writers as `gated` and
+  adds `attrs["native_writes_available"]`. Native writes store what the Java
+  path stores: DSS6 and DSS7, regular and irregular series, the existing file's
+  version (new files DSS7 unless `dss_version=6`), `NaN` as Java stores it.
+  Java reads the native-written RasExamples records (`BaldEagleCrkMulti2D`
+  series, SHG precipitation grids and a zero-tail derivative of the 120-record
+  WPC-QPF family) equal to the Java-written ones. The native writer refuses some
+  input that the Java path truncates or writes as an unreadable record, and
+  DSS6 PRECIP_2_BYTE grids no longer need the swapped base/scale workaround;
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md) lists
+  every difference. Under `shadow`, writes stay on Java (the caller gets the
+  Java result); the write is repeated natively on a temporary copy and the two
+  files are compared and logged (copy limit 256 MB, configurable with
+  `RasDss.shadow_copy_limit_mb` or `RAS_COMMANDER_DSS_SHADOW_COPY_LIMIT_MB`).
+  `java` remains the default.
+- **Native grid reads pass their gate with the current engine.** ras-commander-fast-dss
+  built from engine `main` advertises `grid_srs_monolith_parity`, so
+  `read_grid` under `native` reads grids natively by default. On 250 records
+  from the ten grid families of the RasExamples precipitation file
+  `precip.2018.09.dss`, the native and Java dictionaries were identical.
+
 ### 0.122.0 — 2026-11-13
 
 - **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
@@ -435,7 +630,6 @@ alone does not identify a development checkout.
   ordinary 1D/mixed support guards. Historical benchmark results belong to
   their recorded builds and options. The Creek repeat-export difference
   remains unresolved; this release does not claim exactness on every model.
-
 - **`PrecipMrms.to_dss` behaviour change (#801):** for MRMS QPE, the default
   HEC-Vortex route and `backend="shadow"` now refuse durations other than one
   hour (15M, 03H to 72H) with a `ValueError`, before the import starts and with

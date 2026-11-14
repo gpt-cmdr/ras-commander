@@ -4771,7 +4771,8 @@ class RasUnsteady:
                     boundaries_df[col] = ''
             boundaries_df = boundaries_df.drop(columns=['Boundary Location'])
         
-        logger.info(f"Successfully extracted boundaries and tables from {unsteady_path}")
+        logger.info(f"Successfully extracted boundaries and tables from {unsteady_path.name}")
+        logger.debug(f"Unsteady file path: {unsteady_path}")
         return boundaries_df
 
     @staticmethod

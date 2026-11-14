@@ -1,10 +1,10 @@
 """Typed DSS exceptions shared by every ``RasDss`` backend (decision D32).
 
-The four base classes are the ``dss_commander`` exceptions once that optional
+The four base classes are the ``ras_commander_fast_dss`` exceptions once that optional
 package has been imported (the native and shadow backends import it before they
 read), so the native backend raises them unchanged. Otherwise they are local
 classes with the same names and bases. This module never imports
-``dss_commander`` itself: the Java backend does not load the native engine, and a
+``ras_commander_fast_dss`` itself: the Java backend does not load the native engine, and a
 missing or broken native wheel cannot affect it.
 
 ``RasDss`` adds subclasses where an existing method, or the condition itself,
@@ -25,7 +25,7 @@ Class                          Bases                                            
 =============================  ================================================  =====================
 
 Resolution happens on each use. Within a process the classes change at most once:
-from the local set to the ``dss_commander`` set when the native engine is first
+from the local set to the ``ras_commander_fast_dss`` set when the native engine is first
 imported. A process that uses only one backend always sees one set. Catch the
 builtin bases (``ValueError``, ``TypeError``, ``RuntimeError``) when code must work
 across a backend switch.
@@ -60,7 +60,7 @@ _cache: Dict[str, SimpleNamespace] = {}
 
 
 def _local_bases() -> SimpleNamespace:
-    """Base classes used when ``dss_commander`` has not been imported."""
+    """Base classes used when ``ras_commander_fast_dss`` has not been imported."""
 
     class DssError(RuntimeError):
         """Base class for every DSS error raised by ``RasDss``."""
@@ -88,7 +88,7 @@ def _local_bases() -> SimpleNamespace:
 
 
 def _native_bases(dc: Optional[ModuleType]) -> Optional[SimpleNamespace]:
-    """The four base classes of an imported ``dss_commander``, or None if unusable."""
+    """The four base classes of an imported ``ras_commander_fast_dss``, or None if unusable."""
     if dc is None:
         return None
     try:
@@ -102,7 +102,7 @@ def _native_bases(dc: Optional[ModuleType]) -> Optional[SimpleNamespace]:
 
 
 def _build(dc: Optional[ModuleType]) -> SimpleNamespace:
-    """All classes on the ``dss_commander`` bases (when usable) or local bases."""
+    """All classes on the ``ras_commander_fast_dss`` bases (when usable) or local bases."""
     base = _native_bases(dc) or _local_bases()
 
     class DssRecordTypeError(base.DssUnsupportedRecordError, TypeError):
@@ -131,7 +131,7 @@ def _build(dc: Optional[ModuleType]) -> SimpleNamespace:
 
 def classes() -> SimpleNamespace:
     """All exception classes for the current process state (never imports)."""
-    dc = sys.modules.get("dss_commander")
+    dc = sys.modules.get("ras_commander_fast_dss")
     key = "native" if _native_bases(dc) is not None else "local"
     built = _cache.get(key)
     if built is None:

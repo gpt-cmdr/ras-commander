@@ -31,7 +31,7 @@ uv pip install -e ".[precip]"
 
 DSS product conversion may additionally need HEC-Vortex, HEC-MetVue, or the optional dependencies listed in the product notebook.
 
-`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer, which needs no Java or HEC-Vortex install. Install the wheel you were given first, as the package is not yet on PyPI (`uv pip install ras_commander_fast_dss-<version>-<tag>.whl`):
+`PrecipMrms.to_dss` runs HEC-Vortex by default. The `backend` argument selects the optional `ras-commander-fast-dss` importer (FAST-DSS), which needs no Java or HEC-Vortex install. Install it first with `pip install ras-commander-fast-dss` (published on PyPI from 0.1.0; see [Installation](../native-engine.md#dss-installation)):
 
 ```python
 from ras_commander.precip import PrecipMrms
@@ -101,6 +101,23 @@ receipt can mean either a blocked qualification run or an unresolved version;
 inspect `hec_ras_version` and the accompanying warnings.
 
 WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Use DSS translation as demonstrated in notebook 926. `qpkit 0.1.0`'s `QPFGridOptions.extents` path produced an undersized 2-by-2 grid during qualification, so the notebook crops each source GRIB in its native projection, reopens and verifies it, and calls `kit.qpf_dss.write()` without `extents`. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
+
+### WPC QPF to DSS with FAST-DSS
+
+The FAST-DSS gridded importer decodes WPC's published GRIB2 itself, so the DSS translation needs neither `qpkit` nor HEC-Vortex, Java or GDAL. Pass the downloaded `p06m_<cycle>f<hour>.grb` files with the `total_precipitation` product (or the variable `list_variables()` reports, `Total_precipitation_surface_layer_6_Hour_Accumulation`) and an SHG envelope around the model:
+
+```python
+from ras_commander_fast_dss import gridded
+
+result = gridded.import_gridded(
+    wpc_files, "wpc_qpf.dss", product="total_precipitation",
+    envelope=(1494000, 2120000, 1564000, 2188000),   # SHG metres: west, south, east, north
+    target_crs="SHG", cell_size=2000, method="bilinear",
+    parts={"A": "SHG", "B": "BALD_EAGLE", "F": "WPC-QPF"},
+)
+```
+
+Each forecast file becomes one `PER-CUM` record in millimetres whose D and E parts state its six-hour window. On the 2026-11-07 00Z cycle (f006 to f168), this wrote the 28 records with consecutive six-hour windows. `envelope_crs` takes WKT, not an EPSG code, so state the envelope in the target CRS, as above. Then attach the DSS with `RasUnsteady.configure_gridded_dss_precipitation()` and review the precomputed forcing as notebook 926 does for the `qpkit` route; this importer route has not been run through HEC-RAS by that notebook. See [Gridded import and tools](../native-engine.md#gridded-import-and-tools) for the importer's agreement with HEC-Vortex and its refusals.
 
 ## Direct GeoTIFF and GRIB ingestion
 
@@ -312,8 +329,9 @@ original source intervals for forcing or water-balance calculations.
 | 900 / 901 | AORC catalog and plan creation with precompute checks |
 | 914 | Archived 48-hour AORC event with source-to-temporary/final-HDF checks, hydraulic diagnostics, and a timezone-correct USGS stage comparison; explicitly diagnostic rather than calibration validation because historical boundaries and operations are not bundled |
 | 915 | Executed forecast orchestration/readiness guide with a timezone-explicit cycle manifest, current API-signature checks, and a visual audit of the canonical HRRR, STOFS-3D, MRMS, and WPC artifacts; not independent format/version qualification |
-| 916 | Archived HRRR 15Z forecast to 18 native DSS grids; no-rain/forecast compute, temporary and final HDF forcing checks, active-cell spatial comparison, hydraulic response, convergence map, and manual diagnostics |
-| 917 | Two archived MRMS events: inspect spatial DSS grids, apply the arithmetic mean of a rectangular source clip as a uniform boundary, and compare every native cumulative rainfall timestamp and physical cell on the absolute model clock. Retained baseline/event evidence, HDF-based diagnostic maps, pump plots and interval-aligned animations; not spatial rain-on-grid qualification |
+| 916 | Archived HRRR 15Z forecast: the 18 one-hour APCP messages imported with `RasDssGrid` to hourly DSS grids, each validated against a full-source GDAL warp with a coverage gate (the earlier qpkit route is kept as a disclosed comparison that fails spatial qualification); a Stage IV analysis for context; no-rain/forecast compute, temporary and final HDF forcing checks, active-cell spatial comparison, hydraulic response, convergence map, and manual diagnostics |
+| 732 | `RasDssGrid` (FAST-DSS) import of real AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2, then every grid tool and the eight zonal statistics over the NewOrleansMetro 2D area; no HEC-RAS run |
+| 917 | Two archived MRMS events: inspect spatial DSS grids, apply the arithmetic mean of a rectangular source clip as a uniform boundary, and compare every native cumulative rainfall timestamp and physical cell on the absolute model clock. Retained baseline/event evidence, HDF-based diagnostic maps, pump plots and interval-aligned animations; not spatial rain-on-grid qualification. A native preprocessing section shows `RasDssGrid` accumulation windows from 1 to 72 hours, overlap and gap reports, shapefile clipping and thread-count equality |
 | 924 | MRMS NetCDF rain-on-grid with precompute and final model checks |
 | 926 | Complete current WPC cycle, verified native-projection crop, 28-grid DSS catalog, objective wettest 24-hour window, temporary/final HDF forcing checks, no-rain/event HEC-RAS 7.0 runs, hydraulic/convergence figures, and manual diagnostics |
 

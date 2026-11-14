@@ -13,8 +13,8 @@ Lazy Loading Behavior:
 
 Backends:
     RasDss.backend = "java" (default) | "native" | "shadow"; the environment
-    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads catalogs
-    and time series through the optional dss-commander package without Java.
+    variable RAS_COMMANDER_DSS_BACKEND overrides it. "native" reads and writes
+    through the optional ras-commander-fast-dss package without Java.
     See docs/user-guide/dss-native-backend.md.
 
 Dependencies:
@@ -23,7 +23,8 @@ Dependencies:
         - Java JRE/JDK 8+: Must be installed and JAVA_HOME set
 
     Optional for the native backend:
-        - dss-commander (ras-commander[dss-native] extra)
+        - ras-commander-fast-dss: pip install ras-commander-fast-dss
+          (also installed by the dss, dss-native and all extras)
 
     Auto-downloaded:
         - HEC Monolith libraries (~20 MB, cached in ~/.ras-commander/dss/)
@@ -52,21 +53,28 @@ Usage:
     ras = init_ras_project("project_path", "7.0")
     enhanced = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras_object=ras)
 
+Gridded import and grid tools (ras-commander-fast-dss on every backend):
+    from ras_commander import RasDssGrid
+
+    result = RasDssGrid.import_gridded(grib_files, "storm.dss", product="mrms_qpe")
+    RasDssGrid.grid_to_point("storm.dss", "basins.geojson", "NAME", "basin_average.dss")
+
 See Also:
     - examples/310_dss_boundary_extraction.ipynb for complete workflow
     - ras_commander/dss/AGENTS.md for package-local development guidance
 """
 
 from .RasDss import RasDss
+from .RasDssGrid import RasDssGrid
 from . import _errors
 
-__all__ = ['RasDss', *_errors.ERROR_NAMES]
+__all__ = ['RasDss', 'RasDssGrid', *_errors.ERROR_NAMES]
 
 
 def __getattr__(name):
     """Typed DSS exceptions (``DssPathnameNotFoundError`` and others).
 
-    Resolved on first access: they are the dss-commander classes when that optional
+    Resolved on first access: they are the ras-commander-fast-dss classes when that optional
     package is installed, otherwise local classes with the same names and bases.
     """
     if name in _errors.ERROR_NAMES:

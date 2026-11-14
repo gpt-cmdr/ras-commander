@@ -2366,6 +2366,40 @@ notebooks:
   excluded: false
   code_cells: 11
   executed_cells: 11
+- id: 322_native_dss_records_and_recovery
+  filename: 322_native_dss_records_and_recovery.ipynb
+  title: Native DSS Records, Backends, and Copy-Out Recovery
+  series: 300
+  series_name: Unsteady & DSS
+  summary: Drive RasDss on the native FAST-DSS engine with public HEC data, covering regular and irregular
+    DSS6/DSS7 round trips and merges, the sync= flush policies, a java/native/shadow comparison, multi-curve
+    paired data, location metadata and RasDss.repair copy-out recovery on a healthy file.
+  tags:
+  - dss
+  - native-engine
+  difficulty: intermediate
+  est_runtime: 1 min
+  data_project: Muncie
+  functions_used:
+  - HdfBndry.get_bc_lines
+  - RasDss.get_backend
+  - RasDss.get_capabilities
+  - RasDss.get_catalog
+  - RasDss.get_file_version
+  - RasDss.read_associated_location
+  - RasDss.read_paired_data
+  - RasDss.read_timeseries
+  - RasDss.repair
+  - RasDss.write_location
+  - RasDss.write_paired_data
+  - RasDss.write_timeseries
+  - RasExamples.extract_project
+  - ras.geom_df
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 15
+  executed_cells: 15
 - id: 400_1d_hdf_data_extraction
   filename: 400_1d_hdf_data_extraction.ipynb
   title: 1D HDF Data Extraction
@@ -3684,13 +3718,15 @@ notebooks:
   - precipitation
   difficulty: intermediate
   est_runtime: null
-  data_project: null
+  data_project: NewOrleansMetro
   functions_used:
   - HdfLandCover.sanitize_classification_names
   - HdfMesh.get_mesh_areas
   - HdfPlan.get_plan_met_precip_values
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasDssGrid.import_gridded
+  - RasExamples.extract_project
   - RasMap.list_landcover_layers
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
@@ -3703,8 +3739,56 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 0
+  code_cells: 11
+  executed_cells: 11
+- id: 732_native_gridded_import_and_grid_tools
+  filename: 732_native_gridded_import_and_grid_tools.ipynb
+  title: Native Gridded Import and Grid Tools on Real Precipitation
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Import real AORC (local Zarr and NetCDF), IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2 precipitation
+    to DSS grids with RasDssGrid, then apply every grid tool and the eight zonal statistics to an MRMS
+    storm over the NewOrleansMetro 2D area, without Java, HEC-Vortex or GDAL.
+  tags:
+  - dss
+  - precipitation
+  - native-engine
+  difficulty: intermediate
+  est_runtime: 1 min
+  data_project: NewOrleansMetro
+  functions_used:
+  - HdfMesh.get_mesh_areas
+  - RasDss.get_backend
+  - RasDss.read_grid
+  - RasDss.read_timeseries
+  - RasDssGrid.calculate
+  - RasDssGrid.calculate_raster
+  - RasDssGrid.clip
+  - RasDssGrid.get_features
+  - RasDssGrid.grid_to_point
+  - RasDssGrid.import_gridded
+  - RasDssGrid.import_zarr
+  - RasDssGrid.list_variables
+  - RasDssGrid.normalize
+  - RasDssGrid.read_min_max
+  - RasDssGrid.read_nearest
+  - RasDssGrid.read_window
+  - RasDssGrid.read_zarr
+  - RasDssGrid.resample_times
+  - RasDssGrid.sanitize
+  - RasDssGrid.series_info
+  - RasDssGrid.shift_times
+  - RasDssGrid.time_steps
+  - RasDssGrid.zarr_variables
+  - RasDssGrid.zonal_statistics
+  - RasDssGrid.zone_masks
+  - RasExamples.extract_project
+  - ras.geom_df
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 18
+  executed_cells: 18
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck
@@ -4032,6 +4116,8 @@ notebooks:
   - RasCmdr.compute_plan
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasDssGrid.import_gridded
+  - RasDssGrid.list_variables
   - RasExamples.extract_project
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
@@ -4049,8 +4135,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 11
-  executed_cells: 11
+  code_cells: 15
+  executed_cells: 15
 - id: 917_mrms_precipitation_qpe
   filename: 917_mrms_precipitation_qpe.ipynb
   title: MRMS QPE Boundary-Hyetograph Hydraulic Comparison
@@ -4080,8 +4166,10 @@ notebooks:
   - HdfResultsPlan.get_compute_messages_hdf_only
   - RasCmdr.compute_plan
   - RasCmdr.inspect_plan_processes
+  - RasDss.get_backend
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasDssGrid.import_gridded
   - RasExamples.extract_project
   - RasPlan.get_plan_value
   - RasPlan.update_plan_intervals
@@ -4121,8 +4209,8 @@ notebooks:
     inspection/rendering only. Native run durations are recorded separately. Uniform boundaries follow
     simulation start; spatial rain-on-grid, other configurations and hydraulic acceptance remain unqualified.
     Follow-ups: issues 398, 438, 440 and 441.'
-  code_cells: 10
-  executed_cells: 10
+  code_cells: 13
+  executed_cells: 13
 - id: 918_hms_ras_coupled_forecast
   filename: 918_hms_ras_coupled_forecast.ipynb
   title: HMS-RAS Coupled Forecast Execution

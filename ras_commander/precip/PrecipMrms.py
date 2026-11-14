@@ -433,8 +433,9 @@ class PrecipMrms:
             logger.info(
                 "Converting %d MRMS GRIB2 file(s) to DSS via the native importer: %s",
                 len(grib_paths),
-                output_path,
+                output_path.name,
             )
+            logger.debug("MRMS DSS output path: %s", output_path)
             return _native_vortex.to_dss_native(
                 grib_paths, output_path, **native_arguments
             )
@@ -443,8 +444,9 @@ class PrecipMrms:
             logger.info(
                 "Converting %d MRMS GRIB2 file(s) to DSS via HEC-Vortex: %s",
                 len(grib_paths),
-                output_path,
+                output_path.name,
             )
+            logger.debug("MRMS DSS output path: %s", output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             try:
                 return VortexCli.import_gridded(

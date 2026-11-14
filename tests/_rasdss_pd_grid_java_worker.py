@@ -80,7 +80,7 @@ def run(req):
     if op == "version":
         return RasDss.get_file_version(req["dss_file"])
     if op == "catalog_types":
-        import dss_commander as dc
+        import ras_commander_fast_dss as dc
 
         with dc.open(req["dss_file"]) as handle:
             cat = handle.catalog()

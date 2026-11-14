@@ -62,8 +62,8 @@ DEFAULT_BACKEND = "java"
 
 _INSTALL_HINT = (
     "The 'native' MRMS backend requires the optional ras-commander-fast-dss package with its "
-    "gridded importer. It is not yet on PyPI; install the wheel you were given with "
-    "'uv pip install ras_commander_fast_dss-<version>-<tag>.whl', or use backend='java'."
+    "gridded importer. Install it with 'pip install ras-commander-fast-dss' or "
+    "'pip install \"ras-commander[dss]\"', or use backend='java'."
 )
 
 _RESAMPLING = {

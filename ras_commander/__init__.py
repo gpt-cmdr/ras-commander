@@ -349,7 +349,7 @@ _REMOTE_EXPORTS = {
 
 # DSS operations - lazy loaded to avoid importing pyjnius/Java until needed
 # This keeps the Java dependency truly optional for users who don't need DSS
-_DSS_EXPORTS = {'RasDss'}
+_DSS_EXPORTS = {'RasDss', 'RasDssGrid'}
 
 # Check module - QA validation for HEC-RAS steady flow models (unofficial cHECk-RAS clone)
 _CHECK_EXPORTS = {
@@ -538,7 +538,7 @@ __all__ = [
     'RasApptainer', 'ApptainerSiteProfile', 'ApptainerJob', 'ApptainerStatus', 'ApptainerCollection', 'ApptainerPrepareCollection', 'RasContainerImages', 'ApptainerTransport', 'SshApptainerTransport', 'ApptainerProfileError', 'InputCheckError',
 
     # DSS operations (lazy loaded)
-    'RasDss',
+    'RasDss', 'RasDssGrid',
 
     # Check module - QA validation (lazy loaded) - unofficial cHECk-RAS clone
     'RasCheck', 'CheckResults', 'CheckMessage', 'Severity',
