@@ -59,6 +59,23 @@ def test_guard_before_mutation(geom):
     assert geom.read_bytes() == before
 
 
+@pytest.mark.parametrize('append_new', [False, True])
+def test_retained_eof_point_separator_only_when_needed(tmp_path, append_new):
+    path = tmp_path / 'model.g01'
+    first = b'Reference Point Name=First\nReference Point Position=1,2\n'
+    last = b'Reference Point Name=Last   \nReference Point Position=3.00,4.00'
+    path.write_bytes(b'Geom Title=Example\n' + first + last)
+    points = [{'name':'Last', 'x':3., 'y':4.}]
+    if append_new:
+        points.append({'name':'New', 'x':5., 'y':6.})
+    Ref.replace_reference_points(path, points, create_backup=False)
+    assert Ref.get_reference_points(path) == points
+    if append_new:
+        assert last + b'\nReference Point Name=New' in path.read_bytes()
+    else:
+        assert path.read_bytes() == b'Geom Title=Example\n' + last
+
+
 @pytest.mark.parametrize('records', [b'Reference Point Position=1,2\n',
                                     b'Reference Point Name=x\n',
                                     b'Reference Point Name=x\nReference Point Position=nan,2\n',

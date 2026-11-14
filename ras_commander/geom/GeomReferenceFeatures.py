@@ -1388,13 +1388,12 @@ class GeomReferenceFeatures:
         retained = {r['name']: (r, lines[i:i+2]) for r, i in zip(records, starts)}
         replacement = []
         for point in prepared:
+            if replacement and not replacement[-1].endswith(('\r', '\n')):
+                replacement[-1] += ending
             old = retained.get(point['name'])
             block = old[1] if old and old[0] == point else [
                 line + ending for line in _build_reference_point_block(**point)]
             replacement.extend(block)
-            # An original EOF record may now precede another point or record.
-            if replacement and not replacement[-1].endswith(('\r', '\n')):
-                replacement[-1] += ending
         removed = set(starts) | positions
         insert = starts[0] if starts else next(
             (i for i, line in enumerate(lines) if line.startswith('LCMann ')), len(lines))
@@ -1402,8 +1401,11 @@ class GeomReferenceFeatures:
             # Adding a separator would alter an unrelated unterminated record.
             raise ValueError('Cannot insert points after an unterminated unrelated record')
         updated = [line for i, line in enumerate(lines[:insert]) if i not in removed]
+        suffix = [line for i, line in enumerate(lines[insert:], insert) if i not in removed]
+        if suffix and replacement and not replacement[-1].endswith(('\r', '\n')):
+            replacement[-1] += ending
         updated.extend(replacement)
-        updated.extend(line for i, line in enumerate(lines[insert:], insert) if i not in removed)
+        updated.extend(suffix)
         if _reference_point_records(updated) != prepared:
             raise RuntimeError('Reference-point replacement validation failed')
         output = ''.join(updated).encode('utf-8', errors='surrogateescape')
