@@ -234,7 +234,15 @@ def test_coherent_translation_is_not_current_authored_mesh(tmp_path, dataset):
         obj = hdf[f"{AREA}/Synthetic/{dataset}"]
         obj[...] = obj[()] + 1_000_000
     changed, missing, evidence = validate(text, path, expected, time.time() - 1)
-    assert not changed and missing
+    # Center translation also fails the text/HDF seed consistency check;
+    # face-point translation is detected by product validation alone.
+    expected_changes = (
+        ["Synthetic: text computation points do not match HDF cell centers"]
+        if dataset == "Cells Center Coordinate" else []
+    )
+    assert changed == expected_changes
+    assert missing
+    assert evidence["inputs_preserved"] == (not expected_changes)
     assert not evidence["products_complete"]
 
 
