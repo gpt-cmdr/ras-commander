@@ -19,6 +19,26 @@ def assert_exact(actual, expected):
     assert actual.tobytes(order="C") == expected.tobytes(order="C")
 
 
+@pytest.mark.parametrize("api, accepted", [(10, False), (11, True), (12, True), (13, False), (None, False)])
+def test_adapter_accepts_only_compatible_native_contracts(monkeypatch, api, accepted):
+    from types import SimpleNamespace
+    from ras_commander import fast_hdf
+
+    module = SimpleNamespace(API_VERSION=api)
+    monkeypatch.setattr(fast_hdf, "_native_state", None)
+    monkeypatch.setattr(fast_hdf.importlib, "import_module", lambda name: module)
+    loaded, reason, error = fast_hdf._load_native()
+    assert error is None
+    if accepted:
+        assert loaded is module
+        assert reason is None
+    else:
+        assert loaded is None
+        assert "version 11 or 12" in reason
+        with pytest.raises(fast_hdf.FastHdfError, match="version 11 or 12"):
+            fast_hdf._native("rust")
+
+
 @pytest.mark.parametrize("dtype", ["i1", "u1", "i2", "u2", "i4", "u4", "i8", "u8", "f4", "f8"])
 @pytest.mark.parametrize("compressed", [False, True])
 def test_numeric_dtype_shape_and_chunk_tail(native, tmp_path, dtype, compressed):

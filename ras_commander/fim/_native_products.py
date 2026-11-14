@@ -6,7 +6,12 @@ from . import _products
 from .errors import FimEngineError
 
 
-def deliver(source, folder, name, header, plan):
+def deliver(source, folder, name, header, plan, final=None):
+    """Verify and move engine-written products.
+
+    ``final`` is the ``(wire, grid)`` pair of a requested final delivery format;
+    the files must then carry exactly that format on the delivery grid.
+    """
     import rasterio
 
     pixels = plan.shape[0] * plan.shape[1]
@@ -23,12 +28,20 @@ def deliver(source, folder, name, header, plan):
         or seconds < 0
     ):
         raise FimEngineError("Invalid native product completion record")
+    if final is not None:
+        from . import _final_format
+
+        _final_format.check_header(header, final[0])
+    elif header.get("final_format") is not None:
+        raise FimEngineError("Native completion record carries an unrequested final_format")
     destinations = _products.product_paths(folder, name)
     paths = [source / "depth.tif", source / "wse.tif"]
     # Check both before moving either; the caller cleans delivered files on failure.
     for path in paths:
         with rasterio.open(path) as image:
-            if (
+            if final is not None:
+                _final_format.check_file(image, final[0], final[1], plan.crs)
+            elif (
                 image.shape != plan.shape
                 or image.transform != plan.transform
                 or image.crs != plan.crs
@@ -43,16 +56,20 @@ def deliver(source, folder, name, header, plan):
                 )
     for path, destination in zip(paths, destinations[:2], strict=True):
         path.replace(destination)
+    grid = final[1] if final is not None else dict(
+        col_off=int(plan.window.col_off), row_off=int(plan.window.row_off),
+        width=plan.shape[1], height=plan.shape[0], transform=plan.transform,
+    )
     return dict(
         status="complete" if flooded else "no_flooded_pixels",
         depth_tif=str(destinations[0]),
         wse_tif=str(destinations[1]),
         floodplain_gpkg=None,
-        col_off=int(plan.window.col_off),
-        row_off=int(plan.window.row_off),
-        width=plan.shape[1],
-        height=plan.shape[0],
-        transform=tuple(float(v) for v in tuple(plan.transform)[:6]),
+        col_off=grid["col_off"],
+        row_off=grid["row_off"],
+        width=grid["width"],
+        height=grid["height"],
+        transform=tuple(float(v) for v in tuple(grid["transform"])[:6]),
         crs=plan.crs.to_string(),
         depth_finite_pixels=finite,
         flooded_pixels=flooded,

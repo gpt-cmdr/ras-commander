@@ -82,7 +82,7 @@ def _configure_successful_export(monkeypatch, tmp_path, *, sidecars=()):
         lambda stage, *_args: (stage / "helper.exe", tmp_path / "fake-ras", None),
     )
 
-    def fake_helper(_helper, _ras, _config, request, _stage, _timeout):
+    def fake_helper(_helper, _ras, _config, request, _stage, _timeout, **_kwargs):
         response = {
             "schema_version": 1,
             "helper": "RasMapperTerrainExportHelper",
@@ -812,7 +812,7 @@ def test_operational_failure_cleans_owned_partial_and_stage(monkeypatch, tmp_pat
     )
     calls = []
 
-    def fake_helper(_helper, _ras, _config, request, _stage, _timeout):
+    def fake_helper(_helper, _ras, _config, request, _stage, _timeout, **_kwargs):
         calls.append(request["operation"])
         if request["operation"] == "inspect":
             return {

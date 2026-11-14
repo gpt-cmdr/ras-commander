@@ -258,3 +258,254 @@ def test_optional_real_public_terrain_metadata(tmp_path):
             reference = dataset[:1] if key in {"mask", "perimeter"} else dataset[...]
             actual = np.fromfile(tmp_path / descriptor["path"], dtype=descriptor["dtype"]).reshape(descriptor["shape"])
             assert actual.tobytes() == reference.tobytes()
+
+
+def _untag(tif):
+    with rasterio.open(tif) as src:
+        profile, data = src.profile, src.read()
+    profile.pop("crs", None)
+    tif.unlink()
+    with rasterio.open(tif, "w", **profile) as dst:
+        dst.write(data)
+    with rasterio.open(tif) as src:
+        assert not src.crs
+
+
+def _payload_reads(monkeypatch):
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda dataset, selection, **kwargs: dataset[selection])
+
+
+def test_untagged_tiff_takes_the_terrain_hdf_projection(terrain, tmp_path, monkeypatch):
+    """A RAS Mapper source with no CRS tags (a CRS without an EPSG code) is staged
+    in its terrain HDF's Projection, which becomes the request crs_wkt."""
+    from pyproj import CRS
+    hdf, tif = terrain
+    esri = CRS.from_user_input("ESRI:102630")
+    with h5py.File(hdf, "a") as handle:
+        handle.attrs["Projection"] = esri.to_wkt().encode()
+    _untag(tif)
+    _payload_reads(monkeypatch)
+    result = stage_boundary_terrain(hdf, tif, tmp_path / "out", selected_tiles=[0])
+    assert CRS.from_wkt(result["crs_wkt"]).equals(esri)
+
+
+def test_untagged_tiff_without_a_projection_is_refused(terrain, tmp_path, monkeypatch):
+    from ras_commander import fast_hdf
+    hdf, tif = terrain
+    with h5py.File(hdf, "a") as handle:
+        del handle.attrs["Projection"]
+    _untag(tif)
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda *a, **k: pytest.fail("read without a CRS"))
+    with pytest.raises(FimUnsupportedError, match="stored projected CRS"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
+def test_empty_stitch_arrays_are_no_stitch_tin(terrain, tmp_path, monkeypatch):
+    """Single-source terrains store (0, 0) stitch arrays; they are staged as absent
+    (previously refused as an unsupported shape), as effective terrain treats them."""
+    hdf, tif = terrain
+    with h5py.File(hdf, "a") as handle:
+        for name in ("Points", "Triangles"):
+            del handle[f"Terrain/Stitch TIN {name}"]
+            handle.create_dataset(f"Terrain/Stitch TIN {name}", shape=(0, 0), dtype="<f4")
+    _payload_reads(monkeypatch)
+    result = stage_boundary_terrain(hdf, tif, tmp_path / "out", selected_tiles=[0])
+    assert result["stitch_points"] is None and result["stitch_triangles"] is None
+
+
+def test_one_empty_stitch_array_still_refuses(terrain, tmp_path, monkeypatch):
+    from ras_commander import fast_hdf
+    hdf, tif = terrain
+    with h5py.File(hdf, "a") as handle:
+        del handle["Terrain/Stitch TIN Triangles"]
+        handle.create_dataset("Terrain/Stitch TIN Triangles", shape=(0, 0), dtype="<f4")
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda *a, **k: pytest.fail("read malformed stitch"))
+    with pytest.raises(FimUnsupportedError, match="shape or dtype"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out")
+
+
+def test_strict_links_refuse_soft_linked_empty_stitch_arrays(terrain, tmp_path, monkeypatch):
+    """Strict link checks precede the empty-array skip: soft-linked empty stitch
+    arrays are refused, never dereferenced and dropped."""
+    from ras_commander.fim._boundary_inputs import _boundary_specs
+    hdf, _ = terrain
+    with h5py.File(hdf, "a") as handle:
+        for name in ("Points", "Triangles"):
+            del handle[f"Terrain/Stitch TIN {name}"]
+            handle.create_dataset(f"Empty {name}", shape=(0, 0), dtype="<f4")
+            handle[f"Terrain/Stitch TIN {name}"] = h5py.SoftLink(f"/Empty {name}")
+    with h5py.File(hdf, "r") as handle:
+        source = handle["Terrain/source"]
+        with pytest.raises(FimUnsupportedError, match="Linked terrain boundary metadata"):
+            _boundary_specs(handle, source, [0], 6, strict_links=True)
+        # Without strict links the same arrays are no stitch TIN.
+        specs = _boundary_specs(handle, source, [0], 6, strict_links=False)
+        assert "stitch_points" not in specs and "stitch_triangles" not in specs
+
+
+# ---------------------------------------------- stored-map boundary ground
+
+def _perimeters(values, nodata=-9999.0):
+    """RAS Mapper's level-0 tile perimeters: the next tile's first column and row."""
+    height, width = values.shape
+    rows, cols = -(-height // 256), -(-width // 256)
+    out = np.full((rows * cols, 513), nodata, dtype="float32")
+    for t in range(rows * cols):
+        r0, c0 = (t // cols) * 256, (t % cols) * 256
+        if c0 + 256 < width:
+            n = min(256, height - r0)
+            out[t, :n] = values[r0:r0 + n, c0 + 256]
+        if r0 + 256 < height:
+            n = min(257, width - c0)
+            out[t, 256:256 + n] = values[r0 + 256, c0:c0 + n]
+    return out
+
+
+@pytest.fixture
+def modified(tmp_path):
+    """A single-source terrain with a modification layer and its stored-map
+    effective terrain (a raised block across tile column 256 and row 256)."""
+    from ras_commander.fim._effective_terrain import (METHOD_ID_V2, RECEIPT_SCHEMA,
+                                                     STORED_MAP_RULE_ID, _input_identity)
+    crs = rasterio.crs.CRS.from_epsg(32615)
+    rows, cols = np.mgrid[0:300, 0:520]
+    values = (100 + 0.01 * rows + 0.02 * cols).astype("float32")
+    values[290:, :10] = -9999.0
+    profile = dict(driver="GTiff", width=520, height=300, count=1, dtype="float32", crs=crs,
+                   transform=from_origin(300000, 4000000, 2, 2), nodata=-9999,
+                   tiled=True, blockxsize=256, blockysize=256)
+    tif, hdf = tmp_path / "source.tif", tmp_path / "terrain.hdf"
+    with rasterio.open(tif, "w", **profile) as raster:
+        raster.write(values, 1)
+    with h5py.File(hdf, "w") as handle:
+        handle.attrs["Projection"] = np.bytes_(crs.to_wkt())
+        group = handle.create_group("Terrain/source")
+        group.attrs["File"] = np.bytes_(tif.name)
+        level = group.create_group("0")
+        level["Mask"] = np.full((6, 65536), 255, dtype="uint8")
+        level["Perimeter"] = _perimeters(values)
+        handle.create_group("Modifications/Raise").attrs["Name"] = b"Raise"
+    effective = values.copy()
+    effective[250:262, 250:262] += 5.0
+    out = tmp_path / "effective.tif"
+    with rasterio.open(out, "w", **profile) as raster:
+        raster.write(effective, 1)
+    receipt = {"schema": RECEIPT_SCHEMA, "method_id": METHOD_ID_V2, "basis": "stored_map",
+               "basis_rule_id": STORED_MAP_RULE_ID, "output": str(out),
+               "terrain_hdf": str(hdf), "sources_in_priority_order": [tif.name],
+               "inputs": {"terrain_hdf": _input_identity(hdf), "sources": [_input_identity(tif)]}}
+    (tmp_path / "effective.tif.json").write_text(json.dumps(receipt))
+    return hdf, tif, out, values, effective
+
+
+def _stub_reads(monkeypatch):
+    from ras_commander import fast_hdf
+    monkeypatch.setattr(fast_hdf, "read_dataset", lambda dataset, selection, **kwargs: dataset[selection])
+
+
+def test_stored_map_ground_stages_modified_perimeters(modified, tmp_path, monkeypatch):
+    from ras_commander.fim._boundary_inputs import stored_map_terrain
+    hdf, tif, effective, values, changed = modified
+    _stub_reads(monkeypatch)
+    stored = stored_map_terrain(effective, hdf)
+    assert stored["source"] == tif.resolve()
+    result = stage_boundary_terrain(hdf, stored["source"], tmp_path / "out", effective_terrain=effective)
+    staged = np.fromfile(tmp_path / "out" / result["perimeter"]["path"], dtype="<f4").reshape(6, 513)
+    expected = _perimeters(changed)
+    assert np.array_equal(staged, expected)
+    # Tile 0's column 256 (rows 250..255) and row 256 (columns 250..256),
+    # tile 1's row 256 (columns 256..261) and tile 3's column 256 (rows 256..261).
+    assert result["modifications"]["state"] == "applied"
+    assert result["modifications"]["perimeter_samples_replaced"] == 6 + 7 + 6 + 6
+    assert result["modifications"]["basis"] == "stored_map"
+    json.dumps(result, allow_nan=False)
+
+
+def test_modifications_without_stored_map_ground_still_refuse(modified, tmp_path, monkeypatch):
+    hdf, tif, *_ = modified
+    _stub_reads(monkeypatch)
+    with pytest.raises(FimUnsupportedError, match="stored-map effective terrain"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out")
+
+
+def test_stored_map_receipt_is_checked(modified, tmp_path):
+    from ras_commander.fim._boundary_inputs import stored_map_terrain
+    hdf, tif, effective, *_ = modified
+    sidecar = tmp_path / "effective.tif.json"
+    receipt = json.loads(sidecar.read_text())
+    assert stored_map_terrain(tif, hdf) is None  # an original source has no receipt
+    for change, message in ((dict(basis="export"), "stored-map effective terrain"),
+                            (dict(terrain_hdf=str(tmp_path / "other.hdf")), "another output or terrain HDF"),
+                            (dict(sources_in_priority_order=["a.tif", "b.tif"]), "single-source"),
+                            (dict(sources_in_priority_order=["missing.tif"]), "missing")):
+        sidecar.write_text(json.dumps(dict(receipt, **change)))
+        with pytest.raises(FimUnsupportedError, match=message):
+            stored_map_terrain(effective, hdf)
+    sidecar.write_text(json.dumps(dict(receipt, basis_rule_id="other")))
+    with pytest.raises(FimUnsupportedError, match="rule"):
+        stored_map_terrain(effective, hdf)
+    sidecar.write_text(json.dumps(receipt))
+    assert stored_map_terrain(effective, hdf)["source"] == tif.resolve()
+    # An HDF restored with an older timestamp (copy2/robocopy) is still refused:
+    # the receipt holds the inputs' identities as built.
+    earlier = hdf.stat().st_mtime_ns - 10**9
+    os.utime(hdf, ns=(earlier, earlier))
+    with pytest.raises(FimUnsupportedError, match="differs from the build"):
+        stored_map_terrain(effective, hdf)
+    # A receipt from before input identities falls back to timestamps.
+    sidecar.write_text(json.dumps({k: v for k, v in receipt.items() if k != "inputs"}))
+    assert stored_map_terrain(effective, hdf)["source"] == tif.resolve()
+    later = effective.stat().st_mtime_ns + 10**9
+    os.utime(hdf, ns=(later, later))
+    with pytest.raises(FimUnsupportedError, match="differs from the build"):
+        stored_map_terrain(effective, hdf)
+
+
+def test_stored_map_ground_must_keep_valid_cells_and_tile_history(modified, tmp_path, monkeypatch):
+    hdf, tif, effective, values, changed = modified
+    _stub_reads(monkeypatch)
+    with rasterio.open(effective, "r+") as raster:
+        data = raster.read(1)
+        data[0, 0] = -9999.0
+        raster.write(data, 1)
+    with pytest.raises(FimUnsupportedError, match="valid cells"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "a", effective_terrain=effective)
+    with rasterio.open(effective, "r+") as raster:
+        raster.write(changed, 1)
+    with h5py.File(hdf, "a") as handle:
+        perimeter = handle["Terrain/source/0/Perimeter"]
+        row = perimeter[0]
+        row[10] += 1.0
+        perimeter[0] = row
+    with pytest.raises(FimUnsupportedError, match="perimeters differ"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "b", effective_terrain=effective)
+
+
+def test_stored_map_ground_must_share_the_source_nodata(modified, tmp_path, monkeypatch):
+    """The engine classifies staged (source) perimeters with the ground's nodata."""
+    hdf, tif, effective, values, changed = modified
+    _stub_reads(monkeypatch)
+    data = changed.copy()
+    data[data == -9999.0] = -3.4028235e38
+    with rasterio.open(effective, "r+") as raster:
+        profile = raster.profile
+    profile.update(nodata=-3.4028235e38)
+    with rasterio.open(effective, "w", **profile) as raster:
+        raster.write(data, 1)
+    with pytest.raises(FimUnsupportedError, match="nodata"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "out", effective_terrain=effective)
+
+
+def test_stored_map_valid_cell_check_reads_only_staged_tiles(modified, tmp_path, monkeypatch):
+    """A selected tile checks its own cells (and next row/column), not the raster."""
+    hdf, tif, effective, values, changed = modified
+    _stub_reads(monkeypatch)
+    with rasterio.open(effective, "r+") as raster:
+        data = raster.read(1)
+        data[5, 515] = -9999.0  # tile 2 (row 0, columns 512..519) only
+        raster.write(data, 1)
+    stage_boundary_terrain(hdf, tif, tmp_path / "a", effective_terrain=effective, selected_tiles=[0])
+    with pytest.raises(FimUnsupportedError, match="valid cells"):
+        stage_boundary_terrain(hdf, tif, tmp_path / "b", effective_terrain=effective, selected_tiles=[2])

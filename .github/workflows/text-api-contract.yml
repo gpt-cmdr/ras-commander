@@ -1,5 +1,7 @@
 name: Text API contract
 
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
 on:
   pull_request:
   push:
@@ -11,7 +13,7 @@ permissions:
 
 jobs:
   text-api:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted", "Linux", "X64", "clb-ci-linux"]') }}
     strategy:
       fail-fast: false
       matrix:

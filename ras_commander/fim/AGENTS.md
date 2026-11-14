@@ -126,10 +126,12 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   must not import it or depend on installed HEC-RAS DLLs. Never commit decompiled
   vendor source, captured project geometry, or generated raster evidence.
 
-- Model-backed mapping rejects any 1D river centerline/reach or cross-section geometry before
+- Model-backed 2D mapping entry points reject any 1D river centerline/reach or cross-section geometry before
   mesh selection or engine execution. Coupled pipe hydraulic tables alone are permitted.
   Preserve source-HDF provenance on extracted cell tables; standalone polygon tables cannot
   establish the dimensional scope of an unseen source model.
+  Explicit qualification-gated 1D and coupled APIs perform their own dimensional
+  admission; they do not route mixed inputs through the 2D-only entry points.
 - Step05 preparation is global. Wet samples, triangulation, query axes, and the wet mask use every wet
   cell before any AOI. An AOI selects output pixels on the final grid only. Never subset or
   retriangulate for an AOI.
@@ -162,10 +164,25 @@ Parent `ras_commander/AGENTS.md` and root `AGENTS.md` still apply.
   for concurrency, retaining sequential compatibility with older engines.
 - The returned manifest columns are declared as `fim_product_manifest` in `ras_commander/schemas.py`.
 
+- `RasFim.read_terrain_modifications` is the public reader of a terrain's
+  modification layers in the `rasmapper-effective-terrain/2` request form
+  (`ras-commander-terrain-modifications/1`). It wraps `_terrain_mods.read_layers`
+  with the version/units resolution `build_effective_terrain` uses (links
+  resolved first) and never runs the engine; callers such as ras2cng route on
+  `status` and `refusal_reason` instead of importing `_terrain_mods`. `status`
+  describes the HDF layers only: check `top_priority_terrain_source()["modified"]`
+  (or `warnings` with `rasmap_path`) before treating layers as applied, since
+  RAS Mapper applies none without a group named `Modifications`; a misnamed
+  group alongside a correct one is only ignored. Keep the
+  staged layers identical to the build request. Report how each value was
+  resolved (`*_basis`, `"default"` for assumed values), surface rasmap
+  registration problems in `warnings` and do not apply the
+  `ElevationModificationGroup` gate here (`top_priority_terrain_source` owns it).
+
 ## Catalog workflow for agents
 
 - Use `RasFim.map_catalog` for multiple area/timestep groups. Read
-  `docs/api/fim.md` sections "Build jobs from a watershed layer" and
+  `docs/native-mapping-engine.md` sections "Build jobs from a watershed layer" and
   "Choose a throughput policy" before planning a large catalog.
 - Each job supplies one selected watershed polygon (or an intentional bbox),
   complete source HDF/qualified terrain paths, a safe unique `job_id`, and an

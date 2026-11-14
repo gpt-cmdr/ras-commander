@@ -27,6 +27,9 @@ TABLES = frozenset(
 POLYGON_TABLES = frozenset(
     {"Attributes", "Polygon Info", "Polygon Parts", "Polygon Points"}
 )
+# HEC-RAS 7.0 and 7.0.1 also store a polygon perimeter profile; 6.6 does not.
+# Constant polygons (the only ones accepted here) ignore it in every version.
+POLYGON_PROFILE_TABLES = POLYGON_TABLES | {"Profile Info", "Profile Values"}
 
 
 def _prefix(arrays):
@@ -34,13 +37,13 @@ def _prefix(arrays):
 
 
 def _validated_group(group):
-    if set(group.keys()) not in (TABLES, POLYGON_TABLES):
+    if set(group.keys()) not in (TABLES, POLYGON_TABLES, POLYGON_PROFILE_TABLES):
         raise ValueError(f"Unsupported modification layout: {group.name}")
     arrays = {name: read_typed(group[name], slice(None)) for name in group}
     prefix = _prefix(arrays)
     count = len(arrays["Attributes"])
     if arrays[prefix + " Info"].shape != (count, 4) or (
-        prefix == "Polyline" and arrays["Profile Info"].shape != (count, 2)
+        "Profile Info" in arrays and arrays["Profile Info"].shape != (count, 2)
     ):
         raise ValueError(f"Inconsistent modification feature indexes: {group.name}")
     if arrays[prefix + " Parts"].ndim != 2 or arrays[prefix + " Parts"].shape[1] != 2:
@@ -72,7 +75,7 @@ def _validated_group(group):
         start, size, part_start, part_size = map(int, arrays[prefix + " Info"][feature])
         profile_start, profile_size = (
             map(int, arrays["Profile Info"][feature])
-            if prefix == "Polyline"
+            if "Profile Info" in arrays
             else (0, 0)
         )
         if (
@@ -200,14 +203,14 @@ def _subset_arrays(arrays, indexes):
     for index in indexes:
         start, count, part_start, part_count = map(int, arrays[prefix + " Info"][index])
         profile_start, profile_count = (
-            map(int, arrays["Profile Info"][index]) if prefix == "Polyline" else (0, 0)
+            map(int, arrays["Profile Info"][index]) if "Profile Info" in arrays else (0, 0)
         )
         points.append(arrays[prefix + " Points"][start : start + count])
         new_parts = arrays[prefix + " Parts"][
             part_start : part_start + part_count
         ].copy()
         parts.append(new_parts)
-        if prefix == "Polyline":
+        if "Profile Info" in arrays:
             profiles.append(
                 arrays["Profile Values"][profile_start : profile_start + profile_count]
             )
@@ -222,7 +225,7 @@ def _subset_arrays(arrays, indexes):
         prefix + " Parts": np.concatenate(parts),
         prefix + " Info": np.asarray(line_info, dtype=arrays[prefix + " Info"].dtype),
     }
-    if prefix == "Polyline":
+    if "Profile Info" in arrays:
         result.update(
             {
                 "Profile Values": np.concatenate(profiles),

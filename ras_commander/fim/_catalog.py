@@ -300,6 +300,7 @@ def map_catalog(
     timeout=None,
     cancel_event=None,
     raise_on_failure=True,
+    final_format=None,
 ):
     import pandas as pd
     import psutil
@@ -328,6 +329,11 @@ def map_catalog(
     if product_writer not in ("rasterio", "native"):
         raise ValueError("product_writer must be rasterio or native")
     controls["product_writer"] = product_writer
+    from . import _final_format
+
+    controls["final_format"] = _final_format.normalize(final_format)
+    if controls["final_format"] is not None and product_writer != "native":
+        raise FimUnsupportedError("final_format requires product_writer='native'")
     if strategy not in ("reuse", "parallel"):
         raise ValueError("strategy must be reuse or parallel")
     controls["strategy"] = strategy
@@ -380,6 +386,8 @@ def map_catalog(
         )
     if product_writer == "native" and not engine["method"].get("sloping", {}).get("native_geotiff_outputs"):
         raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
+    if controls["final_format"] is not None:
+        _final_format.require_engine(engine["method"].get("sloping", {}), controls["final_format"])
     for job in normal:
         method = engine["method"].get(job["interpolation"], {})
         if (

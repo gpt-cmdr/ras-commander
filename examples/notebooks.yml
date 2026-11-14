@@ -2337,8 +2337,37 @@ notebooks:
   excluded: false
   code_cells: 14
   executed_cells: 14
-- id: 321_native_dss_records_and_recovery
-  filename: 321_native_dss_records_and_recovery.ipynb
+- id: 321_terrain_modification_layer_writers
+  filename: 321_terrain_modification_layer_writers.ipynb
+  title: 'Terrain Modification Layer Writers: Write, Read Back, Verify in RAS Mapper'
+  series: 300
+  series_name: Unsteady & DSS
+  summary: write channel, high-ground, constant-polygon and ellipse terrain-modification layers into a
+    copied Bald Eagle Creek terrain, read them back with read_layers, write them into a second terrain
+    with add_modification_layer, and compare RAS Mapper's native exports (HEC-RAS 6.6 and 7.0.1) pixel
+    by pixel; no hydraulic plans are run
+  tags:
+  - terrain
+  difficulty: advanced
+  est_runtime: null
+  data_project: BaldEagleCrkMulti2D
+  functions_used:
+  - RasExamples.extract_project
+  - RasFim.read_terrain_modifications
+  - RasTerrain.export_rasmapper_terrain
+  - RasTerrainModWriter.add_channel_modification
+  - RasTerrainModWriter.add_ellipse_modification
+  - RasTerrainModWriter.add_high_ground_modification
+  - RasTerrainModWriter.add_modification_layer
+  - RasTerrainModWriter.add_modification_polygon
+  - RasTerrainModWriter.list_modifications
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 11
+  executed_cells: 11
+- id: 322_native_dss_records_and_recovery
+  filename: 322_native_dss_records_and_recovery.ipynb
   title: Native DSS Records, Backends, and Copy-Out Recovery
   series: 300
   series_name: Unsteady & DSS
@@ -3683,8 +3712,8 @@ notebooks:
   series: 700
   series_name: Sensitivity & Precipitation
   summary: Apply a shared NOAA temporal curve to an existing model footprint, validate native rainfall
-    NetCDF, export Float32 intervals with explicit bilinear SHG conversion through HEC-Vortex or the native
-    FAST-DSS importer, and optionally configure a staged model copy without computing.
+    NetCDF, export Float32 intervals with explicit bilinear SHG conversion, and optionally configure a
+    staged model copy without computing.
   tags:
   - precipitation
   difficulty: intermediate
@@ -4397,9 +4426,9 @@ notebooks:
   title: WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification
   series: 900
   series_name: Data Integration
-  summary: qualify a complete WPC forecast (current day, or a fixed re-runnable cycle) through verified
-    native-projection GRIB crops, 28 DSS grids, temporary and final HDF forcing, no-rain/event HEC-RAS
-    7.0 simulations, hydraulic response, mapped convergence exceptions, and explicit manual review
+  summary: qualify a complete current WPC forecast through verified native-projection GRIB crops, 28 DSS
+    grids, temporary and final HDF forcing, no-rain/event HEC-RAS 7.0 simulations, hydraulic response,
+    mapped convergence exceptions, and explicit manual review
   tags:
   - dss
   - forecast
@@ -4445,9 +4474,9 @@ notebooks:
   title: Terrain Modification Analysis
   series: 900
   series_name: Data Integration
-  summary: write and verify a channel terrain modification in the Bald Eagle Creek example, then use the
-    optional GDAL bridge to report terrain extent and sample the modified profile and polygon elevation-volume
-    curve; no baseline or modified hydraulic plans are run
+  summary: write a channel terrain modification with a uniform design-grade invert along Bald Eagle Creek,
+    then use the optional GDAL bridge to compare existing and proposed terrain profiles and polygon elevation-volume
+    curves and report the cut volume; no baseline or modified hydraulic plans are run
   tags:
   - terrain
   difficulty: advanced
@@ -4461,11 +4490,12 @@ notebooks:
   - RasTerrainMod.setup_gdal_bridge
   - RasTerrainModWriter.add_channel_modification
   - RasTerrainModWriter.add_modification_group
+  - RasTerrainModWriter.list_modifications
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 10
+  code_cells: 11
+  executed_cells: 11
 - id: 931_native_rasmapper_terrain_export
   filename: 931_native_rasmapper_terrain_export.ipynb
   title: Native RAS Mapper Terrain Export
@@ -4491,6 +4521,29 @@ notebooks:
   excluded: false
   code_cells: 9
   executed_cells: 9
+- id: 932_louisiana_endmc_public_models
+  filename: 932_louisiana_endmc_public_models.ipynb
+  title: 'Louisiana LWI EnDMC: Public Catalog, Cloud Raster Reads, and Selective Download'
+  series: 900
+  series_name: Data Integration
+  summary: Read the public Louisiana Watershed Initiative EnDMC catalog without an account, filter models
+    by region and software, classify a resource's S3 files, window-read an online depth raster through
+    /vsicurl/, and download HEC-RAS project text files with a receipt and checksum verification.
+  tags:
+  - model-sources
+  - catalog
+  - cloud-native
+  - louisiana
+  - 2d
+  difficulty: intermediate
+  est_runtime: 1 min
+  data_project: null
+  functions_used: []
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 14
+  executed_cells: 14
 - id: 950_ebfe_spring_creek
   filename: 950_ebfe_spring_creek.ipynb
   title: 'Using eBFE Models: Spring Creek 2D Analysis'

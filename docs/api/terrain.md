@@ -42,6 +42,36 @@ receipt to the share. A qualification path whose fully qualified helper response
 name exceeded the legacy .NET 260-character limit also failed cleanly; long-path
 output staging remains unqualified.
 
+A failed export returns `success=False` with a `failure_kind` that callers can
+act on without parsing the error text:
+
+| `failure_kind` | Condition | Next action |
+|---|---|---|
+| `out_of_memory` | The helper raised .NET `System.OutOfMemoryException`, including when it is wrapped in a type-initializer exception | Retry with more memory available to the helper process |
+| `empty_extent` | RAS Mapper reported that its partial TIFF "does not have embedded statistics", and a full-resolution scan of every registered source that intersects the window found no valid cell | Skip the window, or pass `empty_extent="nodata"` |
+| `empty_extent_unconfirmed` | RAS Mapper reported the same error, but the coverage scan could not read a source or rasterio is not installed | Check the source paths listed in `empty_extent_check` |
+| `no_response`, `invalid_response` | The helper wrote no response file, or a response that failed schema validation | Inspect the exit code and stderr in `helper_invocations` |
+| `native_error` | Any other exception reported by the helper | Read `error` and the helper response |
+| `timeout`, `error` | The bounded runtime expired, or a host-side step such as GeoTIFF validation failed | Read `error` |
+
+With `empty_extent="nodata"`, a confirmed empty window produces an all-nodata
+Float32 GeoTIFF (nodata `-9999`) on the snapped export grid, using the
+`.rasmap` projection file's CRS, and the result sets `empty_extent=True`. If
+the scan finds any valid cell, the export fails as `native_error`; RAS Commander
+does not replace a native failure with nodata output.
+
+`helper_invocations` records each native helper call: the request, process
+exit code, parsed response, the last 20,000 characters of stderr, and a status.
+The receipt carries the same records, so the evidence remains after the
+task-local stage is removed. Under Wine, stderr often holds only the
+`XDG_RUNTIME_DIR is invalid or not set` warning, which also appears in
+successful runs. RAS Commander keeps that line in the record but never uses it
+as the failure summary. A helper that reports success and then exits non-zero,
+for example after a crash during runtime shutdown, is not treated as a failure.
+Its response must still validate, an export's TIFF must exist, and the output
+goes through the same semantic GeoTIFF validation. The record status is
+`success_nonzero_exit`, and `messages` notes the exit code.
+
 Supported HEC-RAS versions are deliberately narrow:
 
 | Runtime | Status | Evidence |
@@ -151,20 +181,31 @@ Line and polygon terrain modification HDF/`.rasmap` writing. Also available as t
 
 - `add_high_ground_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)` - Add levee/road terrain modification with trapezoidal profile along polyline (TakeHigher mode)
 - `add_fill_surface_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)` - Add fill-surface (SetValue) modification along polyline
-- `add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=10.0, left_slope=3.0, right_slope=3.0, ...)` - Add trapezoidal channel modification (TakeLower mode)
+- `add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=None, ..., *, elevation=None, profile_points=None, ...)` - Add trapezoidal channel modification (TakeLower mode). The invert is an absolute elevation profile (`profile_points`, `elevation` or polyline Z); `depth` instead sets it below the terrain source sampled at each vertex.
 
-### Polygon Modification Methods
+Ground lines are written as RAS Mapper saves them: `Type=Levee`, an empty `System Name` (a non-empty one sends even a lone line through RAS Mapper's system path and changes its footprint at bends; pass `system_name` only for an intended join), NaN `Transition Percent`, and an absolute profile in `Profile Info`/`Profile Values`. A new layer goes on top of the list (`Priority` 0, which wins), as in the RAS Mapper GUI; pass `priority` to place it elsewhere. HEC-RAS 6.6 and 7.0.1 exports of writer layers equal those of the same features authored in RAS Mapper.
 
-- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ...)` - Add polygon multipoint modification (detention pond/wetland grading)
+### Polygon and Ellipse Modification Methods
+
+- `add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ..., elevation=None, priority=None, perimeter_control_points=None)` - Add polygon modification: constant (`elevation`), vertex-Z (`shape_z`/`provided`, portable across 6.6 and 7.x), terrain-sampled boundary, or a boundary from `perimeter_control_points` (outside the ring, within `elev_pt_tolerance`; rendered identically by HEC-RAS 6.6, 6.7 Beta 4/5, 7.0, 7.0.1 and 7.0.2). `control_points` are interior mass points
+- `add_ellipse_modification(terrain_hdf_path, rasmap_path, name, ellipses, mode="set_value")` - Add ellipse/circle modifications (rotation in degrees)
+- `add_modification_layer(terrain_hdf_path, rasmap_path, layer)` - Write one layer in the `read_layers` form (ground line, constant polygon, ellipse) back to a terrain
+
+The RAS Mapper export (HEC-RAS 6.6 and 7.0.1) applies a terrain's HDF modifications only when its `.rasmap` terrain layer has an `ElevationModificationGroup` named exactly `Modifications`. Without that group, or with the group under any other name, the export applies none of them and reports nothing: a terrain written into a `Hydroconnectors` group exported unchanged, and renaming the group to `Modifications` applied it. The writers always register layers in `Modifications`. `group_name` accepts only `"Modifications"` (the default) and raises `ValueError` for any other name, before anything is written; an existing group under another name is renamed to `Modifications`, with a warning, because the terrain's other HDF layers then also apply. `RasFim.top_priority_terrain_source(terrain_hdf, rasmap_path=...)` flags an existing misnamed group in `rasmap_warnings` (code `modification_group_misnamed`) without changing either file.
 
 ### Group Management
 
-- `add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")` - Add empty modification group to terrain HDF and `.rasmap`
+- `add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")` - Add the empty `Modifications` group to terrain HDF and `.rasmap` (no other group name is accepted)
 
 ### Query Methods
 
 - `list_modifications(terrain_hdf_path)` - List all terrain modifications stored in HDF sidecar group
 - `get_modification_profile(terrain_hdf_path, name)` - Read modification station/elevation profile
+
+To read the modification layers in the form the native effective-terrain
+engine (`rasmapper-effective-terrain/2`) needs, with the reason for any form it
+refuses, use
+[`RasFim.read_terrain_modifications()`](../native-mapping-engine.md#read-the-modification-layers).
 
 ### Analysis Methods
 
@@ -427,6 +468,7 @@ outlets = result.streams[result.streams["DSLINKNO"] < 0]
 | Notebook | Description |
 |----------|-------------|
 | `316_terrain_modifications.ipynb` | Terrain modification writer: high ground, channel, polygon |
+| `321_terrain_modification_layer_writers.ipynb` | Every writer layer kind, `read_layers` / `add_modification_layer` round trip, pixel checks against RAS Mapper exports (6.6, 7.0.1) |
 | `920_terrain_creation.ipynb` | Terrain HDF creation from rasters |
 | `930_terrain_modification_analysis.ipynb` | Cut/fill analysis with RasTerrainMod |
 | `931_native_rasmapper_terrain_export.ipynb` | Bounded native export, typed result, receipt, and visual grid evidence |

@@ -1,4 +1,4 @@
-"""Explicit experimental sloping API adapter; no arithmetic fallback."""
+"""Explicit sloping API adapter; no arithmetic fallback."""
 
 from pathlib import Path
 import json
@@ -15,7 +15,64 @@ import pandas as pd
 from . import _aoi, _engine, _horizontal, _products
 from ._horizontal_engine import _read_f32, _write_geometry
 from ._sloping_inputs import write_binary_mesh_inputs
-from .errors import FimEngineError, FimUnsupportedError
+from .errors import FimEngineError, FimEngineNotFoundError, FimUnsupportedError
+
+
+class _StreamProtocolError(FimEngineError):
+    """The sloping process did not deliver a complete transport frame."""
+
+
+def _read_stream_f32(*args):
+    try:
+        return _read_f32(*args)
+    except FimEngineError as exc:
+        raise _StreamProtocolError(str(exc)) from exc
+
+
+def _read_stderr_tail(errors):
+    """Read at most 16,000 bytes and retain the last 4,000 decoded characters."""
+    errors.seek(0, os.SEEK_END)
+    errors.seek(max(0, errors.tell() - 16000), os.SEEK_SET)
+    return errors.read(16000).decode("utf-8", errors="replace")[-4000:]
+
+
+def _capture_process_failure(process, errors, details, *, expired=None, wait_for_exit=False):
+    """Capture a natural exit separately from supervisory termination."""
+    timed_out = expired is not None and expired.is_set()
+    observed_code = None if timed_out or process is None else process.poll()
+    if observed_code is None and process is not None and wait_for_exit and not timed_out:
+        try:
+            observed_code = process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            pass
+    cleanup_termination = process is not None and process.poll() is None
+    if cleanup_termination:
+        process.kill()
+    cleanup_code = process.wait() if process is not None else None
+    if expired is not None and expired.is_set():
+        observed_code = None
+    details["engine_returncode"] = observed_code
+    details["engine_cleanup_termination_requested"] = cleanup_termination
+    if observed_code is None and cleanup_code is not None:
+        details["engine_cleanup_returncode"] = cleanup_code
+    details["engine_stderr"] = _read_stderr_tail(errors)
+    return observed_code
+
+
+def _read_report(path, returncode, stderr):
+    """Retain early engine failures even when admission produced no report."""
+    if returncode is not None and returncode != 0:
+        refusal = _engine.read_refusal(path.parent, stderr)
+        if refusal is not None:
+            raise refusal
+        raise FimEngineError(
+            f"Sloping engine failed with exit {returncode}: "
+            f"{stderr.strip()[-4000:] or 'no diagnostic on stderr'}"
+        )
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise FimEngineError("Missing or invalid sloping engine report") from exc
 
 
 def _validate_options(
@@ -125,16 +182,127 @@ def _profile_block(dataset, time_index, start, stop, remaining, cache, chunk_byt
     return values[time_index - first]
 
 
+STAGED_CELLS_METHOD = "ras-commander-staged-cells/1"
+#: Request features the engine refuses together with ``staged_cells_files``.
+STAGED_CELLS_EXCLUDES = (
+    "velocity", "shear_stress", "storage_areas", "terrain_scope", "stored_grid",
+    "reduce_max", "derived_products", "export_physical_ownership",
+)
+
+
+def staged_cells_supported(capabilities, method="depth_groups"):
+    """True when the engine's ``method`` capability (``sloping`` or ``depth_groups``)
+    accepts ``staged_cells_files`` (``ras-commander-staged-cells/1``).
+
+    ``capabilities`` is the engine method record (``RasFim.get_engine_info()["method"]``).
+    Engines without it reject the field (unknown request fields are refused), so
+    callers stage complete meshes instead. ``sloping_native_grid`` never accepts it,
+    and neither does any request using a feature in :data:`STAGED_CELLS_EXCLUDES`.
+    """
+    if method not in ("sloping", "depth_groups"):
+        return False
+    record = (capabilities or {}).get(method) or {}
+    return record.get("staged_cells") == STAGED_CELLS_METHOD
+
+
+def _mesh_array(header_path, header, key, columns):
+    descriptor = header["arrays"][key]
+    rows = int(descriptor["rows"])
+    path = Path(header_path).parent / descriptor["path"]
+    if rows == 0:
+        return np.empty((0, columns), dtype="<i4")
+    return np.memmap(path, dtype="<i4", mode="r", shape=(rows, columns))
+
+
+def _gather_incidence(info, values, rows):
+    """Concatenate CSR rows ``rows`` of ``values`` (first column) in row order."""
+    starts = np.asarray(info[rows, 0], dtype=np.int64)
+    counts = np.asarray(info[rows, 1], dtype=np.int64)
+    if (counts < 0).any() or (starts < 0).any() or (starts + counts > len(values)).any():
+        raise ValueError("Invalid sloping incidence rows")
+    total = int(counts.sum())
+    if total == 0:
+        return np.empty(0, dtype=np.int64)
+    offsets = np.repeat(starts - np.cumsum(counts) + counts, counts)
+    return np.asarray(values[offsets + np.arange(total), 0], dtype=np.int64)
+
+
+def staged_cell_subsets(mesh_files, owner_cells):
+    """Per mesh, the ascending global cells whose WSE can reach an owner pixel.
+
+    Fast-Map's ``ras-commander-staged-cells/1`` closure: the endpoints of every
+    owner-cell face, every face incident to those vertices, and both cells of
+    each such face (ghost cells included). Fast-Map verifies the closure and
+    refuses a subset that misses a cell. A mesh without owner cells stages
+    cell 0 only, which rendering never reads. ``owner_cells`` holds
+    ``[mesh_index, cell_id]`` pairs as in the sloping request.
+    """
+    owners = np.asarray(owner_cells, dtype=np.int64).reshape(-1, 2)
+    subsets = []
+    for index, header_path in enumerate(mesh_files):
+        header = json.loads(Path(header_path).read_text(encoding="utf-8"))
+        if header.get("schema") != "ras-commander-sloping-mesh/1":
+            raise ValueError("Unsupported sloping mesh schema")
+        cells = np.unique(owners[owners[:, 0] == index, 1])
+        if cells.size == 0:
+            subsets.append(np.zeros(1, dtype="<u4"))
+            continue
+        cell_info = _mesh_array(header_path, header, "cell_info", 2)
+        if cells[0] < 0 or cells[-1] >= len(cell_info):
+            raise ValueError("Owner cell outside sloping mesh")
+        faces = _gather_incidence(cell_info, _mesh_array(header_path, header, "cell_faces", 2), cells)
+        face_vertices = _mesh_array(header_path, header, "face_vertices", 2)
+        vertices = np.unique(np.asarray(face_vertices[faces], dtype=np.int64))
+        ring = _gather_incidence(
+            _mesh_array(header_path, header, "vertex_info", 2),
+            _mesh_array(header_path, header, "vertex_faces", 2),
+            vertices,
+        )
+        face_cells = _mesh_array(header_path, header, "face_cells", 2)
+        closure = np.unique(np.concatenate([
+            cells, np.asarray(face_cells[np.unique(np.concatenate([faces, ring]))], dtype=np.int64).ravel(),
+        ]))
+        if closure[0] < 0 or closure[-1] >= len(cell_info) or closure[-1] >= 2**32:
+            raise ValueError("Sloping face cell outside mesh")
+        subsets.append(closure.astype("<u4"))
+        del cell_info, face_vertices, face_cells
+    return subsets
+
+
+def write_staged_cells(root, subsets):
+    """Write one ``<u4`` staged-cell file per mesh; returns their paths."""
+    paths = []
+    for index, cells in enumerate(subsets):
+        path = Path(root) / f"staged-cells-{index}.bin"
+        np.ascontiguousarray(cells, dtype="<u4").tofile(path)
+        paths.append(str(path))
+    return paths
+
+
 def _stage_profiles(
     hdf, root, meshes, max_values, selected, *, deduplicate=False, max_staged_bytes=None,
-    chunk_bytes=8 * 1024 * 1024,
+    chunk_bytes=8 * 1024 * 1024, cell_subsets=None,
 ):
+    """Stage float32 cell WSE per profile and mesh.
+
+    With ``cell_subsets`` (ascending global cells per mesh, as from
+    :func:`staged_cell_subsets`) each file holds only those cells' values in
+    that order. Every complete source row is still read and checked finite.
+    """
     from .. import HdfResultsMesh
     from ..fast_hdf import backend_scope
     from .RasFim import _file_identity
     import h5py
     if isinstance(chunk_bytes, bool) or not isinstance(chunk_bytes, int) or chunk_bytes < 4:
         raise ValueError("chunk_bytes must be an integer >= 4")
+    if cell_subsets is not None:
+        cell_subsets = [np.asarray(c, dtype=np.int64) for c in cell_subsets]
+        if len(cell_subsets) != len(meshes) or any(
+            c.ndim != 1 or c.size == 0 or c[0] < 0 or c[-1] >= m["cell_count"]
+            or (c.size > 1 and (np.diff(c) <= 0).any())
+            for c, m in zip(cell_subsets, meshes)
+        ):
+            raise ValueError("cell_subsets must be ascending in-range cells, one array per mesh")
     before = _file_identity(hdf)
 
     staged_bytes = 0
@@ -150,7 +318,9 @@ def _stage_profiles(
         values_files = []
         for i, mesh in enumerate(meshes):
             size = mesh["cell_count"]
-            if max_staged_bytes is not None and staged_bytes + size * 4 > max_staged_bytes:
+            subset = None if cell_subsets is None else cell_subsets[i]
+            stored = size if subset is None else len(subset)
+            if max_staged_bytes is not None and staged_bytes + stored * 4 > max_staged_bytes:
                 raise FimUnsupportedError("Prepared sloping inputs exceed max_prepared_mib")
             filename = f"values-{profile_index}-{i}.bin"
             destination = root / filename
@@ -193,6 +363,9 @@ def _stage_profiles(
                         array = np.asarray(values, dtype="<f4").reshape(-1)
                         if len(array) != stop - start or not np.isfinite(array).all():
                             raise ValueError(f"Invalid complete cell profile {name!r} for {mesh['mesh_name']!r}")
+                        if subset is not None:
+                            lo, hi = np.searchsorted(subset, [start, stop])
+                            array = array[subset[lo:hi] - start]
                         stream.write(memoryview(np.ascontiguousarray(array)).cast("B"))
                         del values, array
                 if _file_identity(hdf) != before:
@@ -202,7 +375,7 @@ def _stage_profiles(
                 partial.unlink(missing_ok=True)
                 raise
             values_files.append(filename)
-            staged_bytes += size * 4
+            staged_bytes += stored * 4
         cached[selector] = values_files
         units.append(dict(id=name, values_files=values_files))
     return units, len(profile_views), staged_bytes
@@ -238,10 +411,14 @@ def map_profiles(
     terrain_crs_fnv1a64=None,
     _prepared=None,
     product_writer="rasterio",
+    row_stream_rows=0,
     storage_areas=False,
     velocity_depth="rendered",
     derived_products=(),
     _reduce_max=False,
+    shear_stress=False,
+    shear_depth="rendered",
+    final_format=None,
 ):
     from .. import HdfMesh
     from ..fast_hdf import backend_scope
@@ -257,8 +434,29 @@ def map_profiles(
     if product_writer not in ("rasterio", "native"):
         raise ValueError("product_writer must be rasterio or native")
     native_products = product_writer == "native"
+    if (isinstance(row_stream_rows, bool) or not isinstance(row_stream_rows, int)
+            or not 0 <= row_stream_rows <= 4096):
+        raise ValueError("row_stream_rows must be an integer from 0 through 4096")
+    if row_stream_rows and (
+        not native_products or render_mode != "sloping" or velocity or storage_areas
+        or _reduce_max or reduce_shallow_to_horizontal or use_depth_weighted_faces
+    ):
+        raise FimUnsupportedError(
+            "row_stream_rows requires plain sloping with native products and "
+            "no velocity, storage areas or reduction"
+        )
     if native_products and (write_floodplain or template_raster is not None or velocity):
         raise FimUnsupportedError("Native products do not support templates, floodplain or velocity")
+    from . import _final_format
+
+    final_options = _final_format.normalize(final_format)
+    if final_options is not None and (not native_products or _reduce_max):
+        # Floodplain, template and velocity deliveries need arrays in Python and
+        # are already refused for native products above.
+        raise FimUnsupportedError(
+            "final_format requires product_writer='native' Depth/WSE delivery; "
+            "it has no Rasterio fallback"
+        )
     selected_options = _validate_options(
         render_mode, reduce_shallow_to_horizontal, use_depth_weighted_faces
     )
@@ -321,15 +519,42 @@ def map_profiles(
         raise ValueError("velocity_depth and derived_products require velocity=True")
     if _reduce_max and not derived_products:
         raise ValueError("the Max derived pass needs derived_products")
+    from . import _shear as _shear_inputs
+
+    if not isinstance(shear_stress, bool):
+        raise ValueError("shear_stress must be a boolean")
+    if shear_depth not in _shear_inputs.SHEAR_DEPTHS:
+        raise ValueError(f"shear_depth must be one of {_shear_inputs.SHEAR_DEPTHS}")
+    if shear_depth != "rendered" and not shear_stress:
+        raise ValueError("shear_depth requires shear_stress=True")
+    if shear_stress:
+        if render_mode != "sloping":
+            raise FimUnsupportedError(
+                "shear stress is qualified on plain sloping (shear_depth='horizontal' for "
+                "RAS Mapper's horizontal mode); slopingPretty is not"
+            )
+        if profiles is None:
+            profiles = {"Max": "Max"}
+        if wsel_profiles is not None or _prepared is not None:
+            raise FimUnsupportedError(
+                "shear stress needs the plan's stored time series; caller-supplied WSEL "
+                "profiles and prepared models have none"
+            )
+        if len(dict(profiles)) != 1 or set(dict(profiles).values()) != {"Max"}:
+            raise FimUnsupportedError(
+                "shear stress is RAS Mapper's Max only: pass exactly one profile selecting 'Max'"
+            )
+        if storage_areas or _reduce_max or native_products or row_stream_rows or template_raster is not None:
+            raise FimUnsupportedError(
+                "shear stress does not support storage areas, the Max derived pass, native "
+                "products, row streaming or template delivery"
+            )
     scope_info = None
     if (terrain_hdf is not None or velocity) and _prepared is not None:
         raise FimUnsupportedError("prepared sloping models do not support terrain_hdf or velocity")
     if velocity:
-        if reduce_shallow_to_horizontal or use_depth_weighted_faces:
-            raise FimUnsupportedError(
-                "velocity is qualified for plain sloping and plain slopingPretty only "
-                "(no shallow-to-horizontal or depth-weighted faces)"
-            )
+        # slopingPretty options are checked against the engine's
+        # velocity_with_faces record in _velocity.require_engine.
         if wsel_profiles is not None:
             raise FimUnsupportedError(
                 "velocity needs stored face velocities; caller-supplied WSEL profiles have none"
@@ -356,6 +581,11 @@ def map_profiles(
         from copy import deepcopy
 
         model_scope = deepcopy(_prepared._model_scope)
+    if shear_stress and model_scope.get("storage_areas"):
+        raise FimUnsupportedError(
+            "shear stress is not qualified for plans with storage areas "
+            f"({model_scope['storage_areas']} found); use RAS Mapper for these plans"
+        )
     if velocity and model_scope.get("storage_areas"):
         raise FimUnsupportedError(
             "velocity is not qualified for plans with storage areas "
@@ -390,6 +620,24 @@ def map_profiles(
     )
     if native_products and not method.get("native_geotiff_outputs"):
         raise FimUnsupportedError("Native products require native_geotiff_outputs capability")
+    if final_options is not None:
+        _final_format.require_engine(method, final_options, row_stream_rows)
+    if row_stream_rows:
+        capability = method.get("native_row_streaming")
+        if (
+            not isinstance(capability, dict)
+            or capability.get("control") != "row_stream_rows"
+            or capability.get("render_mode") != "sloping"
+            or isinstance(capability.get("max"), bool)
+            or not isinstance(capability.get("max"), int)
+            or row_stream_rows > capability["max"]
+            or not isinstance(capability.get("products"), list)
+            or not all(isinstance(p, str) for p in capability["products"])
+            or not {"depth", "wse"}.issubset(capability["products"])
+        ):
+            raise FimUnsupportedError(
+                "row_stream_rows requires a compatible native_row_streaming capability"
+            )
     concurrency_supported, selected_method_id = _validate_method(
         method, render_mode, max_inflight_profiles
     )
@@ -404,9 +652,15 @@ def map_profiles(
 
         _storage_areas.require_engine(method, "sloping")
     if velocity:
-        _velocity_inputs.require_engine(method, render_mode, velocity_depth, derived_products)
+        _velocity_inputs.require_engine(
+            method, render_mode, velocity_depth, derived_products,
+            reduce_shallow_to_horizontal=reduce_shallow_to_horizontal,
+            use_depth_weighted_faces=use_depth_weighted_faces,
+        )
         if _reduce_max and method.get("derived_max") != "reduce_max/1":
             raise FimUnsupportedError("engine does not advertise derived_max reduce_max/1")
+    if shear_stress:
+        _shear_inputs.require_engine(method, shear_depth)
     gravity = (
         _velocity_inputs.gravity(hdf) if "froude" in derived_products else None
     )
@@ -421,6 +675,14 @@ def map_profiles(
             watched.update(corner_sources)
     if _prepared is not None:
         watched.update(_prepared._watched)
+        crs_hdf = getattr(_prepared, "_terrain_crs_hdf", None)
+    else:
+        # An untagged source's CRS comes from its terrain HDF: watch it too.
+        crs_hdf = (_engine.untagged_source_hdf(
+            terrain, scope_info["terrain_hdf"] if scope_info is not None else None)
+            if _engine.crs_any(method) else None)
+        if crs_hdf is not None:
+            watched.setdefault("terrain_crs_hdf", crs_hdf)
     if template_raster is not None:
         template_raster = Path(template_raster).resolve(strict=True)
         watched["template_raster"] = template_raster
@@ -463,6 +725,7 @@ def map_profiles(
     plan = _horizontal.plan_grid(
         cells, terrain, constraint, budget, native=True,
         storage_areas=storage.polygons if storage is not None else None,
+        terrain_hdf=crs_hdf,
     )
     if plan.mask_geometry and method.get("aoi_mask") != "global-terrain-lattice/1":
         raise FimEngineError("Polygon masking requires Fast-Map global-terrain-lattice/1 (0.10.1+)")
@@ -480,8 +743,12 @@ def map_profiles(
     preparation["grid_plan_seconds"] = time.perf_counter() - phase
     phase = time.perf_counter()
     if _prepared is None:
-        _horizontal.prepare_grid(cells, terrain, plan, False)
-        preparation["cell_validation_reused"] = False
+        from . import _cell_validation
+
+        # Reuse is keyed by the validated polygon content, never by file identity.
+        preparation["cell_validation_reused"] = _cell_validation.validate(
+            cells, terrain, plan, threads=threads
+        )
     else:
         preparation["cell_validation_reused"] = _prepared._validate_grid(plan)
     preparation["cell_validation_seconds"] = time.perf_counter() - phase
@@ -507,6 +774,8 @@ def map_profiles(
             "threads": threads,
             "writer_threads": writer_threads,
             "product_writer": product_writer,
+            "row_stream_rows": row_stream_rows,
+            "final_format": final_options,
             "max_inflight_profiles": max_inflight_profiles,
             "max_working_mib": budget,
             "write_floodplain": bool(write_floodplain),
@@ -518,7 +787,7 @@ def map_profiles(
             k: {"path": str(p), "size": before[k][0], "mtime_ns": before[k][1]}
             for k, p in watched.items()
         },
-        qualification="experimental native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
+        qualification="scoped native 7.0.1; plain five-model physical-2D corpus (bounded eBFE); enhanced combinations on Bald Eagle bridges Max and Davis timesteps",
         invalid_cells=_invalid_cells.describe(invalid_records, invalid_policy, aoi_geometry),
     )
     if scope_info is not None:
@@ -530,7 +799,7 @@ def map_profiles(
 
         details["storage_areas"] = _storage_areas.describe(storage, selected)
         details["qualification"] = (
-            "experimental native 7.0.1; storage-area level pools qualified on "
+            "scoped native 7.0.1; storage-area level pools qualified on "
             "BaldEagleCrkMulti2D storage-area plans (see storage_areas)"
         )
     if velocity:
@@ -553,6 +822,12 @@ def map_profiles(
                 "(973,902 px), slopingPretty and horizontal match in values and mask"
             ),
         }
+        if render_mode == "slopingPretty":
+            details["velocity"]["with_faces"] = {
+                "method_id": method.get("velocity_with_faces"),
+                "reduce_shallow_to_horizontal": bool(reduce_shallow_to_horizontal),
+                "use_depth_weighted_faces": bool(use_depth_weighted_faces),
+            }
         if derived_products:
             details["velocity"]["derived"] = {
                 "method_id": _velocity.DERIVED_METHOD_ID,
@@ -564,6 +839,10 @@ def map_profiles(
                     else None
                 ),
             }
+    if shear_stress:
+        details["shear_stress"] = _shear_inputs.describe(
+            shear_depth, render_mode, _shear_inputs.units(hdf)
+        )
     supplied_source = (_prepared._info.get("profile_source") if _prepared is not None else None)
     if supplied is not None or supplied_source is not None:
         details["qualification"] = "Caller-supplied WSEL; aggregate/changed-terrain/option combinations require independent qualification."
@@ -584,6 +863,10 @@ def map_profiles(
             frame.attrs["storage_areas"] = details["storage_areas"]
         if "max_derived" in details:
             frame.attrs["max_derived"] = details["max_derived"]
+        if "shear_stress" in details:
+            frame.attrs["shear_stress"] = details["shear_stress"]
+        if "final_format" in details:
+            frame.attrs["final_format"] = details["final_format"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
         return frame
 
@@ -597,7 +880,8 @@ def map_profiles(
         else:
             tick = time.perf_counter()
             identity = (
-                _engine.terrain_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64)
+                _engine.source_identity(engine, terrain, cells.crs, terrain_crs_fnv1a64,
+                                        crs_any=_engine.crs_any(method), terrain_hdf=crs_hdf)
                 if _prepared is None
                 else _prepared._terrain_identity
             )
@@ -658,6 +942,12 @@ def map_profiles(
                     fields.update(
                         _velocity.stage(hdf, root, meshes, selected, units, threads=threads)
                     )
+                if shear_stress:
+                    shear_tick = time.perf_counter()
+                    fields.update(
+                        _shear_inputs.stage(hdf, root, meshes, shear_depth=shear_depth, threads=threads)
+                    )
+                    preparation["shear_staging_seconds"] = time.perf_counter() - shear_tick
                 if storage is not None:
                     from . import _storage_areas
 
@@ -675,6 +965,12 @@ def map_profiles(
                         full_transform = list(src.transform.to_gdal())
                 else:
                     full_transform = _prepared._terrain_transform
+                final = None
+                if final_options is not None:
+                    with rasterio.open(terrain) as src:
+                        final = _final_format.resolve(final_options, plan, src.width, src.height)
+                    details["final_format"] = _final_format.describe(final_options, *final)
+                    details["final_format"]["products"] = {}
                 request = dict(
                     schema="ras-commander-sloping-request/1",
                     **(
@@ -684,7 +980,7 @@ def map_profiles(
                         else {}
                     ),
                     terrain=str(terrain),
-                    epsg=identity["epsg"],
+                    **_engine.request_crs(identity),
                     crs_identity=identity["crs_identity"],
                     terrain_transform=full_transform,
                     window=[int(v) for v in plan.window.flatten()],
@@ -696,6 +992,8 @@ def map_profiles(
                     max_working_bytes=budget * (1 << 20) - buffer_bytes,
                     stream_outputs=not _reduce_max,
                     **({"geotiff_outputs": True} if native_products else {}),
+                    **({"row_stream_rows": row_stream_rows} if row_stream_rows else {}),
+                    **({"compression": "DEFLATE", "final_format": final[0]} if final else {}),
                     **fields,
                 )
                 if velocity_depth != "rendered":
@@ -741,23 +1039,49 @@ def map_profiles(
                 persistent = _prepared is not None and _prepared._reuse_native
                 if persistent and _prepared._native_session is None:
                     from ._native_session import NativeSlopingSession
-                    _prepared._native_session = NativeSlopingSession(engine)
+                    try:
+                        _prepared._native_session = NativeSlopingSession(engine)
+                    except OSError as exc:
+                        details["engine_returncode"] = None
+                        raise FimEngineNotFoundError(
+                            f"Cannot start persistent sloping process {engine}: {exc}"
+                        ) from exc
                 from contextlib import nullcontext
                 # Delete-on-close stderr avoids a Windows cleanup race when a
                 # terminated child briefly retains its inherited file handle.
                 with (nullcontext(_prepared._native_session.errors) if persistent else tempfile.TemporaryFile(mode="w+b")) as errors:
-                    errors.seek(0)
-                    errors.truncate()
-                    process = (_prepared._native_session.submit(root / "request.json", root / "out") if persistent else subprocess.Popen(
-                        [
-                            str(engine),
-                            "sloping",
-                            str(root / "request.json"),
-                            str(root / "out"),
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=errors,
-                    ))
+                    process = _prepared._native_session.process if persistent else None
+                    try:
+                        # Preserve startup stderr if a retained session is already dead.
+                        if process is None or process.poll() is None:
+                            errors.seek(0)
+                            errors.truncate()
+                        process = (_prepared._native_session.submit(root / "request.json", root / "out") if persistent else subprocess.Popen(
+                            [str(engine), "sloping", str(root / "request.json"), str(root / "out")],
+                            stdout=subprocess.PIPE, stderr=errors,
+                        ))
+                    except BaseException as failure:
+                        observed_code = _capture_process_failure(process, errors, details)
+                        if persistent:
+                            _prepared._native_session.close()
+                            _prepared._native_session = None
+                        if isinstance(failure, OSError):
+                            raise FimEngineNotFoundError(
+                                f"Cannot execute sloping engine {engine}: {failure}"
+                            ) from failure
+                        if isinstance(failure, FimEngineError):
+                            refusal = _engine.read_refusal(root / "out", details["engine_stderr"])
+                            if refusal is not None:
+                                context = (f"Sloping engine failed with exit {observed_code}: "
+                                           if observed_code is not None else
+                                           "Sloping command refused without an observed process exit: ")
+                                raise _engine.EngineRefusal(context + str(refusal)) from failure
+                            if observed_code not in (None, 0):
+                                diagnostic = details["engine_stderr"].strip() or "no diagnostic on stderr"
+                                raise FimEngineError(
+                                    f"Sloping engine failed with exit {observed_code}: {diagnostic}; {failure}"
+                                ) from failure
+                        raise
 
                     def expire():
                         if process.poll() is None:
@@ -776,13 +1100,13 @@ def map_profiles(
                         for name in ([] if _reduce_max else selected):
                             header = process.stdout.readline(65537)
                             if len(header) > 65536 or not header.endswith(b"\n"):
-                                raise FimEngineError(
+                                raise _StreamProtocolError(
                                     "Missing or invalid sloping stream header"
                                 )
                             try:
                                 unit = json.loads(header)
                             except (ValueError, UnicodeError) as exc:
-                                raise FimEngineError(
+                                raise _StreamProtocolError(
                                     "Invalid sloping stream header JSON"
                                 ) from exc
                             if (
@@ -792,30 +1116,40 @@ def map_profiles(
                                 or unit.get("pixels") != int(np.prod(plan.shape))
                                 or (unit.get("velocity") is True) != velocity
                                 or unit.get("derived", []) != list(derived_products)
+                                or (unit.get("shear_stress") is True) != shear_stress
                             ):
-                                raise FimEngineError(
+                                raise _StreamProtocolError(
                                     "Sloping stream profile or dimensions mismatch"
                                 )
                             if native_products:
                                 from ._native_products import deliver
                                 write_tick = time.perf_counter() - unit["write_seconds"]
-                                products = deliver(root / "out" / name, folder, name, unit, plan)
+                                products = deliver(root / "out" / name, folder, name, unit, plan, final)
+                                if final is not None:
+                                    details["final_format"]["products"][name] = (
+                                        _final_format.check_header(unit, final[0])
+                                    )
                             else:
-                                depth = _read_f32(
+                                depth = _read_stream_f32(
                                     process.stdout, plan.shape, expired, timeout, "depth"
                                 )
-                                wse = _read_f32(
+                                wse = _read_stream_f32(
                                     process.stdout, plan.shape, expired, timeout, "wse"
                                 )
                                 speed = (
-                                    _read_f32(process.stdout, plan.shape, expired, timeout, "velocity")
+                                    _read_stream_f32(process.stdout, plan.shape, expired, timeout, "velocity")
                                     if velocity
                                     else None
                                 )
                                 derived_arrays = [
-                                    _read_f32(process.stdout, plan.shape, expired, timeout, product)
+                                    _read_stream_f32(process.stdout, plan.shape, expired, timeout, product)
                                     for product in derived_products
                                 ]
+                                shear = (
+                                    _read_stream_f32(process.stdout, plan.shape, expired, timeout, "shear_stress")
+                                    if shear_stress
+                                    else None
+                                )
                                 result = SimpleNamespace(
                                     profile=name,
                                     depth=depth,
@@ -852,6 +1186,11 @@ def map_profiles(
                                         _products.write_raster(path, values, plan.transform, plan.crs)
                                         products[f"{product}_tif"] = str(path)
                                     del derived_arrays
+                                    if shear is not None:
+                                        path = _shear_inputs.shear_path(folder, name)
+                                        _products.write_raster(path, shear, plan.transform, plan.crs)
+                                        products["shear_stress_tif"] = str(path)
+                                    del shear
                             rows[name].update(products)
                             details["performance"]["product_write_seconds"][name] = (
                                 time.perf_counter() - write_tick
@@ -860,31 +1199,33 @@ def map_profiles(
                                 del depth, wse, result, speed
                         if persistent:
                             terminal = process.stdout.readline(65537)
-                            if len(terminal) > 65536 or not terminal.endswith(b"\n") or json.loads(terminal) != {"command_status": "complete"}:
-                                raise FimEngineError("Invalid native session completion frame")
+                            try:
+                                terminal_valid = (len(terminal) <= 65536 and terminal.endswith(b"\n")
+                                                  and json.loads(terminal) == {"command_status": "complete"})
+                            except (ValueError, UnicodeError):
+                                terminal_valid = False
+                            if not terminal_valid:
+                                raise _StreamProtocolError("Invalid native session completion frame")
                             if process.poll() is not None:
-                                raise FimEngineError("Native session exited unexpectedly")
-                            code = 0
+                                raise _StreamProtocolError("Native session exited unexpectedly")
+                            # This command completed; the persistent process did not exit.
+                            code = None
+                            details["engine_command_status"] = "complete"
                         else:
                             if _reduce_max:
                                 # File-output requests print the engine report; the
                                 # report file below is authoritative.
                                 process.stdout.read()
                             elif process.stdout.read(1):
-                                raise FimEngineError("Unexpected trailing sloping stream bytes")
+                                raise _StreamProtocolError("Unexpected trailing sloping stream bytes")
                             code = process.wait()
                         if expired.is_set():
                             raise FimEngineError(
                                 f"Sloping engine timed out after {timeout} seconds"
                             )
-                        try:
-                            report = json.loads(
-                                (root / "out/report.json").read_text(encoding="utf-8")
-                            )
-                        except (OSError, ValueError, UnicodeError) as exc:
-                            raise FimEngineError(
-                                "Missing or invalid sloping engine report"
-                            ) from exc
+                        details["engine_returncode"] = code
+                        diagnostic = _read_stderr_tail(errors)
+                        report = _read_report(root / "out/report.json", code, diagnostic)
                         expected = list(selected)
                         units = (
                             report.get("profiles") if isinstance(report, dict) else None
@@ -916,7 +1257,7 @@ def map_profiles(
                                     "Invalid sloping concurrency report"
                                 )
                         if (
-                            code != 0
+                            code not in (None, 0)
                             or report.get("status") != "complete"
                             or not isinstance(reported_method, dict)
                             or reported_method.get("method_id") != selected_method_id
@@ -941,7 +1282,9 @@ def map_profiles(
                             or any(p.get("status") != "complete" for p in units)
                         ):
                             raise FimEngineError(
-                                f"Sloping engine failed with exit {code}: {report.get('error', 'invalid report')}"
+                                ("Sloping command failed: " if code is None else
+                                 f"Sloping engine failed with exit {code}: ")
+                                + str(report.get("error", "invalid report"))
                             )
                         if timer:
                             timer.cancel()
@@ -949,6 +1292,19 @@ def map_profiles(
                         if expired.is_set():
                             raise FimEngineError(f"Sloping engine timed out after {timeout} seconds")
                         details["performance"]["engine_report"] = report
+                        if shear_stress:
+                            engine_shear = report.get("shear_stress")
+                            if (
+                                not isinstance(engine_shear, dict)
+                                or not isinstance(engine_shear.get("method"), dict)
+                                or engine_shear["method"].get("method_id") != _shear_inputs.METHOD_ID
+                                or engine_shear.get("depth") != shear_depth
+                            ):
+                                raise FimEngineError("Missing or invalid shear-stress engine report")
+                            details["shear_stress"]["engine"] = {
+                                key: engine_shear.get(key)
+                                for key in ("units", "factor", "meshes", "face_seconds")
+                            }
                         if storage is not None:
                             from . import _storage_areas
 
@@ -990,20 +1346,37 @@ def map_profiles(
                             _prepared._info["native_state_reused"] = bool(report.get("session", {}).get("geometry_reused"))
                             details["performance"]["prepared_context"] = _prepared.info
                     except BaseException as failure:
-                        if process.poll() is None:
-                            process.kill()
-                        process.wait()
-                        errors.seek(0)
-                        details["engine_stderr"] = errors.read().decode(
-                            "utf-8", errors="replace"
-                        )[-4000:]
+                        # EOF can precede the process-signalled exit; wait only
+                        # briefly for transport failures, never for unrelated errors.
+                        observed_code = _capture_process_failure(
+                            process, errors, details, expired=expired,
+                            wait_for_exit=isinstance(failure, _StreamProtocolError),
+                        )
+                        if final is not None:
+                            # The temporary engine folder is gone once this unwinds.
+                            details["engine_report_error"] = _final_format.report_error(root / "out")
+                        if isinstance(failure, FimEngineError) and expired.is_set():
+                            raise FimEngineError(
+                                f"Sloping engine timed out after {timeout} seconds"
+                            ) from failure
                         refusal = (
                             _engine.read_refusal(root / "out", details["engine_stderr"])
-                            if isinstance(failure, FimEngineError) and not expired.is_set()
+                            if isinstance(failure, FimEngineError)
                             else None
                         )
                         if refusal is not None:
+                            if observed_code is not None:
+                                raise _engine.EngineRefusal(
+                                    f"Sloping engine failed with exit {observed_code}: {refusal}"
+                                ) from failure
                             raise refusal from failure
+                        if isinstance(failure, _StreamProtocolError) and observed_code not in (None, 0):
+                            diagnostic = details["engine_stderr"].strip() or "no diagnostic on stderr"
+                            raise FimEngineError(
+                                f"Sloping engine failed with exit {observed_code}: {diagnostic}; {failure}"
+                            ) from failure
+                        if isinstance(failure, _StreamProtocolError):
+                            raise FimEngineError(str(failure)) from failure
                         raise
                     finally:
                         if timer:
@@ -1030,6 +1403,15 @@ def map_profiles(
         details["status"] = "complete"
     except BaseException as exc:
         details["status"] = "aborted"
+        surfaced = exc
+        if (
+            final_options is not None
+            and isinstance(exc, FimEngineError)
+            and _final_format.NODATA_REFUSAL
+            in f"{exc} {details.get('engine_stderr', '')} {details.get('engine_report_error', '')}"
+        ):
+            # Never drop or alter a valid pixel to fit the nodata marker.
+            surfaced = _final_format.nodata_collision_error(final_options["nodata"])
         for name in selected:
             for product in _products.product_paths(folder, name):
                 product.unlink(missing_ok=True)
@@ -1039,9 +1421,13 @@ def map_profiles(
                 _velocity.velocity_path(folder, name).unlink(missing_ok=True)
                 for product in derived_products:
                     _velocity.derived_path(folder, name, product).unlink(missing_ok=True)
+            if shear_stress:
+                _shear_inputs.shear_path(folder, name).unlink(missing_ok=True)
             rows[name] = _empty_row(
-                name, "failed", error=f"{type(exc).__name__}: {exc}"
+                name, "failed", error=f"{type(surfaced).__name__}: {surfaced}"
             )
+        if surfaced is not exc:
+            raise surfaced from exc
         raise
     finally:
         details.setdefault("performance", {})["total_seconds"] = (

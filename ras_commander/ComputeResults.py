@@ -1082,6 +1082,29 @@ class TerrainExportResult:
     ``bool(result)`` is true only when the native output passed semantic
     validation and both the GeoTIFF and machine-readable receipt were
     promoted to their requested paths.
+
+    ``failure_kind`` classifies a failed export so callers can choose a
+    response without parsing ``error`` text:
+
+    - ``"out_of_memory"``: the native helper raised .NET
+      ``System.OutOfMemoryException``. A retry with more memory may succeed.
+    - ``"empty_extent"``: RAS Mapper could not compute statistics for the
+      export window, and a host-side scan confirmed that no registered
+      source has a valid cell in it.
+    - ``"empty_extent_unconfirmed"``: RAS Mapper reported the same
+      statistics error, but the source coverage scan could not be completed.
+    - ``"no_response"`` / ``"invalid_response"``: the helper wrote no
+      response file, or a response that failed schema validation.
+    - ``"native_error"``: any other exception reported by the helper.
+    - ``"timeout"``: the bounded runtime expired.
+    - ``"error"``: a host-side failure, such as GeoTIFF validation.
+
+    ``helper_invocations`` records each helper call: its request, exit code,
+    parsed response, retained stderr, and status. A ``status`` of
+    ``"success_nonzero_exit"`` means the helper reported success but its
+    process exited non-zero; the output was kept and validated as usual.
+    ``empty_extent`` is true when ``empty_extent="nodata"`` was requested and
+    an all-nodata GeoTIFF was written for a confirmed empty window.
     """
 
     success: bool
@@ -1101,6 +1124,10 @@ class TerrainExportResult:
     elapsed_seconds: float = 0.0
     timed_out: bool = False
     error: Optional[str] = None
+    failure_kind: Optional[str] = None
+    empty_extent: bool = False
+    empty_extent_check: Dict[str, Any] = field(default_factory=dict)
+    helper_invocations: List[Dict[str, Any]] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.success

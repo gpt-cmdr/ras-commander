@@ -32,11 +32,13 @@ projects, and generated artifacts are intentionally excluded from this README.
 - [110_single_plan_execution.ipynb](110_single_plan_execution.ipynb) and [113_parallel_execution.ipynb](113_parallel_execution.ipynb) - run plans through RAS Commander.
 - [201_1d_plaintext_geometry.ipynb](201_1d_plaintext_geometry.ipynb), [203_htab_parameter_optimization.ipynb](203_htab_parameter_optimization.ipynb), and [205_extract_xs_xyz_from_geometry.ipynb](205_extract_xs_xyz_from_geometry.ipynb) - geometry and HTAB workflows.
 - [312_boundary_df_qmult_dss_paths.ipynb](312_boundary_df_qmult_dss_paths.ipynb) and [318_validating_dss_paths.ipynb](318_validating_dss_paths.ipynb) - DSS boundary workflows.
+- [316_terrain_modifications.ipynb](316_terrain_modifications.ipynb) and [321_terrain_modification_layer_writers.ipynb](321_terrain_modification_layer_writers.ipynb) - terrain-modification writers, `read_layers` round trip, and RAS Mapper export checks.
 - [410_2d_hdf_data_extraction.ipynb](410_2d_hdf_data_extraction.ipynb), [412_2d_detail_face_data_extraction.ipynb](412_2d_detail_face_data_extraction.ipynb), and [413_profile_line_flow_extraction.ipynb](413_profile_line_flow_extraction.ipynb) - HDF mesh and results extraction.
 - [720_precipitation_methods_comprehensive.ipynb](720_precipitation_methods_comprehensive.ipynb), [721_precipitation_hyetograph_comparison.ipynb](721_precipitation_hyetograph_comparison.ipynb), and [725_atlas14_spatial_variance.ipynb](725_atlas14_spatial_variance.ipynb) - precipitation methods.
 - [910_usgs_gauge_catalog.ipynb](910_usgs_gauge_catalog.ipynb) through [923_stofs3d_coastal_boundary.ipynb](923_stofs3d_coastal_boundary.ipynb) - gauge, validation, forecast, and coastal boundary workflows.
 - [917_mrms_precipitation_qpe.ipynb](917_mrms_precipitation_qpe.ipynb) - MRMS source inspection and spatially averaged, uniform precipitation-boundary comparisons. Use [924_mrms_netcdf_rain_on_grid.ipynb](924_mrms_netcdf_rain_on_grid.ipynb) for spatial MRMS forcing through direct NetCDF rain-on-grid.
 - [920_terrain_creation.ipynb](920_terrain_creation.ipynb), [925_xs_interpolation_surface.ipynb](925_xs_interpolation_surface.ipynb), [930_terrain_modification_analysis.ipynb](930_terrain_modification_analysis.ipynb), and [931_native_rasmapper_terrain_export.ipynb](931_native_rasmapper_terrain_export.ipynb) - terrain creation, analysis, and native registered-terrain export workflows.
+- [932_louisiana_endmc_public_models.ipynb](932_louisiana_endmc_public_models.ipynb) - Louisiana Watershed Initiative EnDMC public catalog, `/vsicurl/` raster reads, and selective verified downloads.
 - [950_ebfe_spring_creek.ipynb](950_ebfe_spring_creek.ipynb) through [958_model_sources_showcase.ipynb](958_model_sources_showcase.ipynb) - FEMA eBFE/BLE organization and validation.
 - [960_cloud_native_geometry_export.ipynb](960_cloud_native_geometry_export.ipynb) through [962_cloud_native_cog_results_export.ipynb](962_cloud_native_cog_results_export.ipynb) - cloud-native export with `ras2cng`.
 
@@ -94,7 +96,8 @@ for experimental API status and the evidence required before restoring them.
 `314_reference_line_generation.ipynb`, `315_2d_computation_options.ipynb`,
 `316_terrain_modifications.ipynb`, `317_restart_file_settings.ipynb`,
 `318_validating_dss_paths.ipynb`, `319_post_fire_debris_flow_nonnewtonian.ipynb`,
-`320_1d_boundary_condition_visualization.ipynb`
+`320_1d_boundary_condition_visualization.ipynb`,
+`321_terrain_modification_layer_writers.ipynb`
 
 ### 400s - HDF Results Extraction
 
@@ -158,6 +161,10 @@ for experimental API status and the evidence required before restoring them.
 `920_terrain_creation.ipynb`, `925_xs_interpolation_surface.ipynb`,
 `930_terrain_modification_analysis.ipynb`,
 `931_native_rasmapper_terrain_export.ipynb`
+
+### 930s - Public Model Sources
+
+`932_louisiana_endmc_public_models.ipynb`
 
 ### 950s - eBFE Delivery
 

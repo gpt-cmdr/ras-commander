@@ -20,6 +20,7 @@ inconsistent declarations are refused.
 
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
@@ -27,6 +28,8 @@ from typing import Optional
 import numpy as np
 
 from .errors import FimUnsupportedError
+
+logger = logging.getLogger(__name__)
 
 METHOD_ID = "top-priority-source-footprint/1"
 TILE_PIXELS = 256 * 256
@@ -53,11 +56,30 @@ def _vrt_order(vrt: Path) -> list:
     return [_leaf(ref.text or "", "VRT source") for ref in references]
 
 
-def _modifications(source, rasmap_path, terrain_hdf: Path) -> list:
-    """Names of terrain modifications in the HDF and, when given, the rasmap."""
+#: The only rasmap modification group name RAS Mapper applies (HEC-RAS 6.6, 7.0.1).
+MODIFICATION_GROUP = "Modifications"
+#: ``rasmap_warnings`` code: modification layers sit in a group with another name.
+GROUP_MISNAMED = "modification_group_misnamed"
+#: ``rasmap_warnings`` code: the HDF has modifications but the terrain layer no group.
+GROUP_MISSING = "modification_group_missing"
+
+
+def _modifications(source, rasmap_path, terrain_hdf: Path) -> tuple:
+    """Names of terrain modifications in the HDF and, when given, the rasmap.
+
+    Returns ``(names, warnings)``. RAS Mapper's terrain export (HEC-RAS 6.6
+    and 7.0.1) applies the HDF's modifications only when the rasmap terrain
+    layer has an ``ElevationModificationGroup`` named exactly
+    ``Modifications``; its contents and ``Checked`` states do not matter.
+    Without one, ``names`` is empty (nothing is applied) and ``warnings``
+    explains why: ``modification_group_misnamed`` for each group under
+    another name (RAS Mapper ignores it), ``modification_group_missing`` when
+    there is no group at all. Nothing is changed in either file.
+    """
     import h5py
 
     found = []
+    warnings = []
     group = source.get("Modifications")
     if isinstance(group, h5py.Group):
         found.extend(f"hdf:{name}" for name in group.keys())
@@ -74,13 +96,86 @@ def _modifications(source, rasmap_path, terrain_hdf: Path) -> list:
         ]
         if not layers:
             raise FimUnsupportedError(f"{rasmap.name} does not register terrain {terrain_hdf.name}")
+        has_group = False
+        hdf_count = len(found)
         for layer in layers:
             for group_layer in layer.findall("Layer"):
-                if group_layer.get("Type") == "ElevationModificationGroup":
-                    found.extend(
-                        f"rasmap:{child.get('Name')}" for child in group_layer.findall("Layer")
-                    )
-    return found
+                if group_layer.get("Type") != "ElevationModificationGroup":
+                    continue
+                children = [child.get("Name") for child in group_layer.findall("Layer")]
+                if group_layer.get("Name") == MODIFICATION_GROUP:
+                    has_group = True
+                    found.extend(f"rasmap:{name}" for name in children)
+                    continue
+                # RAS Mapper ignores this group: its entries are reported, never applied.
+                name = group_layer.get("Name")
+                message = (
+                    f"{rasmap.name} registers modification group {name!r} under terrain "
+                    f"{terrain_hdf.name}; RAS Mapper (HEC-RAS 6.6, 7.0.1) applies modifications "
+                    f"only from a group named exactly {MODIFICATION_GROUP!r} and ignores this one"
+                )
+                warnings.append({
+                    "code": GROUP_MISNAMED, "group": name, "layers": children,
+                    "message": message,
+                })
+                logger.warning("%s (rename it to %r)", message, MODIFICATION_GROUP)
+        if not has_group and found:
+            # Without a group named Modifications nothing is applied.
+            message = (
+                f"{rasmap.name} registers {terrain_hdf.name} without a modification group "
+                f"named {MODIFICATION_GROUP!r}: RAS Mapper applies none of its {hdf_count} "
+                "HDF modification layers"
+            )
+            if not warnings:
+                warnings.append({
+                    "code": GROUP_MISSING, "group": None, "layers": [], "message": message,
+                })
+            logger.warning(message)
+            found = []
+    return found, warnings
+
+
+#: ``rasmap_warnings`` code: the rasmap registers layers the HDF does not store.
+LAYER_NOT_IN_HDF = "rasmap_layer_not_in_hdf"
+#: ``rasmap_warnings`` code: the rasmap could not be checked for this terrain.
+RASMAP_NOT_CHECKED = "rasmap_not_checked"
+
+
+def rasmap_modification_warnings(terrain_hdf, rasmap_path) -> list:
+    """Rasmap registration warnings for a terrain's modifications.
+
+    The ``rasmap_warnings`` records of :func:`top_priority_source`
+    (``modification_group_misnamed``, ``modification_group_missing``), plus
+    ``rasmap_layer_not_in_hdf`` for layers the ``Modifications`` group lists
+    that the terrain HDF does not store (``build_effective_terrain`` refuses
+    such a terrain), and ``rasmap_not_checked`` when the rasmap cannot be read
+    or does not register the terrain. Empty without a rasmap. Nothing is
+    changed in either file.
+    """
+    import h5py
+
+    if rasmap_path is None:
+        return []
+    terrain_hdf = Path(terrain_hdf).resolve(strict=True)
+    try:
+        with h5py.File(terrain_hdf, "r") as source:
+            names, warnings = _modifications(source, rasmap_path, terrain_hdf)
+    except (FimUnsupportedError, OSError) as exc:
+        message = f"rasmap {Path(rasmap_path).name} was not checked: {exc}"
+        logger.warning(message)
+        return [{"code": RASMAP_NOT_CHECKED, "group": None, "layers": [], "message": message}]
+    stored = {name[4:] for name in names if name.startswith("hdf:")}
+    missing = sorted({name[7:] for name in names
+                      if name.startswith("rasmap:") and name[7:] not in stored})
+    if missing:
+        message = (
+            f"{Path(rasmap_path).name} registers modification layers {missing} that "
+            f"{terrain_hdf.name} does not store; build_effective_terrain refuses this terrain"
+        )
+        logger.warning(message)
+        warnings.append({"code": LAYER_NOT_IN_HDF, "group": MODIFICATION_GROUP,
+                         "layers": missing, "message": message})
+    return warnings
 
 
 def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
@@ -149,7 +244,7 @@ def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
                 f"terrain source {top!r} has no uint8 [tiles, 65536] level-0 Mask"
             )
         mask_shape = [int(v) for v in mask.shape]
-        modifications = _modifications(source, rasmap_path, terrain_hdf)
+        modifications, rasmap_warnings = _modifications(source, rasmap_path, terrain_hdf)
     tif = (terrain_hdf.parent / files[top]).resolve()
     if not tif.is_file():
         raise FimUnsupportedError(f"priority-1 terrain source {tif.name} is missing")
@@ -166,6 +261,7 @@ def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
         "mask_shape": mask_shape,
         "modifications": modifications,
         "rasmap_checked": rasmap_path is not None,
+        "rasmap_warnings": rasmap_warnings,
     }
 
 
@@ -292,5 +388,6 @@ def describe(info: dict) -> dict:
         "priority_basis": info["priority_basis"],
         "mask_dataset": info["mask_dataset"],
         "rasmap_checked": info["rasmap_checked"],
+        "rasmap_warnings": info.get("rasmap_warnings", []),
         "canonical_copy": info.get("canonical_copy"),
     }

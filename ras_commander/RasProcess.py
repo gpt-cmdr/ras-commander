@@ -72,7 +72,8 @@ class StoredMapProductsIncompleteError(RuntimeError):
     def __init__(self, message: str, frame: pd.DataFrame):
         super().__init__(message)
         self.frame = frame
-        self.missing = frame[frame["status"] != "generated"].to_dict(orient="records")
+        missing = frame[frame["status"] != "generated"].astype(object)
+        self.missing = missing.where(pd.notna(missing), None).to_dict(orient="records")
 
 
 @dataclass
@@ -385,6 +386,34 @@ def _wait_for_store_map_admission(
                 "Timed out waiting for StoreMap memory admission: " + "; ".join(reasons)
             )
         time.sleep(performance.admission_poll_interval_seconds)
+
+
+def _validate_native_job_cap_route(performance, map_types, *, wine_runtime=None):
+    """Refuse unsupported cap routes before output or project-file mutation."""
+    if performance.native_job_memory_limit_mb is None:
+        return
+    if (platform.system() != "Windows"
+            or (wine_runtime if wine_runtime is not None else _is_wine_helper_runtime())):
+        raise ValueError("native_job_memory_limit_mb requires the direct native Windows helper")
+    if (tuple(map_types) != ("inundation_boundary",)
+            or performance.native_polygon_serial is not True
+            or performance.max_workers != 1 or performance.memory_policy != "enforce"
+            or performance.worker_memory_override_mb is not None):
+        raise ValueError("native_job_memory_limit_mb requires serial boundary-only, max_workers=1 and enforce policy without an override")
+
+
+def _preflight_native_job_cap(limit_mib):
+    """Verify the packaged helper's OS job cap without loading HEC-RAS/model data."""
+    from ._native_helper import probe_native_job_memory_limit
+    proof = probe_native_job_memory_limit(limit_mib, timeout=15)
+    expected = f"NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB={limit_mib}"
+    if (not isinstance(proof, dict) or type(proof.get("limit_mib")) is not int
+            or proof["limit_mib"] != limit_mib
+            or expected not in str(proof.get("stdout", "")).splitlines()
+            or not isinstance(proof.get("helper_sha256"), str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", proof["helper_sha256"])):
+        raise RuntimeError("Native job memory limit preflight proof is missing or inconsistent")
+    return proof
 
 
 def _run_memory_admitted_store_map_jobs(
@@ -2041,7 +2070,9 @@ Step 5: Configure (optional — auto-detection usually works)
 
         The estimate is deliberately conservative and reports its formula and
         limiters. It does not edit the `.rasmap`, create output directories, or
-        launch HEC-RAS helpers.
+        launch HEC-RAS helpers. An explicit native job cap plans combined
+        private commit plus the OS reserve and verifies the pinned runtime
+        identity; the actual helper cap is probed only by ``store_maps``.
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -2064,6 +2095,18 @@ Step 5: Configure (optional — auto-detection usually works)
         )
         if not normalized_maps or any(not item for item in normalized_maps):
             raise ValueError("map_types must contain at least one non-empty value")
+        _validate_native_job_cap_route(options, normalized_maps)
+        cap_terrain = None
+        cap_runtime = None
+        if options.native_job_memory_limit_mb is not None:
+            from ._native_helper import validate_native_job_memory_runtime
+            cap_runtime = validate_native_job_memory_runtime(Path(str(ras_obj.ras_exe_path)).parent)
+            layers = RasMap.list_terrain_layers(ras_obj.project_folder, ras_object=ras_obj)
+            selected = layers if terrain_name is None else layers.loc[layers["name"] == terrain_name]
+            if len(selected) != 1:
+                raise ValueError("native job cap requires exactly one selected registered terrain")
+            cap_terrain = {"name": str(selected.iloc[0]["name"]),
+                           "terrain_hdf": str(Path(selected.iloc[0]["resolved_path"]).resolve(strict=True))}
         supported_maps = {"wse", "depth", "velocity"}
         fallback_reasons = []
         unsupported = sorted(set(normalized_maps) - supported_maps)
@@ -2085,13 +2128,17 @@ Step 5: Configure (optional — auto-detection usually works)
         terrain_estimates, estimate_warnings = _terrain_resource_estimates(
             terrain_paths
         )
-        if not terrain_estimates and options.worker_memory_override_mb is None:
+        if (not terrain_estimates and options.worker_memory_override_mb is None
+                and options.native_job_memory_limit_mb is None):
             fallback_reasons.append(
                 "active terrain dimensions are unavailable for memory estimation"
             )
 
         raw_surface_mb = sum(item.float32_surface_mb for item in terrain_estimates)
-        if options.worker_memory_override_mb is not None:
+        if options.native_job_memory_limit_mb is not None:
+            base_worker_mb = options.native_job_memory_limit_mb
+            estimate_source = "native_job_cap"
+        elif options.worker_memory_override_mb is not None:
             base_worker_mb = options.worker_memory_override_mb
             estimate_source = "override"
         elif terrain_estimates:
@@ -2106,7 +2153,11 @@ Step 5: Configure (optional — auto-detection usually works)
         # GDAL_CACHEMAX is a per-helper cap. Conservatively include an explicit
         # cap in admission so large per-process caches cannot oversubscribe RAM.
         estimated_gdal_cache_mb = options.gdal_cachemax_mb or 0
-        estimated_worker_mb = base_worker_mb + estimated_gdal_cache_mb
+        estimated_worker_mb = (base_worker_mb if options.native_job_memory_limit_mb is not None
+                               else base_worker_mb + estimated_gdal_cache_mb)
+        if options.native_job_memory_limit_mb is not None:
+            warnings_list_cap = ("Windows job cap reserves combined helper/merge private commit; "
+                                 "GDAL is included, and this is not an RSS or output-size estimate")
 
         memory = get_system_memory_snapshot()
         effective_reserve_mb = max(
@@ -2132,6 +2183,8 @@ Step 5: Configure (optional — auto-detection usually works)
         job_limit = len(normalized_maps)
         parallel_eligible = not fallback_reasons
         warnings_list = list(estimate_warnings)
+        if options.native_job_memory_limit_mb is not None:
+            warnings_list.append(warnings_list_cap)
         if raw_memory_limit < 1:
             warnings_list.append(
                 "current memory headroom is below one estimated worker plus reserve"
@@ -2151,7 +2204,7 @@ Step 5: Configure (optional — auto-detection usually works)
         if options.memory_policy == "ignore":
             warnings_list.append("memory limit ignored by explicit policy")
 
-        return StoreMapResourceEstimate(
+        estimate = StoreMapResourceEstimate(
             plan_number=normalized_plan,
             hecras_version=(
                 getattr(ras_obj, "ras_version", None)
@@ -2160,10 +2213,11 @@ Step 5: Configure (optional — auto-detection usually works)
             map_types=normalized_maps,
             job_count=job_limit,
             terrain=terrain_estimates,
-            formula_version="float32-surface-v1",
+            formula_version=("native-job-private-commit-v1" if options.native_job_memory_limit_mb is not None
+                             else "float32-surface-v1"),
             estimate_source=estimate_source,
-            surface_multiplier=4.0,
-            fixed_overhead_mb=512,
+            surface_multiplier=0.0 if options.native_job_memory_limit_mb is not None else 4.0,
+            fixed_overhead_mb=0 if options.native_job_memory_limit_mb is not None else 512,
             estimated_gdal_cache_mb=estimated_gdal_cache_mb,
             estimated_worker_private_mb=int(estimated_worker_mb),
             total_physical_mb=memory.total_physical_mb,
@@ -2181,6 +2235,19 @@ Step 5: Configure (optional — auto-detection usually works)
             fallback_reasons=tuple(fallback_reasons),
             warnings=tuple(warnings_list),
         )
+        if options.native_job_memory_limit_mb is not None:
+            estimate = replace(estimate,
+                estimate_method="windows-job-private-commit-cap/1",
+                native_job_memory_limit_mb=options.native_job_memory_limit_mb,
+                native_job_memory_limit_bytes=options.native_job_memory_limit_mb * 1024**2,
+                memory_measure="combined helper and merge-descendant private committed bytes; not RSS",
+                source_scope={"plan_hdf": str(plan_hdf.resolve()),
+                    "selected_terrain": cap_terrain,
+                    "native_runtime": cap_runtime,
+                    "geometry": "complete native model geometry; no AOI or hydraulic subsetting",
+                    "raster_header_inventory": [str(item.path) for item in terrain_estimates],
+                    "source_order": "original registered terrain HDF order; no planner reordering"})
+        return estimate
 
     @staticmethod
     @log_call
@@ -3911,6 +3978,9 @@ Step 5: Configure (optional — auto-detection usually works)
                 Returned under ``inundation_boundary`` as SHP paths; companion
                 SHX/DBF/PRJ files are moved with them when output_path is given.
                 Missing, empty or incomplete boundaries are omitted with a warning.
+                Boundary-only calls can request ``native_polygon_serial=True``
+                in ``performance`` to verify the native serial polygon loop.
+                This is separate from CPU affinity and does not assert parity.
             arrival_time: Generate flood Arrival Time map in hours (default: False).
                 Whole-simulation product; ignores the ``profile`` argument.
             duration: Generate inundation Duration map in hours (default: False).
@@ -3936,6 +4006,9 @@ Step 5: Configure (optional — auto-detection usually works)
                 The default preserves serial StoreAllMaps behavior. Use
                 ``StoreMapPerformanceOptions(max_workers=None)`` for automatic
                 memory- and CPU-bounded map-level parallelism.
+                An explicit ``native_job_memory_limit_mb`` requires a serial
+                boundary-only native Windows request and a verified runtime.
+                It caps combined helper/merge private commit, with no unbounded retry.
             max_workers: Deprecated keyword-only worker-count migration alias.
             memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
             reserve_memory_mb: Deprecated keyword-only reserved-memory alias. Do not combine them with
@@ -4075,8 +4148,32 @@ Step 5: Configure (optional — auto-detection usually works)
         depth = True if depth is None else bool(depth)
         velocity = True if velocity is None else bool(velocity)
 
+        serial_polygon = performance_options.native_polygon_serial
+        if serial_polygon:
+            if not inundation_boundary or any((wse, depth, velocity, froude,
+                    shear_stress, depth_x_velocity, depth_x_velocity_sq,
+                    arrival_time, duration, percent_inundated)):
+                raise ValueError(
+                    "native_polygon_serial requires an inundation-boundary-only "
+                    "request; disable all raster and whole-simulation products"
+                )
+            if max_workers != 1:
+                raise ValueError("native_polygon_serial requires max_workers=1")
+            if wine_serial_runtime:
+                raise ValueError("native_polygon_serial is not qualified under Wine")
+        _validate_native_job_cap_route(performance_options, ("inundation_boundary",),
+                                       wine_runtime=wine_serial_runtime)
+
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+
+        serial_polygon_terrain = None
+        if serial_polygon:
+            layers = RasMap.list_terrain_layers(ras_obj.project_folder, ras_object=ras_obj)
+            selected = layers if terrain_name is None else layers.loc[layers["name"] == terrain_name]
+            if len(selected) != 1:
+                raise ValueError("native_polygon_serial requires exactly one selected registered terrain")
+            serial_polygon_terrain = Path(selected.iloc[0]["resolved_path"]).resolve(strict=True)
 
         # Locate HEC-RAS directory
         hecras_dir = Path(str(ras_obj.ras_exe_path)).parent
@@ -4094,6 +4191,22 @@ Step 5: Configure (optional — auto-detection usually works)
 
         if not plan_hdf_path.exists():
             raise FileNotFoundError(f"Plan HDF not found: {plan_hdf_path}")
+
+        serial_steady_profiles = None
+        if serial_polygon:
+            from .hdf.HdfResultsPlan import HdfResultsPlan
+            if HdfResultsPlan.is_steady_plan(plan_hdf_path):
+                serial_steady_profiles = HdfResultsPlan.get_steady_profile_names(plan_hdf_path)
+                if serial_steady_profiles.count(profile) != 1:
+                    raise ValueError("Serial steady boundaries require an exact, unambiguous stored profile name")
+
+        job_cap_preflight = None
+        if performance_options.native_job_memory_limit_mb is not None:
+            from ._native_helper import validate_native_job_memory_runtime
+            cap_runtime = validate_native_job_memory_runtime(hecras_dir)
+            job_cap_preflight = _preflight_native_job_cap(performance_options.native_job_memory_limit_mb)
+            job_cap_preflight = dict(job_cap_preflight, native_runtime=cap_runtime)
+            logger.debug("Native boundary job-cap preflight: %s", json.dumps(job_cap_preflight))
 
         # RasProcess.exe uses the Plan ShortID from HDF to determine output folder name
         # This is the authoritative source - rasmap Layer Name should match but isn't used by RasProcess
@@ -4132,7 +4245,10 @@ Step 5: Configure (optional — auto-detection usually works)
         logger.debug(f"Actual output directory: {output_dir}")
 
         # Determine profile index
-        if profile.upper() in ("MAX", "MIN"):
+        if serial_steady_profiles is not None:
+            profile_index = serial_steady_profiles.index(profile)
+            profile_name = profile
+        elif profile.upper() in ("MAX", "MIN"):
             profile_index = 2147483647 if profile.upper() == "MAX" else -2147483648
             profile_name = profile.title()  # "Max" or "Min"
         else:
@@ -4142,6 +4258,8 @@ Step 5: Configure (optional — auto-detection usually works)
                 profile_index = timestamps.index(profile)
                 profile_name = profile
             except ValueError:
+                if serial_polygon:
+                    raise ValueError(f"Serial boundary timestamp is not a stored profile: {profile!r}") from None
                 logger.warning(
                     f"Timestamp '{profile}' not found. Available: {timestamps[:5]}..."
                 )
@@ -4348,6 +4466,10 @@ Step 5: Configure (optional — auto-detection usually works)
                     performance=performance_options,
                     ras_object=ras_obj,
                 )
+                if job_cap_preflight is not None:
+                    resource_estimate = replace(resource_estimate, native_job_preflight=job_cap_preflight)
+                    logger.debug("Native boundary job-cap admission plan: %s",
+                                 json.dumps(resource_estimate.to_dict(), default=str))
 
             if parallel_requested and len(maps_to_add) > 1:
                 if resource_estimate is None:
@@ -4476,31 +4598,58 @@ Step 5: Configure (optional — auto-detection usually works)
                         plan_num,
                         helper_mode,
                     )
-                    result = run_store_all_maps_helper(
-                        hecras_dir=hecras_dir,
-                        render_mode=helper_mode,
-                        rasmap_path=rasmap_path,
-                        result_hdf_path=mapper_hdf_path,
-                        timeout=timeout,
-                        working_dir=ras_obj.project_folder,
-                        gdal_num_threads=(
-                            performance_options.gdal_num_threads_per_helper
-                        ),
-                        gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
-                        native_cpu_limit=performance_options.native_cpu_limit,
-                    )
+                    if serial_polygon:
+                        safe_profile = profile_name.replace(":", " ").replace("/", "_")
+                        result = run_store_map_helper(
+                            hecras_dir=hecras_dir,
+                            render_mode=helper_mode,
+                            map_type="ProfileMap:depth",
+                            result_hdf_path=mapper_hdf_path,
+                            profile_name=profile_name,
+                            output_base_path=output_dir / f"Inundation Boundary ({safe_profile})",
+                            terrain_hdf_path=serial_polygon_terrain,
+                            native_polygon_serial=True,
+                            timeout=timeout,
+                            working_dir=ras_obj.project_folder,
+                            gdal_num_threads=performance_options.gdal_num_threads_per_helper,
+                            gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                            native_cpu_limit=performance_options.native_cpu_limit,
+                            **({"native_job_memory_limit_mb": performance_options.native_job_memory_limit_mb}
+                               if performance_options.native_job_memory_limit_mb is not None else {}),
+                        )
+                        if result.returncode == 0 and "NATIVE_POLYGON_SERIAL_EFFECTIVE=True" not in result.stdout.splitlines():
+                            raise RuntimeError("Native helper did not verify serial polygon execution")
+                        if (result.returncode == 0 and performance_options.native_job_memory_limit_mb is not None
+                                and f"NATIVE_JOB_MEMORY_LIMIT_EFFECTIVE_MIB={performance_options.native_job_memory_limit_mb}"
+                                not in result.stdout.splitlines()):
+                            raise RuntimeError("Native helper did not verify the requested job memory limit")
+                    else:
+                        result = run_store_all_maps_helper(
+                            hecras_dir=hecras_dir,
+                            render_mode=helper_mode,
+                            rasmap_path=rasmap_path,
+                            result_hdf_path=mapper_hdf_path,
+                            timeout=timeout,
+                            working_dir=ras_obj.project_folder,
+                            gdal_num_threads=(
+                                performance_options.gdal_num_threads_per_helper
+                            ),
+                            gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                            native_cpu_limit=performance_options.native_cpu_limit,
+                        )
 
-                    logger.debug(f"StoreAllMaps stdout: {result.stdout}")
+                    operation = "StoreMap polygon" if serial_polygon else "StoreAllMaps"
+                    logger.debug("%s stdout: %s", operation, result.stdout)
                     if result.stderr:
                         stderr_lines = result.stderr.splitlines()
                         stderr_preview = (
                             stderr_lines[0] if stderr_lines else result.stderr[:200]
                         )
                         logger.warning(
-                            "StoreAllMaps reported stderr: %s",
+                            "%s reported stderr: %s", operation,
                             stderr_preview,
                         )
-                        logger.debug("StoreAllMaps full stderr: %s", result.stderr)
+                        logger.debug("%s full stderr: %s", operation, result.stderr)
                     if result.returncode != 0:
                         stderr_detail = next(
                             (
@@ -4514,7 +4663,7 @@ Step 5: Configure (optional — auto-detection usually works)
                             f": {stderr_detail[:500]}" if stderr_detail else ""
                         )
                         raise RuntimeError(
-                            "StoreAllMaps failed for plan "
+                            f"{operation} failed for plan "
                             f"{plan_num} (exit code {result.returncode})"
                             f"{detail_suffix}"
                         )
@@ -4859,6 +5008,7 @@ Step 5: Configure (optional — auto-detection usually works)
         terrain_name: Optional[str] = None,
         inundation_boundary: bool = True,
         raise_on_missing: bool = True,
+        performance: Optional[StoreMapPerformanceOptions] = None,
     ) -> pd.DataFrame:
         """Generate all selected steady-profile maps with one helper launch.
 
@@ -4899,6 +5049,11 @@ Step 5: Configure (optional — auto-detection usually works)
                 generated is moved to ``output_path`` and kept on disk first;
                 the exception's ``frame`` carries the per-product status.
                 When False, return the frame with ``status="missing"`` rows.
+            performance: Per-helper GDAL threads, GDAL cache and native CPU
+                controls. Aggregate steady export uses one helper; scheduler
+                and memory-admission fields must retain their defaults and
+                are not applied by this aggregate route. Wine helpers inherit
+                one CPU and accept ``native_cpu_limit`` of 1 or None.
 
         Returns:
             DataFrame with one row per logical profile/product and stable
@@ -4921,6 +5076,30 @@ Step 5: Configure (optional — auto-detection usually works)
         """
         from .hdf.HdfResultsPlan import HdfResultsPlan
 
+        performance_options = (
+            StoreMapPerformanceOptions() if performance is None else performance
+        )
+        if not isinstance(performance_options, StoreMapPerformanceOptions):
+            raise TypeError("performance must be a StoreMapPerformanceOptions")
+        if replace(
+            performance_options,
+            gdal_num_threads_per_helper=1,
+            gdal_cachemax_mb=None,
+            native_cpu_limit=None,
+        ) != StoreMapPerformanceOptions():
+            raise ValueError(
+                "steady aggregate performance supports only GDAL threads/cache "
+                "and native_cpu_limit; scheduler fields must retain defaults"
+            )
+        if (
+            _is_wine_helper_runtime()
+            and performance_options.native_cpu_limit is not None
+            and performance_options.native_cpu_limit > 1
+        ):
+            raise ValueError(
+                "Wine stored-map helpers inherit one CPU; "
+                "native_cpu_limit must be 1 or None"
+            )
         started = time.perf_counter()
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -5095,6 +5274,9 @@ Step 5: Configure (optional — auto-detection usually works)
                     result_hdf_path=mapper_hdf_path,
                     timeout=timeout,
                     working_dir=ras_obj.project_folder,
+                    gdal_num_threads=performance_options.gdal_num_threads_per_helper,
+                    gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                    native_cpu_limit=performance_options.native_cpu_limit,
                 )
                 helper_elapsed = time.perf_counter() - helper_started
 
@@ -5268,6 +5450,16 @@ Step 5: Configure (optional — auto-detection usually works)
             frame.attrs["configured_map_count"] = len(configured_specs)
             frame.attrs["generated_file_count"] = len(produced_paths)
             frame.attrs["runtime_provenance"] = runtime_provenance
+            frame.attrs["performance_requested"] = performance_options.to_dict()
+            frame.attrs["performance_effective"] = {
+                "helper_count": 1,
+                "gdal_num_threads_per_helper": performance_options.gdal_num_threads_per_helper,
+                "gdal_cachemax_mb": performance_options.gdal_cachemax_mb,
+                "native_cpu_limit": (
+                    1 if _is_wine_helper_runtime()
+                    else performance_options.native_cpu_limit
+                ),
+            }
             frame.attrs["missing_product_count"] = len(missing_messages)
             if missing_messages:
                 message = (

@@ -30,7 +30,7 @@ For result extraction, keep using the existing `Hdf*` API. The
 below describe the default native reader and its h5py reference path.
 
 For inundation catalogs, use the [Mapping Engine guide](native-mapping-engine.md).
-Development mapping builds add bounded shared-timestep/window caches and
+Mapping supports bounded shared-timestep/window caches and
 optional native terrio GeoTIFF delivery. The
 [retained-state measurements](development/fim-mapping-performance.md#retained-state-and-native-output-optimization)
 separate complete catalog calls from repeated warm-context requests.
@@ -38,13 +38,13 @@ It covers horizontal, cell-corner sloping and depth-weighted cell-face mapping,
 bbox/polygon masks, shared terrain, bounded timestep concurrency, and reusable
 prepared inputs. `RasFim.map_catalog()` schedules known reach/timestep groups
 with shared model state, bounded staging and optional CPU-partitioned workers;
-see the [catalog API](api/fim.md#schedule-reachtimestep-catalogs).
+see [reach/timestep catalogs](native-mapping-engine.md#schedule-reachtimestep-catalogs).
 These methods map already-computed hydraulics; they do not
 run the HEC-RAS hydraulic solver. Models containing 1D river or cross-section
 elements are rejected, and standalone storage-area surfaces are outside the
 physical-2D mapping scope.
 
-The [mapping comparison tables](native-mapping-engine.md#mapping-time-comparisons)
+The [mapping comparison report](development/fim-mapping-performance.md)
 measure complete mapping calls against native RAS Mapper, separately from HDF
 read timings. Matching requires the same interpolation options and effective
 terrain. Raw qualification compares complete valid/nodata masks and float32
@@ -233,7 +233,7 @@ across backends. Results per notebook are in the
 
 Notebooks that teach the native engine directly:
 
-- [321: Native DSS Records, Backends, and Copy-Out Recovery](notebooks/321_native_dss_records_and_recovery.md):
+- [322: Native DSS Records, Backends, and Copy-Out Recovery](notebooks/322_native_dss_records_and_recovery.md):
   DSS6/DSS7 round trips and merges, `sync=` policies, a backend comparison, paired data,
   locations and `RasDss.repair`, on public HEC data.
 - [732: Native Gridded Import and Grid Tools on Real Precipitation](notebooks/732_native_gridded_import_and_grid_tools.md):
@@ -542,9 +542,8 @@ its existing section links.
 
 For native 2D inundation mapping, the optional FIM engine uses this HDF reader
 to stage model inputs, then reconstructs horizontal or sloping surfaces in Rust.
-Depth-weighted sloping additionally requires the stored-corner reader capability
-added after published fast-HDF 0.2.2. See the
-[FIM API](api/fim.md#depth-weighted-sloping-faces-engine-08) and
+Depth-weighted sloping additionally requires the stored-corner reader capability.
+See [depth-weighted mapping](native-mapping-engine.md#depth-weighted-sloping-faces) and
 [five-model RASMapper comparison](development/fim-mapping-performance.md#depth-weighted-sloping-faces-engine-08)
 for setup, retained Windows/Linux wheels, exact mask/value qualification, and
 mapping times. Those mapping measurements are separate from the HDF-read
@@ -592,7 +591,7 @@ repository,
 [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf),
 and published on PyPI as `ras-commander-fast-hdf` (and, from 0.2.0, on
 crates.io as a Rust crate of the same name). ras-commander 0.107.1 and later
-list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`; 0.112.0 and later: `>=0.2.5,<0.3`; 0.113.0 and later: `>=0.3.0,<0.4`), limited by an environment marker to the
+list it as a core dependency (0.108.0 and later: `>=0.2,<0.3`; 0.109.0 and later: `>=0.2.3,<0.3`; 0.112.0 and later: `>=0.2.5,<0.3`; 0.113.0 and later: `>=0.3.0,<0.4`; 0.117.0 and later: `>=0.5.0,<0.6`), limited by an environment marker to the
 platforms that have wheels, so the normal install is enough:
 
 ```bash
@@ -637,16 +636,18 @@ automatically, use `pip install "ras-commander[fast]"` or
 
 ```python
 import ras_commander_fast_hdf as native
-print(native.API_VERSION)      # 12 (legacy mesh metadata compatibility build)
-print(native.ENGINE_COMMIT)    # b2ab8280617383519d38aad9bd47b88b654009b1
+print(native.API_VERSION)      # 12 (0.5.0 and later; 11 before: no legacy mesh layouts)
+print(native.ENGINE_COMMIT)    # Source revision of the installed engine
 print(native.ENGINE_FEATURES)  # ('catalog', 'hdf', 'mesh', 'results')
 
 from ras_commander import fast_hdf
 print(fast_hdf.available())    # True
 ```
 
-ras-commander only uses an extension whose `API_VERSION` is exactly the one it
-was built against (12 for the legacy mesh metadata compatibility build). An older or newer wheel is ignored
+RAS Commander accepts the compatible extension contracts 11 and 12. API 12
+adds native legacy mesh metadata support without changing the API 11 function
+signatures. Published API 11 wheels retain their supported layouts; unsupported
+legacy typed reads still raise in required-native mode. Other API versions are ignored
 with one logged warning, and every read uses h5py; in `native` mode it raises
 `FastHdfError` instead. `fast_hdf.available()` returns `False` in both cases.
 If the extension is not installed at all, `available()` returns `False` and
@@ -1168,7 +1169,7 @@ print({r["backend"] for r in records})
 ```
 
 **The extension is installed but not used.** Check
-`ras_commander_fast_hdf.API_VERSION` (must be 12) and the log for "Ignoring
+`ras_commander_fast_hdf.API_VERSION` (must be 11 or 12) and the log for "Ignoring
 incompatible ras-commander-fast-hdf extension". Also check that
 `RAS_COMMANDER_FAST_HDF` is not set to `h5py`/`0`.
 
@@ -1183,7 +1184,7 @@ first.
 |---|---|
 | Engine | `ras-commander-fast-hdf` crate 0.2.0 ([crates.io](https://crates.io/crates/ras-commander-fast-hdf); source in [gpt-cmdr/ras-commander-fast-hdf](https://github.com/gpt-cmdr/ras-commander-fast-hdf)), engine API 10 |
 | Bridge | Python package `ras-commander-fast-hdf` 0.2.0 (module `ras_commander_fast_hdf`), `API_VERSION` 11, text API 1, features `catalog, hdf, mesh, results`, `ENGINE_COMMIT` = the commit of tag `v0.2.0` |
-| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.112.0 and later require `>=0.2.5,<0.3`; 0.113.0 and later require `>=0.3.0,<0.4` (bridge API 11 unchanged) |
+| ras-commander | 0.108.0 and later require `ras-commander-fast-hdf>=0.2,<0.3` and bridge API 11; 0.109.0 and later require `>=0.2.3,<0.3`; 0.112.0 and later require `>=0.2.5,<0.3`; 0.113.0 and later require `>=0.3.0,<0.4` (bridge API 11 unchanged); 0.117.0 and later require `>=0.5.0,<0.6` (bridge API 12, the first published build with the legacy mesh layouts) |
 | Wheels | On PyPI: Windows `cp310-abi3-win_amd64`, Linux `cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64` and `cp310-abi3-musllinux_1_2_x86_64`, macOS `cp310-abi3-macosx_11_0_arm64` (not yet qualified); source distribution |
 
 `ENGINE_COMMIT` is the commit of the ras-commander-fast-hdf repository the

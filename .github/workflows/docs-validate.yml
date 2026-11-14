@@ -4,6 +4,8 @@ name: Validate Documentation
 # failures) on PRs BEFORE they merge to main and trigger the self-hosted CT 210 rebuild
 # (rascommander.info). Build-only; does not deploy. Strictness also lives in mkdocs.yml.
 
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
 on:
   pull_request:
     paths:
@@ -12,6 +14,8 @@ on:
       - 'ras_commander/**'
       - '.claude/**'
       - 'mkdocs.yml'
+      - 'scripts/mkdocs_mapping_redirect.py'
+      - 'tests/test_mapping_docs_redirects.py'
       - '.github/workflows/docs-validate.yml'
   workflow_dispatch:
 
@@ -24,7 +28,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted", "Linux", "X64", "clb-ci-linux"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,6 +47,12 @@ jobs:
           key: ${{ runner.os }}-pip-docs-${{ hashFiles('docs/requirements-docs.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-docs-
+
+      # On the self-hosted Linux runner the seeded interpreter's site-packages is
+      # read-only, so pip installs to the user site; put its scripts (jupyter-nbconvert,
+      # mkdocs) on PATH. A no-op where pip can write site-packages.
+      - name: User-site scripts on PATH
+        run: echo "$(python -m site --user-base)/bin" >> "$GITHUB_PATH"
 
       - name: Install documentation dependencies
         run: |
@@ -69,7 +79,7 @@ jobs:
           python .claude/scripts/generate_cognitive_docs.py
 
       - name: Verify image catalog and source rendering regressions
-        run: python -m pytest tests/test_container_image_docs.py tests/test_mkdocstrings_source_anchors.py -q
+        run: python -m pytest tests/test_container_image_docs.py tests/test_mkdocstrings_source_anchors.py tests/test_mapping_docs_redirects.py -q
 
       - name: Build — no deploy
         run: |
@@ -77,3 +87,8 @@ jobs:
 
       - name: Verify rendered API members and unique HTML IDs
         run: python .claude/scripts/validate_rasmapper_api_rendering.py
+
+      - name: Verify rendered mapping bookmark destinations
+        env:
+          RAS_COMMANDER_DOCS_SITE: site
+        run: python -m pytest tests/test_mapping_docs_redirects.py -k real_mapping_bookmark_destinations -q

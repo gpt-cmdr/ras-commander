@@ -10,9 +10,10 @@ import time
 
 from .. import get_logger, log_call
 from . import _aoi, _engine, _sloping
+from . import _boundary_inputs
 from ._boundary_inputs import stage_boundary_terrain
 from ._horizontal_engine import _write_geometry
-from .errors import FimEngineError, FimUnsupportedError
+from .errors import FimEngineError, FimGeometryError, FimUnsupportedError
 
 logger = get_logger(__name__)
 METHOD_ID = "deterministic-zero-depth-contours/1"
@@ -112,7 +113,7 @@ def _selected_tiles(shape, transform, geometry):
             for c in range(c0 // 256, (c1-1)//256 + 1)]
 
 
-def _read_product(path, profile, interpolation, crs, max_bytes):
+def _read_product(path, profile, interpolation, crs, max_bytes, *, method_id=METHOD_ID):
     import shapely
     from pyproj import CRS
     from pyproj.exceptions import CRSError
@@ -124,7 +125,7 @@ def _read_product(path, profile, interpolation, crs, max_bytes):
         feature = product["features"][0]
         properties = feature["properties"]
         if (feature["type"] != "Feature" or properties["profile_id"] != profile
-                or properties["interpolation"] != interpolation or properties["method_id"] != METHOD_ID
+                or properties["interpolation"] != interpolation or properties["method_id"] != method_id
                 or properties["native_vector_parity"] is not False):
             raise ValueError("feature identity or method differs from request")
         if CRS.from_user_input(product["crs"]["properties"]["name"]) != CRS.from_user_input(crs):
@@ -147,11 +148,19 @@ def _read_product(path, profile, interpolation, crs, max_bytes):
                 vertices += len(ring)
         parsed = shape(geometry)
         if not shapely.is_valid(parsed):
-            raise ValueError(f"invalid contour geometry: {shapely.is_valid_reason(parsed)}")
+            reason = str(shapely.is_valid_reason(parsed))
+            error = FimGeometryError(f"Invalid boundary product {path.name}: invalid contour geometry: {reason}",
+                validity_reason=reason)
+            error._boundary_counts = (len(geometry["coordinates"]), holes, vertices)
+            # Avoid retaining full parsing/GEOS allocations in an exception traceback.
+            product = feature = properties = geometry = parsed = polygon = ring = xy = None
+            raise error
         area = float(parsed.area)
         if not _finite(area):
             raise ValueError("geometry area is nonfinite")
         return product, (len(geometry["coordinates"]), holes, vertices, area)
+    except FimGeometryError:
+        raise
     except (KeyError, TypeError, ValueError, CRSError) as exc:
         raise FimEngineError(f"Invalid boundary product {path.name}: {exc}") from exc
 
@@ -198,6 +207,11 @@ def map_inundation_boundaries(
         raise FimEngineError("Engine lacks deterministic boundary capability; install a matching Fast-Map engine (0.10+)")
     watched = {"hdf": Path(hdf_path).resolve(strict=True), "terrain": Path(terrain_path).resolve(strict=True),
                "terrain_hdf": Path(terrain_hdf).resolve(strict=True), "engine": engine}
+    # A modified terrain maps on its stored-map effective terrain; tile
+    # metadata then comes from the source that the terrain HDF registers.
+    stored = _boundary_inputs.stored_map_terrain(terrain_path, terrain_hdf)
+    if stored is not None:
+        watched["terrain_source"] = stored["source"]
     if isinstance(polygon, (str, os.PathLike)):
         watched["polygon"] = Path(polygon).resolve(strict=True)
         if watched["polygon"].suffix.lower() == ".shp":
@@ -229,6 +243,9 @@ def map_inundation_boundaries(
             root = Path(context._temporary.name)
             with rasterio.open(terrain_path) as raster:
                 crs, shape = raster.crs, [raster.height, raster.width]
+            if not crs and context._terrain_identity.get("declared_crs"):
+                # Untagged RAS Mapper source: the CRS its terrain HDF declares.
+                crs = rasterio.crs.CRS.from_wkt(context._terrain_identity["declared_crs"])
             aoi = _aoi.resolve_aoi(bbox, polygon, polygon_layer, aoi_crs, default_crs=crs)
             geometry = _aoi.geometry_in_crs(aoi, crs) if aoi is not None else None
             tiles = _selected_tiles(shape, context._terrain_transform, geometry)
@@ -239,13 +256,21 @@ def map_inundation_boundaries(
             remaining = prepared_bytes - context._info["planned_prepared_bytes"] - transport
             if remaining <= 0:
                 raise FimUnsupportedError("Boundary geometry transport exceeds max_prepared_mib")
-            metadata = stage_boundary_terrain(terrain_hdf, terrain_path, root, threads=threads,
-                max_staged_bytes=remaining, selected_tiles=tiles)
+            no_code = context._terrain_identity.get("epsg") is None
+            if no_code and not _engine.crs_any(method):
+                # Older engines label GeoJSON with an EPSG code only.
+                raise FimUnsupportedError(
+                    "inundation boundaries need a terrain CRS with an EPSG code; the engine's "
+                    "boundary method does not advertise crs_any")
+            metadata = stage_boundary_terrain(terrain_hdf,
+                stored["source"] if stored is not None else terrain_path, root, threads=threads,
+                max_staged_bytes=remaining, selected_tiles=tiles,
+                effective_terrain=Path(terrain_path) if stored is not None else None)
             _write_geometry(root / "boundary-cells.wkb", cells.geometry.to_numpy())
             lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(context._meshes)}
             owners = [[lookup[row.mesh_name], int(row.cell_id)] for row in cells.itertuples()]
             model = {"schema": "ras-commander-sloping-request/1", "options": _sloping._validate_options("sloping", False, False),
-                     "terrain": str(Path(terrain_path).resolve()), "epsg": context._terrain_identity["epsg"],
+                     "terrain": str(Path(terrain_path).resolve()), **_engine.request_crs(context._terrain_identity),
                      "crs_identity": context._terrain_identity["crs_identity"], "terrain_transform": context._terrain_transform,
                      "window": [0, 0, shape[1], shape[0]], "geometry_file": "boundary-cells.wkb",
                      "mesh_files": context._mesh_files, "owner_cells": owners,
@@ -256,7 +281,9 @@ def map_inundation_boundaries(
                 model["aoi_file"] = "boundary-aoi.wkb"
             request = root / "boundary-request.json"
             _atomic_json(request, {"schema": "ras-commander-boundary-request/1", "interpolation": interpolation,
-                                   "model": model, "terrain_metadata": metadata})
+                                   "model": model, "terrain_metadata": metadata,
+                                   # GDAL's WKT of the terrain CRS labels the GeoJSON verbatim.
+                                   **({"crs_wkt": crs.to_wkt()} if no_code else {})})
             unchanged()
             tick = time.perf_counter()
             output = root / "boundary-engine"

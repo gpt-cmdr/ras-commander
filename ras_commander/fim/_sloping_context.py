@@ -180,8 +180,17 @@ class FimPreparedSlopingModel:
                 raise FimUnsupportedError("Prepared geometry exceeds max_prepared_mib")
             # Retain the model-wide spatial index once, before reach planning.
             self._cells.sindex
-            self._terrain_identity = _engine.terrain_identity(
-                self._engine, self._terrain, self._cells.crs, terrain_crs_fnv1a64
+            # Untagged RAS Mapper sources take their registering terrain HDF's
+            # Projection (crs_any engines only); otherwise as terrain_identity.
+            # That HDF is watched with the other inputs from before it is read.
+            self._terrain_crs_hdf = (_engine.untagged_source_hdf(self._terrain)
+                                     if _engine.crs_any(self._method) else None)
+            if self._terrain_crs_hdf is not None:
+                self._watched["terrain_crs_hdf"] = self._terrain_crs_hdf
+                self._identities["terrain_crs_hdf"] = _file_identity(self._terrain_crs_hdf)
+            self._terrain_identity = _engine.source_identity(
+                self._engine, self._terrain, self._cells.crs, terrain_crs_fnv1a64,
+                crs_any=_engine.crs_any(self._method), terrain_hdf=self._terrain_crs_hdf,
             )
             with rasterio.open(self._terrain) as source:
                 self._terrain_transform = list(source.transform.to_gdal())
@@ -331,9 +340,11 @@ class FimPreparedSlopingModel:
         if key in self._validated_positions:
             self._validated_positions.move_to_end(key)
             return True
-        _horizontal.prepare_grid(self._cells, self._terrain, plan, False)
+        grid = _horizontal.prepare_grid(self._cells, self._terrain, plan, False)
         size = len(key) + 128
-        if size <= self._validation_limit:
+        # The same cell subset can come from another window, and a tolerated
+        # roundoff overlap is judged against the window's pixel centres.
+        if getattr(grid, "tolerated_overlaps", None) == 0 and size <= self._validation_limit:
             while self._validation_bytes + size > self._validation_limit:
                 old, _ = self._validated_positions.popitem(last=False)
                 self._validation_bytes -= len(old) + 128
@@ -359,6 +370,8 @@ class FimPreparedSlopingModel:
         template_raster=None,
         invalid_cells=None,
         product_writer="rasterio",
+        row_stream_rows=0,
+        final_format=None,
     ):
         """Map all prepared names or an ordered subset into a new/empty folder.
 
@@ -377,6 +390,9 @@ class FimPreparedSlopingModel:
         It excludes templates, floodplain polygonization and velocity. The
         default ``"rasterio"`` preserves the existing delivery path. Native
         compression uses one worker; ``writer_threads`` controls Rasterio only.
+        ``final_format`` has the :meth:`RasFim.map_sloping_profiles` contract.
+        ``row_stream_rows`` has the same opt-in native plain-sloping contract
+        as ``RasFim.map_sloping_profiles``; zero keeps full-array rendering.
         """
         with self._lock:
             if self._closed:
@@ -425,6 +441,8 @@ class FimPreparedSlopingModel:
                     invalid_cells=invalid_cells,
                     _prepared=self,
                     product_writer=product_writer,
+                    row_stream_rows=row_stream_rows,
+                    final_format=final_format,
                 )
             except BaseException:
                 self._check_sources()

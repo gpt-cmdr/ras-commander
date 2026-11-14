@@ -33,6 +33,7 @@ def adapter(tmp_path, monkeypatch):
                              geometry=[box(0, 0, 10, 10), box(10, 0, 20, 10)], crs="EPSG:32615")
     state = SimpleNamespace(failure=None, options=None, request=None)
     method = {"method_id": _boundary.METHOD_ID, "native_vector_parity": False, "coordinate_precision": 0.001}
+    state.method = method
     monkeypatch.setattr(_boundary._engine, "find_engine", lambda *a: engine)
     monkeypatch.setattr(_boundary._engine, "engine_method", lambda *a: {"boundary": method})
 
@@ -193,3 +194,75 @@ def test_optional_real_boundary_engine(tmp_path):
     result = _boundary.map_inundation_boundaries(hdf, tif, tmp_path / "products",
                                                terrain_hdf=terrain_hdf, engine_path=engine)
     assert len(result) == 1 and result.status.iloc[0] in ("complete", "empty")
+
+
+@pytest.mark.parametrize("method,allow,extra", [("deterministic", True, {}),
+    ("native_serial", False, {}), ("native_serial", True, {"polygon_layer": "layer"}),
+    ("native_serial", True, {"bbox": [0, 0, 1, 1]})])
+@pytest.mark.parametrize("api", ["map_inundation_boundaries", "compare_inundation_boundaries"])
+def test_public_raw_guard_is_before_paths_engine_or_outputs(tmp_path, method, allow, extra, api):
+    from ras_commander.fim.RasFim import RasFim
+    with pytest.raises(FimUnsupportedError):
+        getattr(RasFim, api)("missing.hdf", "missing.tif", tmp_path / "out", terrain_hdf="missing.hdf",
+            method=method, allow_unqualified=allow, preserve_raw_geometry=True, **extra)
+    assert not (tmp_path / "out").exists()
+
+
+def test_untagged_terrain_aoi_uses_the_declared_crs(adapter, monkeypatch):
+    """An untagged RAS Mapper source resolves the AOI in the CRS its terrain HDF
+    declares (the prepared context's identity), not in no CRS."""
+    from ras_commander.fim.RasFim import RasFim
+    terrain = adapter.args[1]
+    with rasterio.open(terrain) as src:
+        profile, data = src.profile, src.read()
+    profile.pop("crs", None)
+    terrain.unlink()
+    with rasterio.open(terrain, "w", **profile) as dst:
+        dst.write(data)
+    context = RasFim.prepare_sloping_model
+    seen = {}
+
+    def declared(*args, **options):
+        made = context(*args, **options)
+        made._terrain_identity = {"epsg": None, "crs_identity": {"kind": "untagged"}, "crs_geokeys": {},
+                                  "declared_crs": rasterio.crs.CRS.from_epsg(32615).to_wkt()}
+        return made
+
+    resolve = _boundary._aoi.resolve_aoi
+
+    def recorded(*args, default_crs=None, **kwargs):
+        seen["crs"] = default_crs
+        return resolve(*args, default_crs=default_crs, **kwargs)
+
+    adapter.method["crs_any"] = True
+    monkeypatch.setattr(RasFim, "prepare_sloping_model", declared)
+    monkeypatch.setattr(_boundary._aoi, "resolve_aoi", recorded)
+    monkeypatch.setattr(_boundary._engine, "request_crs", lambda identity: {"epsg": 32615})
+    _boundary.map_inundation_boundaries(*adapter.args, terrain_hdf=adapter.terrain_hdf,
+                                        profiles={"max": "Max"}, bbox=[0, 0, 20, 20])
+    assert seen["crs"] == rasterio.crs.CRS.from_epsg(32615)
+    assert adapter.request["terrain_metadata"]["selected_tiles"] == [0]
+
+
+def test_stored_map_terrain_is_the_ground_and_its_source_is_staged(adapter, monkeypatch):
+    """A stored-map effective terrain passed as terrain_path: the model maps it,
+    tile metadata is staged from the source the terrain HDF registers, and the
+    source is watched."""
+    from ras_commander.fim import _boundary_inputs
+    effective, terrain_hdf = adapter.args[1], adapter.terrain_hdf
+    source = effective.parent / "source.tif"
+    source.write_bytes(b"source")
+    monkeypatch.setattr(_boundary_inputs, "stored_map_terrain",
+                        lambda tif, hdf: {"receipt": {}, "source": source})
+    staged = {}
+
+    def stage(hdf, tif, root, **kwargs):
+        staged.update(tif=Path(tif), **kwargs)
+        return {"selected_tiles": kwargs["selected_tiles"]}
+
+    monkeypatch.setattr(_boundary, "stage_boundary_terrain", stage)
+    _boundary.map_inundation_boundaries(*adapter.args, terrain_hdf=terrain_hdf, profiles={"max": "Max"})
+    assert staged["tif"] == source and staged["effective_terrain"] == Path(effective)
+    assert adapter.request["model"]["terrain"] == str(Path(effective).resolve())
+    manifest = json.loads((adapter.args[2] / "boundary_manifest.json").read_text())
+    assert manifest["sources"]["terrain_source"]["path"] == str(source)

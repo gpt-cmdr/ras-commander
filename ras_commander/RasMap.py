@@ -4407,10 +4407,6 @@ class RasMap:
                 unsupported_steady_options.append("arrival_depth")
             if benefit_area is not None:
                 unsupported_steady_options.append("benefit_area")
-            if performance is not None:
-                unsupported_steady_options.append(
-                    "performance (steady batches use one aggregate helper)"
-                )
             for product in ("arrival_time", "duration", "percent_inundated"):
                 if requested_flags.get(product):
                     unsupported_steady_options.append(product)
@@ -4655,6 +4651,7 @@ class RasMap:
                             map_flags.get("inundation_boundary")
                         ),
                         raise_on_missing=True,
+                        performance=performance,
                     )
                     records = frame.to_dict(orient="records")
                     grouped_profiles = []

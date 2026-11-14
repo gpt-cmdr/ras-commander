@@ -3,9 +3,18 @@ name: Native HDF extension
 # The native extension (ras-commander-fast-hdf) is built and released from
 # https://github.com/gpt-cmdr/ras-commander-fast-hdf. This workflow installs the
 # published wheel from PyPI and runs ras-commander's binding and fallback tests.
-# Until API 12 is released, qualify the paired engine commit below from source.
+# ras-commander-fast-hdf 0.5.0 is the first published API 12 build, so no engine
+# is built from source here.
+# macOS is GitHub-hosted, slow and expensive: it runs only when requested with
+# include_macos, never on pull requests. Linux and Windows run on CLB's
+# self-hosted Slurm runners; pull requests from forks use GitHub-hosted runners.
 on:
   workflow_dispatch:
+    inputs:
+      include_macos:
+        description: "Also run on macOS"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'ras_commander/fast_hdf.py'
@@ -15,6 +24,7 @@ on:
       - 'ras_commander/fast_text.py'
       - 'ras_commander/hdf/**'
       - 'setup.py'
+      - 'tests/test_hdf_plan_geometry_information.py'
       - 'tests/test_hdf_result_view.py'
       - 'tests/test_hdf_raster_interpolation.py'
       - 'tests/test_hdf_raster_triangulation.py'
@@ -34,8 +44,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-15]
-    runs-on: ${{ matrix.os }}
+        os: ${{ fromJSON(inputs.include_macos && '["windows-latest", "ubuntu-latest", "macos-15"]' || '["windows-latest", "ubuntu-latest"]') }}
+        include:
+          - os: ubuntu-latest
+            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
+          - os: windows-latest
+            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
+    # Fork pull requests -> GitHub-hosted matrix.os; otherwise the self-hosted labels (macOS stays hosted).
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('["{0}"]', matrix.os) || matrix.self_hosted || format('["{0}"]', matrix.os)) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,33 +69,15 @@ jobs:
         id: native
         shell: bash
         run: |
-          if python -m pip install --only-binary ras-commander-fast-hdf "ras-commander-fast-hdf>=0.3.0,<0.4"; then
+          if python -m pip install --only-binary ras-commander-fast-hdf "ras-commander-fast-hdf>=0.5.0,<0.6"; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=Native tests skipped::ras-commander-fast-hdf >=0.3.0,<0.4 could not be installed from PyPI for this platform."
+            echo "::notice title=Native tests skipped::ras-commander-fast-hdf >=0.5.0,<0.6 could not be installed from PyPI for this platform."
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Check out paired API 12 engine
+      - name: Adapter compatibility with the published extension
         if: steps.native.outputs.available == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: gpt-cmdr/ras-commander-fast-hdf
-          ref: 7f32f9601648a9ac7b93c91aec3e1cb4f0436a80
-          path: working/paired-fast-hdf
-      - uses: dtolnay/rust-toolchain@stable
-        if: steps.native.outputs.available == 'true'
-      - uses: Swatinem/rust-cache@v2
-        if: steps.native.outputs.available == 'true'
-        with:
-          workspaces: working/paired-fast-hdf -> target
-      - name: Build paired API 12 extension
-        if: steps.native.outputs.available == 'true'
-        shell: bash
-        working-directory: working/paired-fast-hdf/python
-        run: |
-          python -m pip install "maturin>=1.9,<2"
-          python -m maturin build --release --locked --features exports-all,exports-pmtiles,python-arrow --out ../../paired-wheels
-          python -m pip install --force-reinstall --no-deps ../../paired-wheels/*.whl
+        run: python -m pytest tests/test_hdf_plan_geometry_information.py tests/test_hdf_mesh_ghost_cells.py tests/test_fast_hdf.py tests/test_fim_catalog.py -k "legacy_names_and_ghost_filtering or adapter_accepts_only_compatible_native_contracts or bounded_multitime_hdf_read" -q
       - name: Check the installed extension
         if: steps.native.outputs.available == 'true'
         shell: bash
@@ -99,7 +97,7 @@ jobs:
           PY
       - name: Binding and fallback regression tests
         if: steps.native.outputs.available == 'true'
-        run: python -m pytest tests/test_hdf_mesh_ghost_cells.py tests/test_fast_hdf.py tests/test_fast_hdf_pmtiles_columnar.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py tests/rust_engine_bridge/in_call_rewrite_test.py -q
+        run: python -m pytest tests/test_hdf_plan_geometry_information.py tests/test_hdf_mesh_ghost_cells.py tests/test_fast_hdf.py tests/test_fast_hdf_pmtiles_columnar.py tests/test_hdf_result_view.py tests/test_hdf_results_mesh.py tests/test_hdf_mesh_cell_polygon_diagnostics.py tests/rust_engine_bridge/panic_guard_test.py tests/rust_engine_bridge/in_call_rewrite_test.py -q
       - name: Raster interpolation regression tests
         run: python -m pytest tests/test_hdf_raster_interpolation.py tests/test_hdf_raster_triangulation.py tests/test_hdf_raster_windows.py tests/test_hdf_results_mesh_max_depth.py -q
       - name: Table readers with Python reference backend

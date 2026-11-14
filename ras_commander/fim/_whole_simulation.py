@@ -130,6 +130,7 @@ def map_whole_simulation(
     engine_path=None,
     invalid_cells="repair",
     storage_areas=False,
+    terrain_crs_fnv1a64=None,
 ):
     from .. import HdfMesh, HdfResultsMesh
     from ..fast_hdf import backend_scope, read_datasets
@@ -211,6 +212,7 @@ def map_whole_simulation(
     plan = _horizontal.plan_grid(
         cells, terrain, None, budget, native=True,
         storage_areas=storage.polygons if storage is not None else None,
+        terrain_hdf=scope_info["terrain_hdf"] if scope_info is not None else None,
     )
     _horizontal.prepare_grid(cells, terrain, plan, False)  # validates polygons and overlap
     timings["cell_and_grid_seconds"] = time.perf_counter() - tick
@@ -241,6 +243,7 @@ def map_whole_simulation(
             "threads": threads,
             "writer_threads": writer_threads,
             "max_working_mib": budget,
+            "terrain_crs_fnv1a64": terrain_crs_fnv1a64,
         },
         "time_reference": {
             "simulation_start": start.isoformat(),
@@ -271,7 +274,7 @@ def map_whole_simulation(
         frame.attrs["model_scope"] = model_scope
         frame.attrs["time_reference"] = details["time_reference"]
         frame.attrs["invalid_cells"] = details["invalid_cells"]
-        for key in ("terrain_scope", "unqualified", "storage_areas"):
+        for key in ("terrain_scope", "unqualified", "storage_areas", "terrain_identity"):
             if key in details:
                 frame.attrs[key] = details[key]
         return frame
@@ -286,7 +289,7 @@ def map_whole_simulation(
                 engine, hdf, terrain, cells, plan, hours, products, threshold,
                 allow_unqualified, scope_info, threads, writer_threads, budget,
                 timeout, folder, rows, details, timings, crs,
-                HdfResultsMesh, backend_scope, read_datasets, storage,
+                HdfResultsMesh, backend_scope, read_datasets, storage, terrain_crs_fnv1a64,
             )
         changed = [key for key, path in watched.items() if _file_identity(path) != before[key]]
         if changed:
@@ -308,7 +311,7 @@ def map_whole_simulation(
 def _run(
     engine, hdf, terrain, cells, plan, hours, products, threshold, allow_unqualified,
     scope_info, threads, writer_threads, budget, timeout, folder, rows, details, timings,
-    crs, HdfResultsMesh, backend_scope, read_datasets, storage=None,
+    crs, HdfResultsMesh, backend_scope, read_datasets, storage=None, terrain_crs_fnv1a64=None,
 ):
     import h5py
     import rasterio
@@ -322,7 +325,15 @@ def _run(
         raise FimEngineError(
             f"whole-simulation staging needs at least {required} free bytes on the output volume"
         )
-    identity = _engine.terrain_identity(engine, terrain, cells.crs)
+    # A RAS Mapper source with no CRS tags takes the Projection of the terrain
+    # HDF that registers it, as on the horizontal and sloping routes; crs_any
+    # engines only (the whole_simulation record advertises it).
+    identity = _engine.source_identity(
+        engine, terrain, cells.crs, terrain_crs_fnv1a64,
+        crs_any=_engine.crs_any((details.get("engine") or {}).get("method")),
+        terrain_hdf=scope_info["terrain_hdf"] if scope_info is not None else None,
+        **({"timeout": timeout} if timeout is not None else {}))
+    details["terrain_identity"] = identity
     with tempfile.TemporaryDirectory(prefix=".whole-simulation-", dir=folder) as temporary:
         root = Path(temporary)
         tick = time.perf_counter()
@@ -393,7 +404,7 @@ def _run(
         horizontal = {
             "schema": "ras2fim-horizontal-request/1",
             "terrain": str(terrain),
-            "epsg": identity["epsg"],
+            **_engine.request_crs(identity),
             "crs_identity": identity["crs_identity"],
             "terrain_transform": full_transform,
             "window": [int(v) for v in plan.window.flatten()],

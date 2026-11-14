@@ -129,6 +129,7 @@ class RasTerrain:
         hecras_version: Optional[str] = None,
         ras_object=None,
         receipt_path: Optional[Union[str, Path]] = None,
+        empty_extent: str = "fail",
     ) -> TerrainExportResult:
         """Export one registered RAS Mapper terrain to a validated GeoTIFF.
 
@@ -158,11 +159,25 @@ class RasTerrain:
                 conflict with ``hecras_version`` raises ``ValueError``.
             receipt_path: Machine-readable JSON receipt path. Defaults to
                 ``<output_tif>.receipt.json``.
+            empty_extent: Behavior when RAS Mapper fails because the export
+                window holds no terrain data and a full-resolution scan of the
+                registered sources confirms it. ``"fail"`` (default) returns a
+                failed result with ``failure_kind="empty_extent"``.
+                ``"nodata"`` writes an all-nodata Float32 GeoTIFF (nodata
+                -9999) on the snapped export grid with the ``.rasmap``
+                projection and sets ``empty_extent=True``; it requires
+                rasterio.
 
         Returns:
             TerrainExportResult: Bool-compatible typed result. Operational
             failures and timeouts return a failed result and failure receipt;
-            invalid inputs raise before native execution.
+            invalid inputs raise before native execution. ``failure_kind``
+            classifies a failure (for example ``"out_of_memory"`` or
+            ``"empty_extent"``), and ``helper_invocations`` records each
+            native helper request, exit code, response, and retained stderr.
+            The receipt holds the same records. A helper that reports success
+            but exits non-zero is not treated as a failure: its output is
+            validated like any other, and ``messages`` records the exit code.
 
         Notes:
             Qualified releases are HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1.
@@ -174,8 +189,19 @@ class RasTerrain:
             is forward-open for its future official binary, with the helper's
             exact managed-contract check retained as the runtime safety gate.
             HEC-RAS 7.0.2 is qualified on Windows for bounded two-source export;
-            its changed spatial-index overload is selected at runtime. Vector
-            modifications and Wine have not been qualified on 7.0.2.
+            its changed spatial-index overload is selected at runtime. Its
+            vector-modification exports were pixel-identical to 7.0.1's for
+            every form in the 2026-11-12 per-release qualification (bounded
+            and whole-terrain); Wine has not been qualified on 7.0.2.
+            The 6.7 betas and 7.0.0 stay refused by this export even though
+            that qualification found their modification rendering identical
+            to 6.6 (betas, on every form 6.6 renders) and 7.0.1 (7.0.0, which
+            did not show its documented defect on the one minimum-Y window
+            tried): prerelease builds are not production runtimes, and one
+            negative probe does not clear an official HEC known defect.
+            Projects on those releases can still take the native effective
+            terrain (``RasFim.build_effective_terrain``), whose rules were
+            qualified against their exports.
             Windows-drive and UNC project/input paths are supported, but direct
             output to a UNC share is not qualified because the task-local GDAL
             junction may not be staged on a remote volume; use a local output
@@ -202,6 +228,7 @@ class RasTerrain:
             hecras_version=hecras_version,
             ras_object=ras_object,
             receipt_path=receipt_path,
+            empty_extent=empty_extent,
         )
 
     @staticmethod

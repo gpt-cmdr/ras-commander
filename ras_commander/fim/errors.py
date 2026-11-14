@@ -19,8 +19,33 @@ class FimEngineError(FimError):
     """The engine rejected a request, crashed, or wrote inconsistent output."""
 
 
+class FimGeometryError(FimEngineError, ValueError):
+    """Geometry delivery refused, optionally with retained raw diagnostics.
+
+    Raw artifacts do not represent repaired or qualified vector products.
+    ``diagnostic_manifest`` identifies the aborted diagnostic receipt;
+    ``artifacts`` lists retained paths and ``validity_reason`` records the
+    independent topology-validation refusal.
+    """
+
+    def __init__(self, message: str, *, diagnostic_manifest=None, artifacts=None,
+                 validity_reason=None):
+        super().__init__(message)
+        self.diagnostic_manifest = diagnostic_manifest
+        self.artifacts = tuple(artifacts or ())
+        self.validity_reason = validity_reason
+
+
 class FimUnsupportedError(FimError):
-    """The input is outside the current engine contract."""
+    """The input is outside the current engine contract.
+
+    ``reason`` is an optional stable code naming the refused form (for
+    example ``"multi_ring_polygon"``); ``None`` when none is assigned.
+    """
+
+    def __init__(self, *args, reason=None):
+        super().__init__(*args)
+        self.reason = reason
 
 
 class FimAoiError(FimError, ValueError):

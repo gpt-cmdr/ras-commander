@@ -88,6 +88,16 @@ def _write_test_tiff(path: Path):
         destination.write(np.arange(48, dtype="float32").reshape(6, 8), 1)
 
 
+def test_ordinary_estimate_payload_omits_only_new_optional_cap_fields():
+    from dataclasses import fields
+    optional_cap_fields = {"estimate_method", "native_job_memory_limit_mb",
+        "native_job_memory_limit_bytes", "memory_measure", "source_scope", "native_job_preflight"}
+    result = _estimate()
+    assert type(result) is StoreMapResourceEstimate
+    assert set(result.to_dict()) == {field.name for field in fields(result)} - optional_cap_fields
+    assert result.to_dict()["formula_version"] == "float32-surface-v1"
+
+
 def test_store_map_options_are_typed_frozen_and_validate_override_policy():
     options = StoreMapPerformanceOptions(
         max_workers=None,

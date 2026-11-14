@@ -66,6 +66,50 @@ def equal_products(left, right):
                 )
 
 
+@pytest.mark.parametrize("rows", [1, 7, 256])
+def test_real_native_row_delivery_matches_full_arrays(case, tmp_path, rows, monkeypatch):
+    from ras_commander import RasFim
+    from ras_commander.fim import _engine
+    from ras_commander.fim import _sloping
+
+    method = _engine.engine_method(Path(case["engine"]))["sloping"]
+    if not method.get("native_row_streaming"):
+        pytest.skip("engine lacks native row streaming")
+    requests = []
+    popen = _sloping.subprocess.Popen
+
+    def capture(args, *a, **kw):
+        if isinstance(args, list) and len(args) > 2 and args[1] == "sloping":
+            requests.append(json.loads(Path(args[2]).read_text()))
+        return popen(args, *a, **kw)
+
+    monkeypatch.setattr(_sloping.subprocess, "Popen", capture)
+    options = dict(profiles=case["profiles"], engine_path=case["engine"],
+                   threads=2, max_working_mib=4096, product_writer="native",
+                   terrain_crs_fnv1a64=case.get("terrain_crs_fnv1a64"))
+    baseline = RasFim.map_sloping_profiles(
+        case["hdf"], case["terrain"], tmp_path / "full", **options,
+    )
+    actual = RasFim.map_sloping_profiles(
+        case["hdf"], case["terrain"], tmp_path / "rows", row_stream_rows=rows, **options,
+    )
+    assert baseline.depth_finite_pixels.sum() > 0
+    equal_products(actual, baseline)
+    assert "row_stream_rows" not in requests[0]
+    assert requests[1]["row_stream_rows"] == rows
+    receipt = json.loads((tmp_path / "rows" / "fim_manifest.json").read_text())
+    assert receipt["options"]["row_stream_rows"] == rows
+    with RasFim.prepare_sloping_model(
+        case["hdf"], case["terrain"], profiles=case["profiles"],
+        engine_path=case["engine"], threads=2, max_working_mib=4096,
+        terrain_crs_fnv1a64=case.get("terrain_crs_fnv1a64"),
+    ) as prepared:
+        result = prepared.map_profiles(
+            tmp_path / "prepared-rows", product_writer="native", row_stream_rows=rows,
+        )
+    equal_products(result, baseline)
+
+
 def test_new_caches_revisit_windows_and_invalidate_modified_wse(case, tmp_path):
     """Old/new and stream/native comparisons, including a return to an earlier AOI."""
     from shapely.geometry import Polygon

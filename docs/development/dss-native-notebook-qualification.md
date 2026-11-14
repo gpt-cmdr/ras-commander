@@ -250,19 +250,19 @@ Two new notebooks teach the native engine, and three existing ones were revised.
 Each was run with the same harness as above on `ras-commander-fast-dss` 0.1.2 from
 PyPI (CPython 3.12.11; 916 on CPython 3.13.5 for `qpkit`), HEC-RAS 7.0 through
 `RasCmdr` only, and HEC-Vortex 0.13.3 for the Vortex routes. "default" means
-`RAS_COMMANDER_DSS_BACKEND` unset, so `RasDss` uses `java`; notebooks 321, 731 and
+`RAS_COMMANDER_DSS_BACKEND` unset, so `RasDss` uses `java`; notebooks 322, 731 and
 732 select the native engine explicitly where they teach it. Committed outputs are
 the default-lane runs.
 
 | NB | Change | default | native | shadow | Wall time (s) |
 |---|---|---|---|---|---|
-| 321 Native DSS Records, Backends, and Copy-Out Recovery (new) | Records, backends, `sync=`, paired data, locations and `repair` on public HEC files; no HEC-RAS | pass | pass | in-notebook (note C) | 28 / 30 / — |
+| 322 Native DSS Records, Backends, and Copy-Out Recovery (new) | Records, backends, `sync=`, paired data, locations and `repair` on public HEC files; no HEC-RAS | pass | pass | in-notebook (note C) | 28 / 30 / — |
 | 732 Native Gridded Import and Grid Tools on Real Precipitation (new) | `RasDssGrid` on AORC Zarr/NetCDF, IMERG HDF5, Stage IV GRIB1/GRIB2 and MRMS GRIB2; every grid tool; no HEC-RAS | pass | pass | not applicable (note D) | 43 / 53 / — |
 | 731 Atlas 14 shared temporal pattern | Public preset (NewOrleansMetro, NOAA `se100yr24ha`); native export through `RasDssGrid.import_gridded` | pass (native export route) | pass | — | 115 / 54; Vortex route 39 (note E) |
 | 916 HRRR forecast | Review 1: the HEC-RAS runs are driven by native hourly forcing (HRRR one-hour APCP messages through `RasDssGrid`), validated against a full-source GDAL warp with a coverage gate; qpkit kept as a disclosed comparison that fails spatial qualification | pass | pass | pass | 371 / 405 / 330 (note G) |
 | 917 MRMS QPE | Visible backend selectors; native preprocessing (1-72 h windows, overlap/gap reports, shapefile clip, threads) | pass | pass (`RAS_COMMANDER_MRMS_BACKEND=native`) | pass (`...=shadow`) | 2910 / 2351 / 3507 (note F) |
 
-**Note C, 321.** The notebook's own comparison cell runs `native`, `java` and
+**Note C, 322.** This notebook was added as 321 and renumbered 322 on 2026-11-13, when `main` gained its own notebook 321 (terrain modification layer writers); its cells and outputs are unchanged. The notebook's own comparison cell runs `native`, `java` and
 `shadow` in one kernel. In the default lane every series was equal to the native
 read on all three, and the shadow summary was `read_timeseries|identical|identical: 2`.
 With `RAS_COMMANDER_DSS_BACKEND` set, the environment overrides the attribute, so

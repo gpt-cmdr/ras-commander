@@ -155,7 +155,7 @@ RasDssGrid.grid_to_point("storm.dss", "basins.geojson", "NAME", "basin_average.d
 
 Notebook [732](../notebooks/732_native_gridded_import_and_grid_tools.md) runs every
 `RasDssGrid` operation on real precipitation; notebook
-[321](../notebooks/321_native_dss_records_and_recovery.md) covers the record operations,
+[322](../notebooks/322_native_dss_records_and_recovery.md) covers the record operations,
 locations and `repair`.
 
 The engine plans a run before it writes, so a refused run leaves the output

@@ -122,7 +122,7 @@ def test_rasmap_modification_layers_are_reported(tmp_path):
     rasmap = tmp_path / "m.rasmap"
     rasmap.write_text(
         '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
-        '<Layer Name="Mods" Type="ElevationModificationGroup"><Layer Name="Levee" Type="X"/></Layer>'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup"><Layer Name="Levee" Type="X"/></Layer>'
         "</Layer></Terrains></RASMapper>",
         encoding="utf-8",
     )
@@ -132,6 +132,105 @@ def test_rasmap_modification_layers_are_reported(tmp_path):
     other.write_text("<RASMapper><Terrains/></RASMapper>", encoding="utf-8")
     with pytest.raises(FimUnsupportedError, match="does not register"):
         RasFim.top_priority_terrain_source(hdf, rasmap_path=other)
+
+
+def test_hdf_modifications_need_the_rasmap_modification_group(tmp_path):
+    """HEC-RAS 6.6 and 7.0.1 exports apply the HDF's modifications only when
+    the rasmap terrain layer has an ElevationModificationGroup element (an
+    empty or unchecked group is enough); without it they change nothing."""
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf" />'
+        "</Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    assert not RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)["modified"]
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] and info["modifications"] == ["hdf:Channel"]
+    assert RasFim.top_priority_terrain_source(hdf)["modified"]  # no rasmap: assume applied
+
+
+def test_hdf_modifications_without_a_group_report_the_missing_group(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf" />'
+        "</Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert [w["code"] for w in info["rasmap_warnings"]] == ["modification_group_missing"]
+    assert RasFim.top_priority_terrain_source(hdf)["rasmap_warnings"] == []
+
+
+def test_misnamed_modification_group_is_flagged_and_not_applied(tmp_path):
+    """HEC-RAS 6.6 and 7.0.1 apply modifications only from a group named exactly
+    Modifications: a terrain whose layers sit in "Hydroconnectors" exports
+    unchanged. The reader flags it and changes neither file."""
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup" Checked="True">'
+        '<Layer Name="Channel" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    before = (rasmap.read_bytes(), hdf.read_bytes())
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] is False and info["modifications"] == []
+    [warning] = info["rasmap_warnings"]
+    assert warning["code"] == "modification_group_misnamed"
+    assert warning["group"] == "Hydroconnectors" and warning["layers"] == ["Channel"]
+    assert "named exactly 'Modifications'" in warning["message"]
+    assert (rasmap.read_bytes(), hdf.read_bytes()) == before
+    assert _terrain_scope.describe(info)["rasmap_warnings"] == [warning]
+    # Renamed, nothing else changed: RAS Mapper applies the layers.
+    rasmap.write_text(rasmap.read_text(encoding="utf-8").replace("Hydroconnectors", "Modifications"),
+                      encoding="utf-8")
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] and info["rasmap_warnings"] == []
+    assert info["modifications"] == ["hdf:Channel", "rasmap:Channel"]
+
+
+def test_misnamed_group_beside_the_modifications_group_is_flagged(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0], modifications=True)
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="NotInHdf" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    # Entries of the ignored group are reported, never counted as applied.
+    assert info["modified"] and info["modifications"] == ["hdf:Channel"]
+    assert [(w["group"], w["layers"]) for w in info["rasmap_warnings"]] == [("Hydroconnectors", ["NotInHdf"])]
+
+
+def test_ignored_group_entries_do_not_mark_an_unmodified_terrain_modified(tmp_path):
+    hdf = _terrain(tmp_path, ["a"], priorities=[0])
+    rasmap = tmp_path / "m.rasmap"
+    rasmap.write_text(
+        '<RASMapper><Terrains><Layer Name="T" Type="TerrainLayer" Filename=".\\T.hdf">'
+        '<Layer Name="Modifications" Type="ElevationModificationGroup" />'
+        '<Layer Name="Hydroconnectors" Type="ElevationModificationGroup">'
+        '<Layer Name="Levee" Type="GroundLineModificationLayer" /></Layer>'
+        "</Layer></Terrains></RASMapper>",
+        encoding="utf-8",
+    )
+    info = RasFim.top_priority_terrain_source(hdf, rasmap_path=rasmap)
+    assert info["modified"] is False and info["modifications"] == []
+    assert [w["code"] for w in info["rasmap_warnings"]] == ["modification_group_misnamed"]
 
 
 def test_resolve_requires_the_priority_one_tiff_and_stages_its_mask(tmp_path):
@@ -227,6 +326,53 @@ def model_files(tmp_path, monkeypatch):
     return hdf, tif, scope
 
 
+@pytest.mark.parametrize("capability", [
+    None, True, {},
+    {"control": "rows", "max": 4096, "render_mode": "sloping", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": True, "render_mode": "sloping", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": 6, "render_mode": "sloping", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": 4096, "render_mode": "slopingPretty", "products": ["depth", "wse"]},
+    {"control": "row_stream_rows", "max": 4096, "render_mode": "sloping", "products": ["depth", {}]},
+    {"control": "row_stream_rows", "max": 4096, "render_mode": "sloping", "products": ["depth"]},
+])
+def test_row_stream_capability_refuses_before_staging(model_files, tmp_path, monkeypatch, capability):
+    hdf, tif, _ = model_files
+    method = {"native_geotiff_outputs": True, "native_row_streaming": capability}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {"sloping": method})
+    with pytest.raises(FimUnsupportedError, match="native_row_streaming"):
+        RasFim.map_sloping_profiles(
+            hdf, tif, tmp_path / "out", product_writer="native", row_stream_rows=7,
+        )
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("rows", [0, 7, 4096])
+def test_row_stream_gate_accepts_compatible_capability(model_files, tmp_path, monkeypatch, rows):
+    from ras_commander.fim import _sloping
+
+    hdf, tif, _ = model_files
+    capability = {"control": "row_stream_rows", "max": 4096,
+                  "render_mode": "sloping", "products": ["depth", "wse"]}
+    # Zero must remain compatible with an engine that predates this capability.
+    method = {"native_geotiff_outputs": True}
+    if rows:
+        method["native_row_streaming"] = capability
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {"sloping": method})
+
+    class AfterCapability(Exception):
+        pass
+
+    def stop(*args):
+        raise AfterCapability
+
+    monkeypatch.setattr(_sloping, "_validate_method", stop)
+    with pytest.raises(AfterCapability):
+        RasFim.map_sloping_profiles(
+            hdf, tif, tmp_path / "out", product_writer="native", row_stream_rows=rows,
+        )
+    assert not (tmp_path / "out").exists()
+
+
 def test_whole_simulation_refuses_storage_areas_and_missing_capability(model_files, tmp_path, monkeypatch):
     hdf, tif, scope = model_files
     scope["storage_areas"] = 1
@@ -247,8 +393,6 @@ def test_whole_simulation_refuses_storage_areas_and_missing_capability(model_fil
 @pytest.mark.parametrize(
     "kwargs, message",
     [
-        (dict(velocity=True, render_mode="slopingPretty", reduce_shallow_to_horizontal=True),
-         "plain sloping"),
         (dict(velocity=True, template_raster="x.tif"), "template_raster"),
         (dict(terrain_hdf="T.hdf", render_mode="slopingPretty"), "plain sloping"),
     ],
@@ -319,6 +463,63 @@ def test_velocity_product_controls_and_capabilities(model_files, tmp_path, monke
     assert not any((tmp_path / name).exists() for name in "abcd")
 
 
+@pytest.mark.parametrize(
+    "options",
+    [
+        dict(reduce_shallow_to_horizontal=True),
+        dict(use_depth_weighted_faces=True),
+        dict(reduce_shallow_to_horizontal=True, use_depth_weighted_faces=True),
+    ],
+)
+def test_sloping_pretty_options_need_the_with_faces_velocity_record(
+    model_files, tmp_path, monkeypatch, options
+):
+    from ras_commander.fim import _velocity
+
+    hdf, tif, _ = model_files
+    sloping = {"method_id": "rasmapper-plain-sloping/1", "stream_outputs": True,
+               "enhanced_options": True, "native_donation_history": True,
+               "enhanced_method_id": "rasmapper-sloping-with-faces/1",
+               "depth_weighted_faces": True,
+               "velocity": _velocity.METHOD_ID,
+               "velocity_render_modes": ["horizontal", "sloping", "slopingPretty"]}
+    monkeypatch.setattr(_engine, "engine_method", lambda engine: {"sloping": sloping})
+    # Older engines: velocity with slopingPretty options is refused before any output.
+    with pytest.raises(FimUnsupportedError, match=_velocity.WITH_FACES_METHOD_ID):
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "a", velocity=True,
+                                    render_mode="slopingPretty", **options)
+    assert not (tmp_path / "a").exists()
+    # A record listing only one option still refuses the other.
+    sloping["velocity_with_faces"] = _velocity.WITH_FACES_METHOD_ID
+    sloping["velocity_with_faces_options"] = ["reduce_shallow_to_horizontal"]
+    if options.get("use_depth_weighted_faces"):
+        with pytest.raises(FimUnsupportedError, match="use_depth_weighted_faces"):
+            RasFim.map_sloping_profiles(hdf, tif, tmp_path / "b", velocity=True,
+                                        render_mode="slopingPretty", **options)
+    # With the record the request passes the gate (and fails later on this
+    # synthetic, empty HDF).
+    sloping["velocity_with_faces_options"] = [
+        "reduce_shallow_to_horizontal", "use_depth_weighted_faces"]
+    with pytest.raises(Exception) as caught:
+        RasFim.map_sloping_profiles(hdf, tif, tmp_path / "c", velocity=True,
+                                    render_mode="slopingPretty", **options)
+    assert _velocity.WITH_FACES_METHOD_ID not in str(caught.value)
+    assert "plain sloping" not in str(caught.value)
+
+
+def test_with_faces_options_follow_the_engine_record():
+    from ras_commander.fim import _velocity
+
+    assert _velocity.with_faces_options({}) == ()
+    assert _velocity.with_faces_options(
+        {"velocity_with_faces": "other/1", "velocity_with_faces_options": ["x"]}) == ()
+    assert _velocity.with_faces_options({
+        "velocity_with_faces": _velocity.WITH_FACES_METHOD_ID,
+        "velocity_with_faces_options": ["reduce_shallow_to_horizontal",
+                                        "use_depth_weighted_faces"],
+    }) == ("reduce_shallow_to_horizontal", "use_depth_weighted_faces")
+
+
 def test_gravity_follows_the_plan_unit_system(tmp_path):
     import h5py
     from ras_commander.fim import _velocity
@@ -385,6 +586,9 @@ def test_public_signatures_expose_new_controls():
     derived = inspect.signature(RasFim.map_derived_max).parameters
     assert tuple(derived["products"].default) == (
         "depth_x_velocity", "depth_x_velocity_squared", "froude")
+    assert derived["reduce_shallow_to_horizontal"].default is False
+    assert derived["use_depth_weighted_faces"].default is False
+    assert derived["postprocessing_hdf"].default is None
     for name in ("top_priority_terrain_source", "map_whole_simulation", "map_derived_max"):
         assert isinstance(RasFim.__dict__[name], staticmethod)
 

@@ -37,11 +37,14 @@ class HorizontalGrid:
     plan: GridPlan
     owner: np.ndarray | None
     ground: np.ndarray
+    # Positive-area overlaps accepted as roundoff residue for this plan's
+    # pixel centres. A validation that relied on any is specific to the plan.
+    tolerated_overlaps: int = 0
 
 
 def plan_grid(
     cells, terrain_path: Path, aoi, max_working_mib: int, native: bool = False,
-    storage_areas=None,
+    storage_areas=None, terrain_hdf=None,
 ) -> GridPlan:
     """Inspect metadata and admit the window before allocating raster arrays.
 
@@ -117,9 +120,19 @@ def plan_grid(
             raise FimUnsupportedError(
                 "horizontal mapping requires north-up square terrain pixels"
             )
-        if src.crs is None or not _prepare.same_crs(cells.crs, src.crs):
+        terrain_crs = src.crs
+        if terrain_crs is None and native:
+            # A RAS Mapper source with no CRS tags: the Projection of the
+            # terrain HDF that registers it (``terrain_hdf`` when selected). The engine identity then admits it
+            # only for crs_any engines (_engine.source_identity).
+            from ._effective_terrain import registered_source_crs
+
+            declared = registered_source_crs(terrain_path, terrain_hdf)
+            if declared is not None:
+                terrain_crs = rasterio.crs.CRS.from_wkt(declared.to_wkt())
+        if terrain_crs is None or not _prepare.same_crs(cells.crs, terrain_crs):
             raise FimUnsupportedError("horizontal cells and terrain must share a CRS")
-        crs = _aoi.to_crs(src.crs)
+        crs = _aoi.to_crs(terrain_crs)
         # Preserve the unbounded output extent; an AOI may only remove pixels.
         fc0, fc1 = _aoi.center_index_range(bounds[0], bounds[2], t.c, t.a, src.width)
         fr0, fr1 = _aoi.center_index_range(bounds[1], bounds[3], t.f, t.e, src.height)
@@ -208,10 +221,130 @@ def plan_grid(
     )
 
 
+def _numerical_overlap_without_sample(intersection, plan):
+    """Recognize coordinate-roundoff residue that owns no output pixel centre.
+
+    The area must fit an eight-ULP boundary-error envelope at the coordinates'
+    scale. Even then, an interior terrain pixel centre keeps the rejection.
+    This changes neither ownership polygons nor the native hydraulic topology.
+    """
+    import math
+    import shapely
+
+    bounds = shapely.bounds(intersection)
+    scale = max(1.0, float(np.max(np.abs(bounds))))
+    envelope = 8 * abs(float(np.spacing(scale))) * max(1.0, float(intersection.length))
+    if not np.isfinite(envelope) or intersection.area > envelope:
+        return False
+    t = plan.transform
+    xmin, ymin, xmax, ymax = bounds
+    c0 = max(0, math.ceil((xmin - t.c) / t.a - 0.5) - 1)
+    c1 = min(plan.shape[1] - 1, math.floor((xmax - t.c) / t.a - 0.5) + 1)
+    r0 = max(0, math.ceil((ymax - t.f) / t.e - 0.5) - 1)
+    r1 = min(plan.shape[0] - 1, math.floor((ymin - t.f) / t.e - 0.5) + 1)
+    if c1 < c0 or r1 < r0:
+        return True
+    if (c1 - c0 + 1) * (r1 - r0 + 1) > 4096:
+        return False  # Conservative bound; never allocate an unbounded check.
+    cols, rows = np.meshgrid(np.arange(c0, c1 + 1), np.arange(r0, r1 + 1))
+    points = shapely.points(t.c + (cols.ravel() + 0.5) * t.a,
+                            t.f + (rows.ravel() + 0.5) * t.e)
+    if shapely.contains(intersection, points).any():
+        return False
+    # Native sloping uses the global terrain lattice, whereas the Python
+    # horizontal writer evaluates the cropped transform. Check both arithmetic
+    # orders: their last bits can differ at the scale of the residue itself.
+    source = getattr(plan, "source_transform", None)
+    if source is not None:
+        points = shapely.points(
+            source.c + (cols.ravel() + plan.window.col_off + 0.5) * source.a,
+            source.f + (rows.ravel() + plan.window.row_off + 0.5) * source.e,
+        )
+        if shapely.contains(intersection, points).any():
+            return False
+    return True
+
+
+# Candidate pairs admitted by one bulk spatial-index query (16 bytes each).
+_PAIR_QUERY_BUDGET = 1 << 22
+_PAIR_BATCH = 4096
+
+
+def _check_pairs(geometries, first, second, plan):
+    """Refuse a real overlap; return how many roundoff residues were accepted."""
+    import shapely
+
+    first = geometries[first]
+    second = geometries[second]
+    interiors = shapely.relate_pattern(first, second, "T********")
+    tolerated = 0
+    if interiors.any():
+        intersections = shapely.intersection(first[interiors], second[interiors])
+        for intersection in intersections[shapely.area(intersections) > 0]:
+            if not _numerical_overlap_without_sample(intersection, plan):
+                raise FimUnsupportedError("horizontal cells have overlapping interiors")
+            tolerated += 1
+    return tolerated
+
+
+def _warn_tolerated(count):
+    import warnings
+
+    for _ in range(count):
+        warnings.warn(
+            "Numerical cell-overlap residue has no interior terrain pixel centre; "
+            "ownership polygons and hydraulic topology are unchanged",
+            RuntimeWarning, stacklevel=3,
+        )
+
+
+def _candidate_batches(geometries, index):
+    """Yield bounded (left, right) candidate pairs whose interiors could meet."""
+    import shapely
+
+    bounds = shapely.bounds(geometries)
+    total = len(geometries)
+    # Coincident geometries must not allocate an N-by-N candidate-pair array
+    # before the first overlap is rejected: a query of ``step`` cells returns
+    # at most ``step * N`` pairs.
+    step = max(1, min(_PAIR_BATCH, _PAIR_QUERY_BUDGET // max(total, 1)))
+    held_left = np.empty(0, dtype=np.intp)
+    held_right = np.empty(0, dtype=np.intp)
+    for start in range(0, total, step):
+        pairs = index.query(geometries[start : start + step])
+        left = pairs[0] + start
+        right = pairs[1]
+        later = right > left
+        left, right = left[later], right[later]
+        # A polygon interior lies inside the open interior of its envelope, so
+        # envelopes that only touch (or have no extent) cannot hold a shared
+        # interior point. Comparisons only: no rounding can change the answer,
+        # and an unordered (NaN) envelope keeps its pair.
+        possible = ~(
+            (np.maximum(bounds[left, 0], bounds[right, 0])
+             >= np.minimum(bounds[left, 2], bounds[right, 2]))
+            | (np.maximum(bounds[left, 1], bounds[right, 1])
+               >= np.minimum(bounds[left, 3], bounds[right, 3]))
+        )
+        held_left = np.concatenate((held_left, left[possible]))
+        held_right = np.concatenate((held_right, right[possible]))
+        offset = 0
+        while len(held_left) - offset >= _PAIR_BATCH:
+            yield held_left[offset : offset + _PAIR_BATCH], held_right[offset : offset + _PAIR_BATCH]
+            offset += _PAIR_BATCH
+        held_left, held_right = held_left[offset:], held_right[offset:]
+    if len(held_left):
+        yield held_left, held_right
+
+
 def prepare_grid(
-    cells, terrain_path: Path, plan: GridPlan, read_terrain: bool = True
+    cells, terrain_path: Path, plan: GridPlan, read_terrain: bool = True, *, threads: int = 1
 ) -> HorizontalGrid:
-    """Cache terrain and centre-based cell ownership for one admitted window."""
+    """Cache terrain and centre-based cell ownership for one admitted window.
+
+    ``threads`` bounds the workers used for the overlap predicates; it never
+    changes which cell sets are accepted or refused.
+    """
     import rasterio
     from rasterio.features import rasterize
 
@@ -225,51 +358,55 @@ def prepare_grid(
     import shapely
 
     geometries = cells.geometry.to_numpy()
-    if (
-        not np.isin(shapely.get_type_id(geometries), [3]).all()
-        or shapely.is_empty(geometries).any()
-        or not shapely.is_valid(geometries).all()
-    ):
-        raise FimUnsupportedError(
-            "horizontal mapping requires valid, non-empty cell Polygons"
-        )
-    # Reject positive-area overlaps: choosing a cell silently would replace
-    # one hydraulic value with another. Shared edges are permitted.
-    # Query one cell at a time: coincident geometries must not allocate an
-    # N-by-N candidate-pair array before the first overlap is rejected.
-    index = cells.sindex
-    capacity = 4096
-    left = np.empty(capacity, dtype=np.intp)
-    right = np.empty(capacity, dtype=np.intp)
-    used = 0
+    workers = max(1, min(int(threads), 64))
+    pool = None
+    if workers > 1 and len(geometries) > _PAIR_BATCH:
+        from concurrent.futures import ThreadPoolExecutor
 
-    def check_pairs(count):
-        first = geometries[left[:count]]
-        second = geometries[right[:count]]
-        interiors = shapely.relate_pattern(first, second, "T********")
-        if interiors.any():
-            intersections = shapely.intersection(first[interiors], second[interiors])
-            if (shapely.area(intersections) > 0).any():
-                raise FimUnsupportedError("horizontal cells have overlapping interiors")
+        pool = ThreadPoolExecutor(workers, thread_name_prefix="fim-cell-validation")
+    try:
+        if not np.isin(shapely.get_type_id(geometries), [3]).all() or shapely.is_empty(
+            geometries
+        ).any():
+            valid = False
+        else:
+            # Calling thread only: shapely.is_valid enters warnings.catch_warnings,
+            # which swaps process-wide warning state and is not thread-safe.
+            valid = bool(shapely.is_valid(geometries).all())
+        if not valid:
+            raise FimUnsupportedError(
+                "horizontal mapping requires valid, non-empty cell Polygons"
+            )
+        # Reject positive-area overlaps: choosing a cell silently would replace
+        # one hydraulic value with another. Shared edges and coordinate-roundoff
+        # residue with no interior output pixel centre are permitted.
+        tolerated = 0
+        batches = _candidate_batches(geometries, cells.sindex)
+        if pool is None:
+            for first, second in batches:
+                found = _check_pairs(geometries, first, second, plan)
+                _warn_tolerated(found)
+                tolerated += found
+        else:
+            from collections import deque
 
-    for i, geometry in enumerate(geometries):
-        others = index.query(geometry)
-        others = others[others > i]
-        start = 0
-        while start < len(others):
-            count = min(capacity - used, len(others) - start)
-            left[used : used + count] = i
-            right[used : used + count] = others[start : start + count]
-            used += count
-            start += count
-            if used == capacity:
-                check_pairs(used)
-                used = 0
-    if used:
-        check_pairs(used)
+            pending = deque()
+            for first, second in batches:
+                pending.append(pool.submit(_check_pairs, geometries, first, second, plan))
+                if len(pending) >= workers * 2:
+                    found = pending.popleft().result()
+                    _warn_tolerated(found)
+                    tolerated += found
+            while pending:
+                found = pending.popleft().result()
+                _warn_tolerated(found)
+                tolerated += found
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True, cancel_futures=True)
     if not read_terrain:
         # Rust owns rasterization, AOI masking and terrain for the native path.
-        return HorizontalGrid(plan, None, np.empty((0, 0), dtype=np.float32))
+        return HorizontalGrid(plan, None, np.empty((0, 0), dtype=np.float32), tolerated)
     with rasterio.Env(GDAL_CACHEMAX=64 << 20), rasterio.open(terrain_path) as src:
         ground = (
             src.read(1, window=plan.window, masked=True).filled(np.nan)
@@ -294,7 +431,7 @@ def prepare_grid(
         owner[~keep] = 0
     owner.setflags(write=False)
     ground.setflags(write=False)
-    return HorizontalGrid(plan, owner, ground)
+    return HorizontalGrid(plan, owner, ground, tolerated)
 
 
 def render(grid: HorizontalGrid, values: np.ndarray, min_depth: float):

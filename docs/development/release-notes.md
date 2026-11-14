@@ -203,6 +203,433 @@ alone does not identify a development checkout.
   `read_grid` under `native` reads grids natively by default. On 250 records
   from the ten grid families of the RasExamples precipitation file
   `precip.2018.09.dss`, the native and Java dictionaries were identical.
+
+### 0.122.0 — 2026-11-13
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.21.0,<0.22` (was
+  `>=0.20.0,<0.21`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.21.0 keeps the output bytes of
+  every request 0.20.0 accepts and adds the stored-map basis for several
+  sources on one lattice (`rasmapper-stored-map-composition/1`), the
+  staged-session follow-ups and duration with storage-area level pools.
+
+- **Whole-simulation products on untagged RAS Mapper sources:**
+  `RasFim.map_whole_simulation` now reads a terrain source TIFF with no CRS
+  tags in the CRS of the terrain HDF that registers it (`terrain_hdf` when
+  given), as horizontal and sloping mapping already do. The request carries
+  `crs_identity: untagged` and GDAL's GeoKeys for that CRS, for engines whose
+  `whole_simulation` record advertises `crs_any` (ras-commander-fast-map
+  0.20+). Older engines keep the refusal. Tagged terrains send the same
+  requests as before.
+
+- **Inundation boundaries on modified terrains:**
+  `RasFim.map_inundation_boundaries` (deterministic and `native_serial`)
+  accepts a modified single-source terrain's stored-map effective terrain
+  (`build_effective_terrain(..., basis="stored_map")`, its receipt beside it)
+  as `terrain_path`. Tile masks stay the terrain HDF's; staged tile perimeters
+  take the effective values where modifications changed them. Before, any
+  non-empty `/Modifications` refused. On Helena with edge-crossing polygon
+  modifications the boundaries equal RAS Mapper 7.0.1's (0 ft² difference,
+  horizontal and sloping). Unmodified terrains send unchanged requests.
+
+- **Stored-map basis for multi-source terrains:** `build_effective_terrain(...,
+  basis="stored_map")` sends a multi-source terrain to engines whose
+  `effective_terrain.stored_map.multi_source` record names
+  `rasmapper-stored-map-composition/1` (ras-commander-fast-map with that
+  record; new probe `_effective_terrain.engine_composes_stored_map_sources`).
+  The engine composes sources on one lattice as RAS Mapper's stored maps do
+  and refuses other layouts. Older engines keep the single-source refusal,
+  before any request.
+
+### 0.121.0 — 2026-11-12
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.20.0,<0.21` (was
+  `>=0.19.0,<0.20`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.20.0 keeps the output bytes of
+  every request 0.19.0 accepts and adds `crs_any` (CRSs without an EPSG code),
+  the HEC-RAS release table with the 6.7 rule (`effective_terrain.hecras_versions`)
+  and the opt-in stored-map effective-terrain basis.
+
+- **Behaviour changes (read before upgrading):**
+  - A *modified* terrain whose project release is outside 6.6 to 7.0.2 (6.5
+    and earlier, after 7.0.2) is now refused by `RasFim.build_effective_terrain`
+    (`FimUnsupportedError`, `reason="unqualified_hecras_version"`), and
+    `RasFim.read_terrain_modifications` reports it as `refused`. Earlier
+    releases applied the 7.0.1 rule, which the 2026-11-12 per-release
+    qualification showed does not reproduce those releases' exports. Passing
+    `hecras_version="7.0.1"` explicitly keeps the previous result.
+  - HEC-RAS 6.7 projects take the engine's `6.7` rule with Fast-Map 0.20.0.
+    With an engine that has no release table (0.19.0 and older, supplied
+    explicitly), they take the `6.6` rule instead of `7.0.1`; under it,
+    boundary polygons that need a stored profile are refused.
+  - Unmodified terrains and requests on 6.6 and 7.0.x are unchanged.
+
+- **Effective terrain for HEC-RAS 6.6 to 7.0.2:** `RasFim.build_effective_terrain`
+  and `RasFim.read_terrain_modifications` map the project's HEC-RAS release to
+  the engine's modification rule from a table: 7.0, 7.0.1 and 7.0.2 to
+  `7.0.1`, 6.6 to `6.6`, and the 6.7 betas to `6.7` when the engine
+  advertises `effective_terrain.hecras_versions` (otherwise `6.6`). **Every
+  other release is now refused** (`reason` `unqualified_hecras_version`)
+  instead of following 7.0.1, which was wrong for 6.7 (narrow ground lines,
+  named systems) and for 6.5 and earlier (their exports match no rule). The
+  table is read from the engine when it advertises one; `read_terrain_modifications`
+  takes `engine_path` for that. Per-release qualification, 2026-11-12:
+  0 mask and 0 value differences on every accepted layer for 6.6, 6.7 Beta 4/5,
+  7.0, 7.0.1 and 7.0.2.
+- **Boundary polygons follow the engine's control-point test:** the reader
+  stages a polygon with boundary elevations only when a control point lies
+  outside its ring within Elev Pt Tolerance, or it has a stored profile (not
+  under 6.6). Points inside the ring are mass points, so such polygons were
+  staged before and then refused by the engine.
+- **Writer: perimeter control points.**
+  `RasTerrainModWriter.add_modification_polygon(..., perimeter_control_points=...)`
+  stores boundary control points outside the ring (within `elev_pt_tolerance`)
+  in the layer's `Control Points` group, with
+  `elevation_method="boundary_from_terrain"`. RAS Mapper 6.6, 6.7 Beta 4/5,
+  7.0, 7.0.1 and 7.0.2 exports of such polygons are identical to each other and
+  to the engine. This is the only boundary-elevation form HEC-RAS 6.6 renders
+  as the later releases do.
+- **RAS Mapper export unchanged:** `RasTerrain.export_rasmapper_terrain` still
+  refuses the 6.7 betas (prerelease) and 7.0.0 (HEC's documented
+  modification-export defect). The qualification did not reproduce that
+  defect on one minimum-Y window, which does not rule it out. Projects on
+  those releases can use the native effective terrain instead.
+
+- **CRSs without an EPSG code on the native route.** With an engine that
+  advertises `crs_any` (ras-commander-fast-map 0.20+), the following accept a
+  terrain whose CRS has no EPSG code, such as ESRI:102630 (NAD83 / Alabama
+  West, US survey feet):
+  - `RasFim.build_effective_terrain`;
+  - sloping mapping and `prepare_sloping_model`;
+  - horizontal mapping;
+  - 1D `final_format`.
+
+  Requests carry the CRS as `crs_geokeys`: the terrain's own GeoKey tags, or,
+  for RAS Mapper terrain sources that carry no CRS, GDAL's tags for the
+  terrain HDF's `Projection`, checked by a GDAL round trip. The engine writes
+  them verbatim, so outputs read back in exactly the source CRS. New helpers:
+  `_engine.crs_any`, `request_crs` and `geokeys_for_crs`; the
+  effective-terrain receipt gains `crs`. Engines without `crs_any` still
+  refuse with a clear message. EPSG terrains send the same requests as before.
+  Boundaries (GeoJSON labelled with GDAL's WKT of the terrain CRS; native
+  boundaries also on untagged RAS Mapper sources), Step05 `map_profiles`
+  (terrain by GeoKeys, `output_crs` without an EPSG code by WKT),
+  whole-simulation products and coupled mapping take the same route when
+  their engine methods advertise `crs_any`.
+- **FIM: untagged RAS Mapper terrain sources on every native route.** A
+  source TIFF with no CRS tags (RAS Mapper writes none for a CRS without an
+  EPSG code) now takes the `Projection` of the one sibling HEC terrain HDF
+  that registers it (`_effective_terrain.registered_source_crs`), for sloping,
+  prepared sloping, horizontal and both boundary methods, and only with an
+  engine that advertises `crs_any` (`_engine.source_identity`). The terrain
+  CRS must still equal the model CRS. Boundary staging takes the same CRS for
+  `crs_wkt`, and the boundary AOI is resolved in it. On unmodified Helena
+  (ESRI:102630) WSE/Depth now map on the source TIFF with the same valid mask
+  as RAS Mapper.
+- **FIM fix (not CRS): boundary staging treats empty stitch TIN arrays as no
+  stitch TIN.** Single-source terrains store `(0, 0)` `Stitch TIN Points` and
+  `Stitch TIN Triangles`; boundary staging refused them as an unsupported
+  shape, which also refused EPSG terrains. They are now absent, as effective
+  terrain already treats them. One empty and one non-empty array still refuse.
+- **Effective terrain, stored-map basis (opt-in):**
+  `RasFim.build_effective_terrain(..., basis="stored_map")` builds the
+  terrain RAS Mapper's stored maps read (Fast-Map rule
+  `rasmapper-stored-map-terrain/1`): a single-source terrain's own cells on
+  its own grid, with the modifications applied unrounded. RAS Mapper's export,
+  which the default `basis="export"` reproduces, leaves the source's last cell
+  row and column nodata and rounds to 1/32, so maps on it differ from RAS
+  Mapper's stored maps there. `RasFim.supports_effective_terrain_basis()`
+  reports whether the engine offers it. Multi-source terrains are refused on
+  this basis. Default requests are unchanged (no `basis` field is sent);
+  receipts gain `basis` and `basis_rule_id`.
+
+### 0.120.0 — 2026-11-12
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.19.0,<0.20` (was
+  `>=0.18.0,<0.19`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.19.0 keeps every earlier JSON
+  request unchanged and adds staged cell subsets (capability `staged_cells`,
+  `ras-commander-staged-cells/1`).
+
+- **Staged cell subsets (opt-in):** `_sloping.staged_cell_subsets` returns, for
+  each mesh, the ascending global cells whose WSE can reach an owner cell's
+  pixels. That set is Fast-Map's stencil closure: owner face endpoints, every
+  face at those vertices, and both cells of each face, ghost cells included.
+  `_sloping.write_staged_cells` writes them as the request's
+  `staged_cells_files`. `_stage_profiles(..., cell_subsets=...)` then stages
+  only those cells' WSE, and the staged-byte budget counts the subset. Every
+  complete source row is still read and checked finite.
+  `staged_cells_supported(capabilities, method)` reports whether the
+  installed engine advertises the capability. Fast-Map refuses a subset that
+  misses a closure cell, so Depth and WSE stay bit-identical to the complete
+  mesh. Velocity, shear, storage areas, terrain scope, a stored grid,
+  `reduce_max` and derived products, and ownership export do not take
+  subsets. Default staging is unchanged (#842).
+
+- **Terrain export failure diagnostics:** `RasTerrain.export_rasmapper_terrain`
+  now classifies failures in `TerrainExportResult.failure_kind`, including
+  `out_of_memory` for a .NET `System.OutOfMemoryException` and `empty_extent`
+  when RAS Mapper's "does not have embedded statistics" error is confirmed by a
+  full-resolution scan of the registered sources. The new `empty_extent="nodata"`
+  option writes an all-nodata GeoTIFF for a confirmed empty window.
+  `helper_invocations` and the receipt keep each helper request, exit code,
+  response, and stderr. A failure summary no longer quotes Wine's
+  `XDG_RUNTIME_DIR` warning. A helper that reports success and then exits
+  non-zero keeps its validated output instead of failing the export.
+  The empty-window scan, the all-nodata write and the final commit honour
+  `timeout_seconds`, and a timed-out helper's partial stderr and response stay
+  in `helper_invocations`.
+
+- **Coupled mapping with storage areas:** `RasFim.prepare_coupled_model()` and
+  `RasFim.map_coupled_profiles()` accept mixed 1D/2D models with storage areas
+  when the engine is `ras-commander-fast-map` 0.18.0 or later. Earlier
+  releases refused them with `FimUnsupportedError: mixed models with storage
+  areas are unsupported`. Storage areas are mapped as level pools and composed
+  with the XS and 2D components through coupled schema `/2`. Storage areas
+  that physically overlap a 2D flow area, storage with the native stored-grid
+  contract and older engines are still refused before any write. Results stay
+  `qualified=False` and still require `allow_unqualified=True`.
+
+### 0.119.0 — 2026-11-12
+
+- **Mapping engine dependency:** mapping extras (`fim`, `fast-map`, `full`
+  and `all`) select `ras-commander-fast-map>=0.18.0,<0.19` (was
+  `>=0.17.0,<0.18`). As before, the extras install the engine only on
+  Windows x64 and Linux x86_64. Fast-Map 0.18.0 keeps every earlier JSON
+  request unchanged, adds the 1D capabilities below and confines its terrain
+  reader's thread pool, so a request never has more busy threads than it was
+  given. It also identifies some terrains whose CRS 0.17.0 could not match to
+  an EPSG code: the Davis terrain now reads as EPSG:2871 with its HARN datum
+  and maps without `terrain_crs_fnv1a64`, with outputs identical to the
+  override route.
+
+- **Effective terrain `/2`:** `RasFim.build_effective_terrain` uses
+  `rasmapper-effective-terrain/2`, which Fast-Map 0.18.0 runs for both request
+  schemas. **Unmodified terrains (schema 1) get different values from `/1`
+  engines** (RAS Mapper render-block sampling and its export TIN), and their
+  receipts report `/2`; ras-commander accepts a `/2` receipt for a schema 1
+  request. Terrain modifications now go through the engine when it advertises
+  `/2` with a `modifications` record: ground lines (high ground and channels,
+  control points, NaN templates, `Add`/`SetValue`), constant and
+  boundary-elevation polygons, and ellipses, following HEC-RAS 7.0.1 or 6.6
+  rules (`hecras_version`, resolved from the project by default). Forms the
+  engine does not reproduce are refused with `FimUnsupportedError` before it
+  runs, so callers use the RAS Mapper export; engines advertising only `/1`
+  still refuse every modified terrain. (#790, #833)
+
+- **Terrain-modification writers:** `RasTerrainModWriter` layers export
+  exactly like layers drawn in RAS Mapper (HEC-RAS 6.6 and 7.0.1 round trips:
+  0 differing pixels): an empty `System Name`, absolute channel inverts
+  (`depth=` now means below the sampled terrain), new layers on top
+  (Priority 0), `add_ellipse_modification` and `add_modification_layer` (the
+  inverse of the reader), and varying polygon boundaries stored as vertex Z.
+  Example notebook 321 writes every layer kind, reads it back and checks the
+  RAS Mapper exports. (#790, #833, #835)
+
+- **Terrain-modification group name:** HEC-RAS 6.6 and 7.0.1 RAS Mapper
+  apply a terrain's modifications only when the `.rasmap` group holding them
+  is named exactly `Modifications`; under any other name the export applies
+  none of them, silently. `RasTerrainModWriter` now always registers layers in
+  `Modifications`: `group_name` accepts only that name and raises
+  `ValueError` otherwise (before anything is written), and an existing group
+  under another name is renamed with a warning. The module note that RAS
+  Mapper's export does not need the `.rasmap` XML is corrected.
+  `RasFim.top_priority_terrain_source` and the `build_effective_terrain`
+  receipt add `rasmap_warnings` (`modification_group_misnamed`,
+  `modification_group_missing`), and a terrain whose modification group has
+  another name is treated as unmodified, as RAS Mapper treats it. (#837)
+
+- **Multi-ring modification polygons refused up front:** the terrain
+  modification reader (used by `build_effective_terrain` and
+  `read_terrain_modifications`) refuses a polygon feature with more than one
+  ring (holes in any winding, separate or overlapping parts) before the engine
+  runs, as Fast-Map 0.18.0 does. The `FimUnsupportedError` carries
+  `reason="multi_ring_polygon"` (also in the message) so callers route those
+  terrains to the RAS Mapper export. `FimUnsupportedError` gains an optional
+  `reason` attribute (default `None`). (#837)
+
+- **Effective terrain CRS refusal:** `RasFim.build_effective_terrain` refuses
+  a source CRS with no EPSG code (for example `ESRI:102630`) before staging,
+  with a message that states why: the engine's `rasmapper-effective-terrain`
+  request carries the CRS as an EPSG code and the engine labels the output
+  GeoTIFF from it, so `terrain_crs_fnv1a64` cannot replace it. Use the RAS
+  Mapper export for such terrains. The shared engine CRS check states the
+  same requirement. (#837)
+
+- **Public terrain-modification reader:** `RasFim.read_terrain_modifications()`
+  returns a terrain's modification layers in the form the native effective
+  terrain (`rasmapper-effective-terrain/2`) stages them, with the resolved
+  HEC-RAS version and unit system and how each was resolved (`*_basis`;
+  `"default"` when assumed), the reason when a form is refused (`refusal`,
+  plus the error's `reason` code as `refusal_reason`, for example
+  `multi_ring_polygon`; `status` `"staged"`, `"none"` or `"refused"`), and
+  rasmap registration `warnings` (misnamed or missing group, layers the rasmap
+  lists that the HDF does not store). `status` describes the layers the HDF
+  stores; `top_priority_terrain_source()["modified"]` says whether RAS Mapper
+  applies them. Record schema
+  `ras-commander-terrain-modifications/1`. It wraps the reader that
+  `build_effective_terrain` already uses, so callers such as ras2cng no
+  longer import the private `ras_commander.fim._terrain_mods` module. No change
+  to the staged layers or the engine request. (#836)
+
+- **1D mapping throughput:** `RasFim.map_one_d_profiles()` and
+  `FimPreparedOneDModel.map_profiles()` use Fast-Map 0.18.0's 1D capabilities
+  when the engine advertises them: all selected profiles in one request
+  (`multi_profile`), XS rendering on up to `threads` workers reduced to fit
+  `max_working_mib` (`render_workers`), storage pools composed inside that
+  request (`inline_storage`) and a direct read of the source terrain GeoTIFF
+  (`terrain_tiff`; terrains with a dataset or alpha mask keep the staged
+  read). Products are bit-identical to the sequential route; manifests record
+  `xs_render_workers`, `xs_profiles_per_request`, `storage_inline` and a
+  `threads_effective` that counts only the requests issued. Older engines
+  receive byte-identical requests. 1D mapping remains unqualified
+  (`qualified=False`). (#834)
+
+- **1D `final_format`:** both 1D entry points accept `final_format` with the
+  `map_sloping_profiles()` contract. With an engine advertising
+  `native_final_format` on the delivering method, the engine writes each
+  Depth/WSE GeoTIFF once in delivery form; manifest rows record the delivered
+  grid. There is no Rasterio fallback; a model CRS without an EPSG code or an
+  engine without the capability is refused with `FimUnsupportedError`. (#834)
+
+### 0.118.0 — 2026-11-11
+
+- **Final-format delivery:** `RasFim.map_sloping_profiles(final_format=...)`
+  has the engine write sloping Depth/WSE once in delivery form: full-grid
+  placement (`grid="terrain"` or an explicit window), numeric nodata, tiled
+  DEFLATE and average overviews matching GDAL 3.10.3 `AVERAGE`, so callers no
+  longer re-encode the rasters in Python. It requires `product_writer="native"`
+  Depth/WSE delivery and an engine advertising `native_final_format`; other
+  deliveries and older engines are refused with `FimUnsupportedError`, with no
+  Rasterio fallback. Spring River p02 Max, installed Fast-Map 0.17.0 wheels
+  on Windows and Linux: 0 mask and 0 bit differences against the stock route
+  plus GDAL normalization at base, overview 2 and overview 4. See
+  [final-format delivery](../native-mapping-engine.md). (#829)
+
+- **Cell-validation reuse:** a successful horizontal cell validation is cached
+  per geometry and terrain grid plan, in process and on disk
+  (`RAS_COMMANDER_FIM_VALIDATION_CACHE` overrides the location), so repeated
+  maps of the same model skip it. Passes that relied on the coordinate-roundoff
+  tolerance are not cached. A multi-threaded validity check no longer drops the
+  caller's warnings. (#829)
+
+- **Coordinate-roundoff overlap tolerance:** the horizontal overlap check
+  accepts unsampled coordinate-roundoff residue between cells, with a
+  `RuntimeWarning` for each tolerated overlap. The tolerance from #803 is carried
+  into the faster check by #829, which supersedes #803.
+
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.17.0,<0.18`. 0.17.0 adds `native_final_format` with
+  no change to existing requests or products. As before, the extras install the
+  engine only on Windows x64 and Linux x86_64; elsewhere no engine is installed
+  and `final_format` is refused with `FimUnsupportedError`.
+
+### 0.117.0 — 2026-11-09
+
+- **slopingPretty velocity and derived Max:** `map_sloping_profiles(velocity=True)`
+  and `map_derived_max` accept `reduce_shallow_to_horizontal` and
+  `use_depth_weighted_faces` when the engine advertises
+  `velocity_with_faces` (`rasmapper-with-faces-velocity-derived/1`);
+  `map_derived_max` also takes `postprocessing_hdf`. Native 7.0.1 Max on
+  bridges p05 and Davis p02 in all four slopingPretty option combinations:
+  velocity, D x V, D x V^2 and Froude have 0 mask and 0 bit differences. The
+  earlier bridges slopingPretty mask gap was a reference made with shallow
+  reduction (the `store_maps` default for `"slopingPretty"`) compared with a
+  plain run. Engines without the record keep refusing those options.
+
+- **Max shear stress:** `RasFim.map_sloping_profiles(shear_stress=True,
+  shear_depth="rendered"|"horizontal")` renders RAS Mapper's Shear Stress (Max)
+  through the engine's `rasmapper-face-shear-max/1` method, adding
+  `shear_stress_tif` to the product manifest; `RasFim.supports_shear_stress()`
+  detects it. Native HEC-RAS 7.0.1 bridges p05 and Davis p02, sloping and
+  horizontal: 0 mask and 0 bit differences. Fast-Map 0.16.0 has the method;
+  older engines refuse with `FimUnsupportedError`. See
+  [Max shear stress](../native-mapping-engine.md#max-shear-stress).
+
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.16.0,<0.17`. Fast-Map 0.16.0 advertises both
+  records above (`shear_stress`, `velocity_with_faces`), so a plain
+  `ras-commander[full]` or `[fim]` install maps Max shear stress and
+  slopingPretty velocity and derived Max products. These products are
+  qualified against RAS Mapper 7.0.1 output on the models named above, for
+  pure 2D models.
+
+- **HDF engine dependency:** the core requirement is
+  `ras-commander-fast-hdf>=0.5.0,<0.6` (was `>=0.3.0,<0.4`). 0.5.0 is the
+  first published build with bridge API 12, which this adapter has accepted
+  since 0.114.0; the engine API stays 10 and no binding is removed or renamed.
+  What changes for a plain install:
+    - HEC-RAS 5.0.x and 6.1 plan files read natively in more places: 2D
+      summaries that store no `Location` (qualified by name and width) and
+      mesh inventories from the legacy `Names` dataset. Layouts the engine
+      cannot prove stay refused, so automatic mode reads them with h5py and
+      required-native mode raises.
+    - The engine's HDF5 reader is 0.12.1 (fast-hdf 0.4.0). Files with a user
+      block are refused at open, SZIP stays refused, and a zero-width datatype
+      or a missing variable-length heap object fails the native read instead
+      of returning a partial result. HEC-RAS does not write such files. See
+      the engine's
+      [changelog](https://github.com/gpt-cmdr/ras-commander-fast-hdf/blob/main/CHANGELOG.md).
+
+### 0.116.0 — 2026-11-09
+
+- **Native serial boundaries:** the existing boundary map and comparison APIs
+  accept supported canonical cross-section, storage, mixed and original-source
+  terrain inputs with complete source/tile/stitch history and explicit
+  qualification opt-in. See the [mapping guide](../native-mapping-engine.md#compare-native-polygons)
+  for fixture, runtime and platform limits.
+- **Raw geometry diagnostics:** `preserve_raw_geometry=True` retains completed
+  invalid vectors with verified aborted receipts and raises `FimGeometryError`.
+  Complete raw ring-bit comparisons remain distinct from valid-polygon delivery.
+- **Native execution controls:** serial polygon-loop verification, helper/runtime
+  provenance and optional aggregate private-commit limits cover merge children.
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.15.0,<0.16`.
+
+### 0.115.0 — 2026-11-08
+
+- **Prepared 1D and mixed mapping:** canonical receipt-bound preparation and
+  Depth/WSE mapping, with explicit diagnostic opt-in, global-lattice AOI
+  delivery and atomic failure manifests. Supported 1D inputs include stored
+  steady/unsteady profiles and disjoint storage pools.
+- **Native stored-tile grid:** mixed preparation can bind the advertised
+  source-preserving grid contract. Unsupported layouts and combinations
+  refuse; capability discovery separates API stability from numerical scope.
+- **Exactness evidence:** the pinned 7.0.1 matrix passes all 32 mandatory
+  products. Pinned 6.6 controls and the distinct 1D stripe-pilot limits are
+  recorded in the [mapping guide](../native-mapping-engine.md#native-runtime-comparison-scope).
+  Davis original-source raw framing and terrain modifications remain outside
+  this qualification.
+- **Native steady export controls:** one aggregate helper accepts the typed
+  GDAL thread/cache and native CPU settings. Unsupported scheduler controls
+  refuse before project mutation. Product manifests preserve binary64
+  transforms through JSON serialization.
+- **Mapping engine dependency:** mapping extras select
+  `ras-commander-fast-map>=0.14.0,<0.15`.
+
+### 0.114.0 — 2026-11-07
+
+- **Published HDF wheel compatibility:** accepts native bridge API 11 and the
+  compatible API 12 legacy-layout extension. Current public `main` had required
+  API 12 globally, rejecting the published API 11 wheel even for supported
+  layouts. The core dependency stays `>=0.3.0,<0.4`; required-native reads
+  continue to refuse layouts the installed engine cannot read.
+
+- **Optional native row delivery:** `RasFim.map_sloping_profiles()` and the
+  prepared sloping context accept `row_stream_rows=1..4096` with
+  `product_writer="native"`. Zero preserves the existing path. The engine
+  must advertise the matching capability; cell-face, velocity, storage-area
+  and reduction combinations are refused. Ownership and terrain remain
+  resident, and Commander retains conservative memory admission.
+- **Mapping engine floor:** mapping extras require
+  `ras-commander-fast-map>=0.13.0,<0.14`. The engine release adds bounded
+  TIFF writing and other measured performance paths without changing the
+  ordinary 1D/mixed support guards. Historical benchmark results belong to
+  their recorded builds and options. The Creek repeat-export difference
+  remains unresolved; this release does not claim exactness on every model.
 - **`PrecipMrms.to_dss` behaviour change (#801):** for MRMS QPE, the default
   HEC-Vortex route and `backend="shadow"` now refuse durations other than one
   hour (15M, 03H to 72H) with a `ValueError`, before the import starts and with
@@ -296,7 +723,7 @@ contours, bbox/polygon clipping and bounded tile/timestep concurrency.
 through the stored-map API or accepts retained exports, and reports complete
 geometry differences and separate workflow clocks. The vector method is
 explicitly distinct from native stored polygons; existing raster methods retain
-their numerical contracts. See the [API](../api/fim.md#deterministic-inundation-boundaries)
+their numerical contracts. See the [API](../native-mapping-engine.md#deterministic-inundation-boundaries)
 and [qualification](fim-mapping-performance.md#deterministic-vector-boundary-qualification)
 for terrain and engine prerequisites, measured differences and scope.
 
@@ -312,7 +739,7 @@ for terrain and engine prerequisites, measured differences and scope.
 - `map_whole_simulation` delivers duration without `allow_unqualified` when
   the engine advertises `duration_rule` `rasmapper-backward-window-recession/1`.
 - Native HEC-RAS 7.0.1 qualification: see the
-  [velocity table](../api/fim.md#sloping-velocity).
+  [velocity table](../native-mapping-engine.md#sloping-velocity).
 
 **Fast-Map 0.12 is the minimum mapping engine**
 
@@ -597,7 +1024,7 @@ The mapping extras accept `ras-commander-fast-map>=0.10.1,<0.12`; install
 0.11.0 for retained hydraulic/window caches and native TIFF delivery. The
 core HDF requirement is `ras-commander-fast-hdf>=0.2.4,<0.3`. Capabilities
 remain checked at runtime, and existing user pins are not silently updated.
-See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer) and
+See the [catalog recipe](../native-mapping-engine.md#build-jobs-from-a-watershed-layer) and
 [complete source comparison](https://github.com/gpt-cmdr/ras-commander/compare/v0.110.2...v0.110.3).
 
 ### Implementation notes
@@ -610,7 +1037,7 @@ parallel workers, budget per-worker memory and inspect partial results.
 The `fim` and `fast-map` extras accept Fast-Map 0.11 alongside 0.10.1. Version
 0.11 adds the retained-state and native-writer capabilities; inspect advertised
 flags before selecting them.
-See the [catalog recipe](../api/fim.md#build-jobs-from-a-watershed-layer).
+See the [catalog recipe](../native-mapping-engine.md#build-jobs-from-a-watershed-layer).
 
 **Retained reach mapping state and optional native raster delivery**
 
@@ -641,7 +1068,7 @@ Prepared sloping contexts now support `native_session=True` (default on capable
 engines). HDF staging uses bounded contiguous-timestep reads; horizontal catalog
 tables assign columns directly instead of repeatedly merging profile tables.
 Mapping arithmetic, AOI inclusion and depth thresholds are unchanged.
-See the [catalog API](../api/fim.md#schedule-reachtimestep-catalogs) and
+See the [catalog API](../native-mapping-engine.md#schedule-reachtimestep-catalogs) and
 [measured scope](fim-mapping-performance.md#reach-timestep-catalog-throughput).
 
 **Fast-HDF 0.2.4 is the minimum HDF engine**
@@ -670,7 +1097,7 @@ and geometry are unchanged, and pandas 2 results are unchanged.
 whose WKT the engine cannot map to an EPSG code, such as Davis 7.0.1's
 `PROJCS["unknown", ...]`, can now be mapped directly, without an EPSG copy.
 The manifest records the accepted identity as `terrain_crs_identity`. See
-[FIM](../api/fim.md).
+[FIM](../native-mapping-engine.md).
 
 **Invalid-cell policy for horizontal, whole-simulation and comparison mapping**
 
@@ -695,7 +1122,7 @@ when the AOI (or the whole mesh, without one) intersects an affected cell.
 On Glaise Creek p01, `repair` reproduced native HEC-RAS 7.0.1 horizontal depth,
 and whole-simulation arrival time and percent inundated, on every pixel of
 three windows around the cells. See
-[Invalid cell polygons](../api/fim.md#horizontal-whole-simulation-and-comparison-mapping).
+[Invalid cell polygons](../native-mapping-engine.md#horizontal-whole-simulation-and-comparison-mapping).
 
 **Native fluvial-pluvial polygons on meshes with invalid cells**
 
@@ -799,7 +1226,7 @@ silently use the old coverage. Unbounded/same-CRS bbox compatibility remains.
 The NumPy reference and bbox planning use the same normalized convention.
 This intentionally changes legacy edge inclusion, while leaving hydraulic
 cell ownership and surface arithmetic unchanged. See the
-[AOI contract](../api/fim.md#global-terrain-lattice-aoi-coverage-engine-0101).
+[AOI contract](../native-mapping-engine.md#global-terrain-lattice-aoi-coverage).
 
 **Sloping maps no longer fail a whole mesh for one invalid cell** (#733)
 
@@ -818,7 +1245,7 @@ sloping Max pixels and `"omit"` left 22 holes. That is limited evidence, not
 general equivalence. Horizontal, whole-simulation and comparison mapping remain
 strict. Published fast-hdf 0.2.3 already provides the non-strict assembly; no
 engine release is needed. See
-[Invalid cell polygons](../api/fim.md#invalid-cell-polygons).
+[Invalid cell polygons](../native-mapping-engine.md#invalid-cell-polygons).
 
 **FIM: priority-1 terrain source, whole-simulation products and velocity** (#724)
 
@@ -832,7 +1259,7 @@ adds a `velocity_tif` manifest column. All need a Fast-Map engine that
 advertises the matching methods; engine refusals raise `FimUnsupportedError`,
 and storage-area plans are refused. Products are qualified against RAS Mapper
 output on Davis p02 and BaldEagleCrkMulti2D bridges p05 for pure 2D FIM
-library creation. See [the FIM guide](../api/fim.md#map-on-the-priority-1-terrain-source-no-terrain-export).
+library creation. See [the FIM guide](../native-mapping-engine.md#map-on-the-priority-1-terrain-source-no-terrain-export).
 
 **Columnar PMTiles properties** (#715)
 
@@ -854,7 +1281,7 @@ of HDF Max/timestep selectors. Complete physical/ghost coverage is required;
 NaN explicitly means dry. The original HDF still supplies geometry and
 hydraulic properties, and the caller independently selects one mapping TIFF.
 Existing defaults are unchanged, and Fast-Map 0.8.0 needs no rebuild. See the
-[input and installation contract](../api/fim.md#supply-cell-wsel-profiles) and
+[input and installation contract](../native-mapping-engine.md#supply-cell-wsel-profiles) and
 [selector-equivalence evidence](fim-mapping-performance.md#caller-supplied-wsel-qualification).
 
 **Native fluvial-pluvial boundary on meshes with invalid cells** (#708)
@@ -1022,7 +1449,7 @@ requests. The horizontal method now applies native binary32
 `WSE >= float32(terrain + 0.001)` before depth subtraction, fixing pixel
 visibility at the plotting tolerance. Mapping is physical-2D only and needs no
 HEC-RAS installation. The optional FIM engine wheels are not published to PyPI.
-See [FIM API](../api/fim.md).
+See [FIM API](../native-mapping-engine.md).
 
 **`RasProcess.store_maps` accepts sloping render-mode flags**
 
