@@ -215,3 +215,62 @@ def test_public_701_upper_area_reference(tmp_path):
     for name in native.dtype.names[4:]:
         np.testing.assert_allclose(result['external_faces'][name], native[name], atol=3e-4, rtol=0)
     np.testing.assert_allclose(result['lengths'], attrs['Length'][selected], atol=3e-4, rtol=0)
+
+
+@pytest.mark.parametrize('separate_portions', [False, True])
+def test_two_boundaries_cannot_claim_same_area_face(tmp_path, separate_portions):
+    path = make_mesh(tmp_path)
+    with h5py.File(path, 'r+') as f:
+        bc = f['Geometry/Boundary Condition Lines']
+        attrs = np.repeat(bc['Attributes'][()], 2)
+        attrs['Name'][1] = b'Other'
+        del bc['Attributes']
+        bc['Attributes'] = attrs
+        del bc['Polyline Info']
+        bc['Polyline Info'] = [[0, 2, 0, 1], [2, 2, 0, 1]]
+        del bc['Polyline Points']
+        bc['Polyline Points'] = ([[0, 1], [0, 3], [0, 6], [0, 8]] if separate_portions
+                                 else [[0, 1], [0, 6], [0, 3], [0, 8]])
+    before = path.read_bytes()
+    for operation in (GeomBcLines.compute_external_faces,
+                      lambda p: GeomBcLines.write_external_faces(p, experimental=True)):
+        with pytest.raises(ValueError, match='Conflicting BC face ownership'):
+            operation(path)
+        assert path.read_bytes() == before
+    assert not list(tmp_path.glob('*.bak'))
+    assert not list(tmp_path.glob('bc-faces-*'))
+
+
+@pytest.mark.parametrize('scale', [1., 3.280839895])
+def test_island_boundary_faces_are_not_projected_onto_outer_ring(tmp_path, scale):
+    path = make_mesh(tmp_path, scale=scale)
+    with h5py.File(path, 'r+') as f:
+        mesh = f['Geometry/2D Flow Areas/A']
+        for name, extra in (
+            ('FacePoints Coordinate', np.array([[1, 2], [1, 4]]) * scale),
+            ('Faces FacePoint Indexes', [[4, 5]]),
+            ('Faces Cell Indexes', [[0, -1]]),
+        ):
+            data = np.concatenate((mesh[name][()], extra))
+            del mesh[name]
+            mesh[name] = data
+    result = GeomBcLines.compute_external_faces(path)
+    assert result['external_faces']['Face Index'].tolist() == [3, 0]
+
+
+def test_float32_face_points_preserve_outer_boundary_candidates(tmp_path):
+    path = make_mesh(tmp_path)
+    with h5py.File(path, 'r+') as f:
+        for group, name in (
+            ('Geometry/2D Flow Areas/A', 'Perimeter'),
+            ('Geometry/2D Flow Areas/A', 'FacePoints Coordinate'),
+            ('Geometry/Boundary Condition Lines', 'Polyline Points'),
+        ):
+            parent = f[group]
+            data = parent[name][()] + 1000000.03
+            if name == 'FacePoints Coordinate':
+                data = data.astype('float32')
+            del parent[name]
+            parent[name] = data
+    result = GeomBcLines.compute_external_faces(path)
+    assert result['external_faces']['Face Index'].tolist() == [3, 0]

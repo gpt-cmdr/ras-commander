@@ -1406,6 +1406,7 @@ class GeomBcLines:
                 raise ValueError('Coordinates must be finite (N, 2) arrays')
             return value
         rows, lengths = [], []
+        face_owners = {}
         with h5py.File(Path(geom_hdf), 'r') as hdf:
             bc = hdf['Geometry/Boundary Condition Lines']
             attributes, info = bc['Attributes'][()], bc['Polyline Info'][()]
@@ -1453,7 +1454,13 @@ class GeomBcLines:
                 lengths.append(length)
                 cells = mesh['Faces Cell Indexes'][()]
                 pairs = mesh['Faces FacePoint Indexes'][()]
-                xy = coordinates(mesh['FacePoints Coordinate'][()])
+                native_xy = mesh['FacePoints Coordinate'][()]
+                xy = coordinates(native_xy)
+                # Native float32 coordinates can round away from the float64
+                # perimeter. Allow one coordinate ULP, independently of the
+                # overlap threshold (which may intentionally be zero).
+                precision = (np.linalg.norm(np.spacing(np.abs(native_xy)).astype(float), axis=1)
+                             if native_xy.dtype.kind == 'f' else np.zeros(len(xy)))
                 if cells.shape != pairs.shape or cells.ndim != 2 or cells.shape[1] != 2:
                     raise ValueError('Face connectivity must have matching (N, 2) shape')
                 if cells.dtype.kind not in 'iu' or np.any(cells < -1):
@@ -1465,6 +1472,9 @@ class GeomBcLines:
                 line_rows = []
                 for face in selected:
                     a, b = map(int, pairs[face])
+                    if any(ring.distance(Point(xy[p])) > max(tolerance, precision[p])
+                           for p in (a, b)):
+                        continue
                     u, v = [(sign * (ring.project(Point(xy[p])) - origin)) % total for p in (a, b)]
                     # Unwrap the shorter face interval, then choose its periodic
                     # copy with greatest intersection with this BC span.
@@ -1484,6 +1494,14 @@ class GeomBcLines:
                         or any(left[3] != right[2] or abs(left[5] - right[4]) > tolerance
                                for left, right in zip(line_rows, line_rows[1:]))):
                     raise ValueError('Perimeter faces do not continuously cover the BC span')
+                for row in line_rows:
+                    key = (area, row[1])
+                    if key in face_owners:
+                        raise ValueError(
+                            f'Conflicting BC face ownership: area {area}, face {row[1]}, '
+                            f'BC lines {face_owners[key]} and {line_id}'
+                        )
+                    face_owners[key] = line_id
                 rows.extend(line_rows)
         return {'external_faces': pd.DataFrame.from_records(np.array(rows, dtype=dtype)),
                 'lengths': np.asarray(lengths, dtype=float)}
