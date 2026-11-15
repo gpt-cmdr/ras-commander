@@ -28,19 +28,23 @@ name: Publish PyPI Release
 # releases they expect, from main. A manual dispatch must be started from the release tag
 # (Use workflow from: the vX.Y.Z tag), or the `v*` tag deployment policy rejects `publish`.
 #
-# Pull requests that touch packaging run plan, build and validate as a dry run for two targets
-# and never publish: `head` (the pull request against its declared version) and `latest-tag`
-# (the newest existing vX.Y.Z tag, built and validated exactly as a manual dispatch would). On a
-# pull request the gate comes from the pull request itself, because the pull request may be the
-# change to the gate; pull-request runs have no publish path.
+# Pull requests that touch packaging run plan, build and validate as a dry run in a separate
+# workflow, packaging-dry-run.yml, which never publishes. That file has no hosted job, and this
+# one has no pull_request trigger, so the runner of every pull-request job is statically
+# verifiable. The plan, build and validate jobs below are MIRRORED in packaging-dry-run.yml,
+# including their pull-request branches: change both files together. The only difference is
+# plan's INPUT_TAG, which is '' there (no dispatch inputs). The dry
+# run builds two targets: `head` (the pull request against its declared version) and
+# `latest-tag` (the newest existing vX.Y.Z tag, built and validated exactly as a manual dispatch
+# would). On a pull request the gate comes from the pull request itself, because the pull
+# request may be the change to the gate.
 #
 # Runners: plan, build and validate run on CLB's self-hosted Linux runners (clb-ci-linux) for
-# every event, with no GitHub-hosted fallback; pull requests from forks skip them. Nothing runs
-# on any push: only a published release, a manual dispatch or a pull request that touches
-# packaging starts this workflow. The only GitHub-hosted job is `publish`, because
-# pypa/gh-action-pypi-publish is a Docker container action and the CLB runners have no Docker.
+# every event, with no GitHub-hosted fallback. Nothing runs on any push or pull request: only a
+# published release or a manual dispatch starts this workflow. The only GitHub-hosted job is
+# `publish`, because pypa/gh-action-pypi-publish is a Docker container action and the CLB runners have no Docker.
 # It declares the protected `pypi` environment, so no hosted runner starts until a required
-# reviewer approves the deployment, and it never runs for pull requests.
+# reviewer approves the deployment.
 
 on:
   release:
@@ -51,13 +55,6 @@ on:
         description: Existing release tag to build and publish (vMAJOR.MINOR.PATCH)
         required: true
         type: string
-  pull_request:
-    paths:
-      - .github/workflows/publish-pypi.yml
-      - .github/scripts/release_version_gate.py
-      - pyproject.toml
-      - setup.py
-      - MANIFEST.in
 
 permissions:
   contents: read

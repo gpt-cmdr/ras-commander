@@ -53,14 +53,22 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       matrix:
-        os: [linux, windows]
-        python: ['3.11', '3.13']
+        # Explicit rows with literal runner labels (no axes), so the runner for
+        # every job is statically verifiable.
         include:
           - os: linux
-            runner: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
+            python: '3.11'
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+          - os: linux
+            python: '3.13'
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
           - os: windows
-            runner: ["self-hosted", "Windows", "X64", "clb-ci-windows"]
-    runs-on: ${{ matrix.runner }}
+            python: '3.11'
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: windows
+            python: '3.13'
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

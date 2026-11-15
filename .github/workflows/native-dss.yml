@@ -29,24 +29,26 @@ jobs:
   native-dss:
     name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     strategy:
       fail-fast: false
       matrix:
-        os: [linux, windows]
-        backend: [native, shadow]
+        # Explicit rows with literal runner labels (no axes, no exclude), so the
+        # runner for every job is statically verifiable.
+        # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
+        # aborts intermittently in DSS6 time-series writes ("Substring out of
+        # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
+        # Shadow runs on Windows; Linux runs the native leg.
         include:
           - os: linux
-            runner: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
+            backend: native
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
           - os: windows
-            runner: ["self-hosted", "Windows", "X64", "clb-ci-windows"]
-        exclude:
-          # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
-          # aborts intermittently in DSS6 time-series writes ("Substring out of
-          # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
-          # Shadow runs on Windows; Linux runs the native leg.
-          - os: linux
+            backend: native
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: windows
             backend: shadow
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
     env:
       CI: '1'
       PYTHONUTF8: '1'

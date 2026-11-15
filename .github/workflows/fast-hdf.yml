@@ -7,16 +7,14 @@ name: Native HDF extension
 # is built from source here.
 # Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
 # clb-ci-windows) with no GitHub-hosted fallback; pull requests from forks skip
-# the job. macOS arm64 (macos-15) is GitHub-hosted, slow and expensive: it runs
-# only from a manual dispatch with include_macos (off by default), and only after
-# the maintainer approves that run. Nothing automatic selects it.
+# the job. The runner labels are literal include rows (`self_hosted`), so the
+# runner for every job is statically verifiable.
+# macOS arm64 (macos-15) is GitHub-hosted, slow and expensive, so it lives in a
+# separate dispatch-only workflow, fast-hdf-macos.yml (input include_macos, off by
+# default; run it only after the maintainer approves that run). The job steps are
+# mirrored there: keep the two files in sync.
 on:
   workflow_dispatch:
-    inputs:
-      include_macos:
-        description: "Also run on GitHub-hosted macOS arm64 (macos-15); needs maintainer approval"
-        type: boolean
-        default: false
   pull_request:
     paths:
       - 'ras_commander/fast_hdf.py'
@@ -48,9 +46,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The macOS row exists only on a workflow_dispatch with include_macos: true.
-        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.include_macos && '[{"os":"windows","runner":["self-hosted","Windows","X64","clb-ci-windows"]},{"os":"linux","runner":["self-hosted","Linux","X64","clb-ci-linux"]},{"os":"macos-15","runner":["macos-15"]}]' || '[{"os":"windows","runner":["self-hosted","Windows","X64","clb-ci-windows"]},{"os":"linux","runner":["self-hosted","Linux","X64","clb-ci-linux"]}]') }}
-    runs-on: ${{ matrix.runner }}
+        include:
+          - os: windows
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: linux
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
