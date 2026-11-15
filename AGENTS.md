@@ -2,6 +2,29 @@
 
 This file is the canonical shared instruction contract for repository-local coding agents.
 
+## GitHub Actions runner approval (user directive, 2026-11-14)
+
+- GitHub-hosted runners are prohibited for routine CI. Use the CLB self-hosted
+  fleet for Linux and Windows checks; never silently fall back to GitHub-hosted
+  runners for fork pull requests, missing labels, unavailable capacity, or failures.
+- Only occasional macOS qualification CI may use GitHub-hosted runners, and only
+  after the user explicitly approves the specific run and its scope. Describe the
+  workflow, runner type, expected runtime/cost, and number of jobs before approval.
+  Approval for one run does not authorize retries, reruns, or subsequent runs.
+- Local CLB self-hosted CI may run automatically, including on pushes and pull
+  requests. No separate approval is required for local CI execution.
+- Never dispatch, rerun, or otherwise send CI jobs to GitHub-hosted runners without
+  the user's explicit approval. Do not trigger hosted jobs indirectly by pushing,
+  opening/editing a pull request, or changing workflow triggers unless that hosted
+  execution is approved.
+- Keep hosted macOS qualification manual and approval-gated. Do not add automatic
+  hosted execution on push, pull_request, schedules, or workflow chaining. Other
+  hosted runner types require a new explicit user exception to this policy.
+- A request to implement, test, commit, or open a pull request does not by itself
+  approve GitHub-hosted runner execution or paid Actions usage. Stop before an
+  unapproved hosted-runner-triggering action and present the concrete run for
+  approval. This restriction does not apply to automatic local CLB CI.
+
 ## Harness Loading
 
 - Codex reads this file directly.

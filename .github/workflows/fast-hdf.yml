@@ -5,16 +5,16 @@ name: Native HDF extension
 # published wheel from PyPI and runs ras-commander's binding and fallback tests.
 # ras-commander-fast-hdf 0.5.0 is the first published API 12 build, so no engine
 # is built from source here.
-# macOS is GitHub-hosted, slow and expensive: it runs only when requested with
-# include_macos, never on pull requests. Linux and Windows run on CLB's
-# self-hosted Slurm runners; pull requests from forks use GitHub-hosted runners.
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows) with no GitHub-hosted fallback; pull requests from forks skip
+# the job. The runner labels are literal include rows (`self_hosted`), so the
+# runner for every job is statically verifiable.
+# macOS arm64 (macos-15) is GitHub-hosted, slow and expensive, so it lives in a
+# separate dispatch-only workflow, fast-hdf-macos.yml (input include_macos, off by
+# default; run it only after the maintainer approves that run). The job steps are
+# mirrored there: keep the two files in sync.
 on:
   workflow_dispatch:
-    inputs:
-      include_macos:
-        description: "Also run on macOS"
-        type: boolean
-        default: false
   pull_request:
     paths:
       - 'ras_commander/fast_hdf.py'
@@ -41,17 +41,17 @@ permissions:
 
 jobs:
   native:
+    name: native (${{ matrix.os }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.include_macos && '["windows-latest", "ubuntu-latest", "macos-15"]' || '["windows-latest", "ubuntu-latest"]') }}
         include:
-          - os: ubuntu-latest
-            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
-          - os: windows-latest
-            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
-    # Fork pull requests -> GitHub-hosted matrix.os; otherwise the self-hosted labels (macOS stays hosted).
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('["{0}"]', matrix.os) || matrix.self_hosted || format('["{0}"]', matrix.os)) }}
+          - os: windows
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: linux
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

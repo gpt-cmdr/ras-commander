@@ -17,7 +17,11 @@ concurrency:
 
 jobs:
   propose-update:
-    runs-on: ubuntu-latest
+    # CLB self-hosted Linux runner for every trigger, including the weekly schedule; no
+    # GitHub-hosted fallback. The runner image has curl and jq but not the gh CLI, so the
+    # pull request is found, edited or created through the REST API.
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,9 +68,22 @@ jobs:
 
           This workflow does not merge, publish packages/plugins, or register MCP servers. The plugin's version remains an independent identity and should change when a distribution is released.
           BODY
-          existing=$(gh pr list --head "$UPDATE_BRANCH" --state open --json number --jq '.[0].number // empty')
+          api() {
+            curl --fail-with-body --silent --show-error \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "$@"
+          }
+          title="Refresh Commander release compatibility evidence"
+          owner="${GH_REPO%%/*}"
+          existing=$(api "https://api.github.com/repos/$GH_REPO/pulls?state=open&head=$owner:$UPDATE_BRANCH" | jq -r '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --title "Refresh Commander release compatibility evidence" --body-file "$RUNNER_TEMP/commander-update-body.md"
+            jq -n --arg title "$title" --rawfile body "$RUNNER_TEMP/commander-update-body.md" \
+              '{title: $title, body: $body}' \
+              | api --request PATCH --data @- "https://api.github.com/repos/$GH_REPO/pulls/$existing" >/dev/null
           else
-            gh pr create --draft --base main --head "$UPDATE_BRANCH" --title "Refresh Commander release compatibility evidence" --body-file "$RUNNER_TEMP/commander-update-body.md"
+            jq -n --arg title "$title" --arg head "$UPDATE_BRANCH" --rawfile body "$RUNNER_TEMP/commander-update-body.md" \
+              '{title: $title, head: $head, base: "main", body: $body, draft: true}' \
+              | api --request POST --data @- "https://api.github.com/repos/$GH_REPO/pulls" >/dev/null
           fi

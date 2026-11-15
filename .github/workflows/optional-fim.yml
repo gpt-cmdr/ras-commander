@@ -1,7 +1,9 @@
 name: Optional FIM engine
 
-# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
-# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
+# Every job runs on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). There is no GitHub-hosted fallback: pull requests from
+# forks skip these jobs (shown as skipped), and a maintainer runs the checks
+# from a branch in this repository instead.
 on:
   pull_request:
     paths:
@@ -47,16 +49,26 @@ permissions:
 
 jobs:
   python-interface:
+    name: python-interface (${{ matrix.os }}, ${{ matrix.python }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ['3.11', '3.13']
+        # Explicit rows with literal runner labels (no axes), so the runner for
+        # every job is statically verifiable.
         include:
-          - os: ubuntu-latest
-            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
-          - os: windows-latest
-            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('["{0}"]', matrix.os) || matrix.self_hosted || format('["{0}"]', matrix.os)) }}
+          - os: linux
+            python: '3.11'
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+          - os: linux
+            python: '3.13'
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+          - os: windows
+            python: '3.11'
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: windows
+            python: '3.13'
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
