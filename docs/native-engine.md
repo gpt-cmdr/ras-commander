@@ -218,6 +218,19 @@ record, and DSS7 SHG grids store a null value of -FLT_MAX where Monolith stores
 (reads) and in its [Writes section](user-guide/dss-native-backend.md#intended-differences)
 (writes).
 
+**Confirmed engine behaviors.** Three native-writer behaviors are intended and
+are kept:
+
+- **DSS6 compressed blocks.** A native merge into a DSS6 block that HEC stored with
+  delta compression leaves the values outside the written window exactly as stored,
+  and stores the block uncompressed. HEC's library re-quantizes the whole block. See
+  the engine's
+  [DSS6 format notes, section 9.4](https://github.com/gpt-cmdr/ras-commander-fast-dss/blob/main/docs/format/dss6.md#94-regular-merge-and-extend-into-existing-blocks).
+- **Pathnames outside printable ASCII** are refused for writing.
+- **DSS6 irregular-pattern writes** (an `IR-` E part with a `TS-` D part) need the
+  engine's explicit opt-in `allow_unconfirmed_dss6_irregular_pattern=True`. No RasDss
+  writer passes it; see [What 0.1.2 changes](#dss-0-1-2).
+
 **Gridded import.** HEC-Vortex behaviors that move or relabel data are refused by
 default, each with an opt-in argument that reproduces Vortex where one exists:
 
@@ -391,9 +404,10 @@ The scope is the engine's, and RAS Commander does not widen it:
   out of scope. **A partial recovery is still published**, so always check
   `complete` and `not_copied`. A complete copy is not an integrity certificate
   for `src`, and copying a healthy file shows the mechanics, not salvage of a
-  damaged one. `dest` must not exist. DSS6 files are not supported. In RAS
-  Commander, `RasDss.repair` calls it on every backend (there is no Java
-  equivalent):
+  damaged one. `dest` must not exist. `repair` is for DSS7 files only. A DSS6
+  file is not repaired by a copy: the next native write to it reconciles an
+  interrupted write in place. In RAS Commander, `RasDss.repair` calls it on
+  every backend (there is no Java equivalent):
 
     ```python
     from ras_commander import RasDss
