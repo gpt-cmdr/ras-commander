@@ -213,10 +213,11 @@ assert HdfMesh.__name__ == "HdfMesh"
 
 
 def test_native_dss_engine_is_a_default_dependency(monkeypatch):
-    """FAST-DSS is a core dependency wherever wheels are published, macOS included.
+    """FAST-DSS is a core dependency on its wheel platforms, macOS included in the marker.
 
     The default DSS backend ("auto") uses it when it is installed. The floor stays
-    at 0.1.2 until 0.1.3 (the first release with macOS wheels) is on PyPI.
+    at 0.1.2 until 0.1.3 (planned as the first release with macOS wheels; not yet on
+    PyPI) is published.
     """
     from packaging.requirements import Requirement
 

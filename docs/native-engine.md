@@ -308,8 +308,9 @@ pip install "ras-commander[dss-native]"   # + pydsstools, affine, pyproj
 ```
 
 Wheels (abi3, CPython 3.10 and later) are published for Windows x64 and for
-Linux x86_64 and aarch64 (manylinux and musllinux); macOS wheels (arm64 and
-x86_64) are published from ras-commander-fast-dss 0.1.3. On any other platform
+Linux x86_64 and aarch64 (manylinux and musllinux). macOS wheels (arm64 and x86_64)
+are planned starting with ras-commander-fast-dss 0.1.3, which is not yet on PyPI;
+until then a macOS install builds 0.1.2 from source. On any other platform
 or interpreter (Windows ARM64, PyPy) the marker leaves the engine out, `auto`
 selects `java`, and `pip install ras-commander-fast-dss` builds it from the
 source distribution, which needs a Rust toolchain.

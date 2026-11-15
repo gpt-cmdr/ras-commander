@@ -24,11 +24,12 @@ FAST_HDF_WHEEL_MARKER = (
 # The native DSS engine (FAST-DSS) is a default dependency: RasDss.backend
 # "auto" (the default) uses it when it is installed and advertises the features
 # the default needs, otherwise the Java backend. It is published as abi3 wheels
-# for CPython 3.10+ on Windows x64, Linux x86_64/aarch64 (manylinux and
-# musllinux) and, from 0.1.3, macOS; the marker keeps pip from compiling the
+# for CPython 3.10+ on Windows x64 and Linux x86_64/aarch64 (manylinux and
+# musllinux); macOS wheels are planned starting with 0.1.3, which is not yet on
+# PyPI. The marker keeps pip from compiling the
 # Rust source distribution elsewhere (Windows ARM64, PyPy).
-# Release gate: the native default ships with ras-commander-fast-dss 0.1.3,
-# the first release with macOS wheels. Raise the floor to >=0.1.3 when it is on
+# Release gate: the native default is to ship with ras-commander-fast-dss
+# 0.1.3, planned as the first release with macOS wheels. Raise the floor to >=0.1.3 when it is on
 # PyPI; until then a macOS install would build 0.1.2 from source.
 FAST_DSS_REQUIREMENT = 'ras-commander-fast-dss>=0.1.2,<0.2'
 FAST_DSS_WHEEL_MARKER = (

@@ -132,7 +132,8 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
   (D*, J*, PD1-PD4, G-CRS, G1-G4; G-CRS only while the grid CRS is unqualified). Anything else is `unexpected`; do not widen
   an allowance without corpus evidence.
 - The maintainer made `native` the default (`auto`) after the shadow release
-  (decision D4, 2026-11-14); it ships with ras-commander-fast-dss 0.1.3. Keep `java`
+  (decision D4, 2026-11-14); it is to ship with ras-commander-fast-dss 0.1.3 (not yet
+  on PyPI). Keep `java`
   selectable explicitly, and keep `shadow` unchanged.
 - Time-series writes: `RasDss._check_write_times` (`_times.py`) runs once in the public
   `write_timeseries`, before any backend, and refuses times HEC-DSS would store elsewhere
@@ -146,7 +147,8 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 - `pyjnius` and Java are optional runtime prerequisites and should fail with clear installation guidance when missing.
 - `ras_commander_fast_dss` (distribution `ras-commander-fast-dss`) is a core
   dependency, with a marker limited to the CPython abi3 wheel platforms (Windows AMD64,
-  Linux x86_64/aarch64, macOS arm64/x86_64; macOS wheels from 0.1.3). The floor is
+  Linux x86_64/aarch64, macOS arm64/x86_64; macOS wheels are planned starting with
+  0.1.3, not yet on PyPI). The floor is
   `>=0.1.2,<0.2` until 0.1.3 is on PyPI, then `>=0.1.3,<0.2`. Elsewhere `auto` selects
   `java`. The `dss`, `dss-native` and `all` extras repeat the requirement. `RasDss.repair` wraps the
   engine's `repair` (gated on the `repair_copy_out` feature, on every backend).

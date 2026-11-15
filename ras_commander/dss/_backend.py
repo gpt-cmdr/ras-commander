@@ -124,8 +124,9 @@ def explicit_backend(attribute_value: Any) -> Optional[str]:
     return None if name == AUTO else name
 
 
-#: Lowest engine release the automatic default selects: 0.1.3 reads and writes DSS6
-#: calendar (yearly) times as HEC does (engine gaps EG2/EG3 of the native-default audit).
+#: Lowest engine release the automatic default selects: 0.1.3 (not yet on PyPI) is to
+#: read and write DSS6 calendar (yearly) times as HEC does, as its release candidate does
+#: (engine gaps EG2/EG3 of the native-default audit).
 MIN_DEFAULT_ENGINE_VERSION = (0, 1, 3)
 #: A final release: ``X.Y.Z``, optionally ``.postN``. Pre-releases (``a``, ``b``, ``rc``),
 #: development and local versions do not qualify.

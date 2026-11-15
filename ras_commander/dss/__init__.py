@@ -21,7 +21,8 @@ Backends:
 Dependencies:
     Native backend:
         - ras-commander-fast-dss: a default dependency on CPython for Windows x64,
-          Linux x86_64/aarch64 and macOS (where wheels are published)
+          Linux x86_64/aarch64, and macOS once its wheels are published (planned
+          starting with 0.1.3)
 
     Java backend (lazy loaded):
         - pyjnius: pip install pyjnius (or the dss extra)

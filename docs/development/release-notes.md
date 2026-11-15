@@ -10,7 +10,8 @@ alone does not identify a development checkout.
 ### Unreleased
 
 **Read before upgrading.** This release is planned to ship with
-`ras-commander-fast-dss` 0.1.3, the first engine release with macOS wheels.
+`ras-commander-fast-dss` 0.1.3, which is not yet on PyPI and is planned to be the first
+engine release with macOS wheels.
 
 - **Behaviour change: the native DSS engine is the default backend.** `RasDss.backend`
   now defaults to `"auto"`: `native` when `ras-commander-fast-dss` is installed and
@@ -25,7 +26,8 @@ alone does not identify a development checkout.
   `RAS_COMMANDER_DSS_BACKEND=java`, and install `ras-commander[dss]` (pyjnius) with
   Java 8+. Explicit `java`, `native` and `shadow` settings behave as before.
 - **`ras-commander-fast-dss>=0.1.2,<0.2` is a core dependency** on CPython for Windows
-  x64, Linux x86_64/aarch64 and macOS arm64/x86_64 (macOS wheels from 0.1.3). It
+  x64, Linux x86_64/aarch64 and macOS arm64/x86_64 (macOS wheels are planned starting
+  with 0.1.3, not yet on PyPI). It
   requires only NumPy and pandas; the default install does not pin NumPy below 2.
   pydsstools stays in the opt-in `dss-native` extra.
 - **Java-route DSS6 grid fixes.** `write_grid_timeseries` on `java` refuses
@@ -59,7 +61,8 @@ alone does not identify a development checkout.
   unaffected.
 - **ras-commander-fast-dss 0.1.2 misdates some DSS6 yearly data** (for example a
   HEC-written 2020-06-15 reads as 2020-06-14) and refuses to write those times; the
-  native default ships with 0.1.3, which reads and writes them as HEC does. Until then,
+  native default is planned to ship with 0.1.3, whose release candidate reads and
+  writes them as HEC does. Until then,
   keep `RasDss.backend = "java"` for DSS6 yearly data.
 - `RasDss.get_capabilities().attrs` adds `backend_source`, `auto_backend` and
   `default_backend_reason`. Under an explicit backend, what `auto` would select is

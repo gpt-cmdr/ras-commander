@@ -181,8 +181,9 @@ pip install rasterio pyproj
 ### DSS File Operations
 
 `pip install ras-commander` includes the native DSS engine
-(`ras-commander-fast-dss`) on CPython for Windows x64, Linux x86_64 and aarch64,
-and macOS. DSS reads and writes then need no Java: the default `RasDss` backend
+(`ras-commander-fast-dss`) on CPython for Windows x64 and Linux x86_64 and aarch64,
+and on macOS starting with ras-commander-fast-dss 0.1.3 (not yet on PyPI; the first
+release planned with macOS wheels). DSS reads and writes then need no Java: the default `RasDss` backend
 (`auto`) uses the engine wherever it is installed.
 
 !!! warning "Behaviour change: native DSS by default"

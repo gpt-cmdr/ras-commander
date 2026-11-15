@@ -10,7 +10,8 @@ the engine is installed and ready, and `java` elsewhere.
 !!! warning "Behaviour change: native is the default"
     From this release `RasDss.backend` defaults to `auto`, which selects `native`
     when `ras-commander-fast-dss` 0.1.3 or later is installed (it is a default dependency on
-    Windows x64, Linux x86_64/aarch64 and macOS). Results differ from the Java
+    Windows x64, Linux x86_64/aarch64 and, with the macOS wheels planned starting with
+    0.1.3, macOS; 0.1.3 is not yet on PyPI). Results differ from the Java
     path only as listed on this page: missing values are `NaN`, `start_date` and
     `end_date` are honored, errors are typed, and some input the Java path
     truncated or stored unreadably is refused. To keep the Java backend:
@@ -97,7 +98,8 @@ pip install "ras-commander[dss]"      # adds pyjnius for the java and shadow bac
 
 `ras-commander` requests `ras-commander-fast-dss>=0.1.2,<0.2` on CPython for
 Windows x64, Linux x86_64 and aarch64, and macOS arm64 and x86_64 (macOS wheels
-from 0.1.3; see [Installation](../native-engine.md#dss-installation)). Elsewhere
+are planned starting with 0.1.3, which is not yet on PyPI; see
+[Installation](../native-engine.md#dss-installation)). Elsewhere
 it is not requested and `auto` selects `java`.
 
 If `ras-commander-fast-dss` is not installed:
@@ -653,7 +655,8 @@ that HEC Monolith moves the refused cases when the check is disabled.
 **Engine 0.1.2 and DSS6 yearly data.** ras-commander-fast-dss 0.1.2 reads some DSS6
 yearly series that HEC wrote one day early (for example the 2020 value of
 2019-06-15 / 2020-06-15 / 2021-06-15 reads as 2020-06-14) and refuses to write those
-times. The native default ships with 0.1.3; its release candidate reads and writes them
+times. The native default is planned to ship with 0.1.3 (not yet on PyPI); its release
+candidate reads and writes them
 as HEC does (checked on the same oracle: 0 differences). Until then, keep `RasDss.backend = "java"`
 for DSS6 yearly data.
 
