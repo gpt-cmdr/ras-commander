@@ -2767,9 +2767,12 @@ class HdfMesh:
             or batch_cells < 1
         ):
             raise ValueError("batch_cells must be a positive integer")
-        from ._cell_property_batches import iter_cell_property_batches
+        from ._cell_property_batches import _source_file, iter_cell_property_batches
 
-        names = HdfMesh.get_mesh_area_names(hdf_path)
+        # The legacy inventory getter deliberately logs ordinary read failures
+        # and returns []; a streaming iterator must not disguise them as EOF.
+        with _source_file(Path(hdf_path)) as source:
+            names = HdfMesh._mesh_area_names(source)
         if mesh_name is not None:
             names = [mesh_name] if mesh_name in names else []
         return iter_cell_property_batches(Path(hdf_path), names, int(batch_cells))
