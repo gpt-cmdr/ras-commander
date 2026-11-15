@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.33"
+SCHEMA_VERSION = "1.34"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,24 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "mesh_cell_property_batch": {
+        "description": (
+            "Frame in each (mesh_name, frame) cell-property iterator pair, in source "
+            "cell/point order. Values retain source elevation/volume units and vertical "
+            "datum; no coordinates or CRS transformation. Missing datasets yield an empty "
+            "three-column object frame; present tables with no rows yield no columns, "
+            "matching the original full-table getter. Dtypes below describe nonempty frames."
+        ),
+        "accessor": "HdfMesh.iter_mesh_cell_property_tables(hdf_path, mesh_name=None, batch_cells=65536)",
+        "source": "ras_commander.hdf.HdfMesh.HdfMesh.iter_mesh_cell_property_tables()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "Cell ID", "dtype": "int64", "description": "Zero-based source mesh-local cell ID, including stored ghost ranges."},
+            {"name": "Elevation", "dtype": "float64", "description": "Stored elevation in the source length units and vertical datum."},
+            {"name": "Volume", "dtype": "float64", "description": "Stored volume in the source volume units."},
+        ],
+    },
     "geometry_breaklines": {
         "description": "Authored geometry-text breaklines, source coordinates and units; CRS unset.",
         "accessor": "GeomStorage.get_breaklines(geom_file)",

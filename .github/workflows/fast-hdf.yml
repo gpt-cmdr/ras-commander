@@ -103,9 +103,9 @@ jobs:
       - name: Table readers with Python reference backend
         env:
           RAS_COMMANDER_FAST_HDF: python
-        run: python -m pytest tests/test_tabular_readers_core_install.py -q
+        run: python -m pytest tests/test_tabular_readers_core_install.py tests/test_hdf_mesh_cell_property_batches.py -q
       - name: Table readers with required native backend
         if: steps.native.outputs.available == 'true'
         env:
           RAS_COMMANDER_FAST_HDF: required
-        run: python -m pytest tests/test_tabular_readers_core_install.py -q
+        run: python -m pytest tests/test_tabular_readers_core_install.py tests/test_hdf_mesh_cell_property_batches.py -q

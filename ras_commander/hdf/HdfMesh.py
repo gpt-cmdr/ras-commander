@@ -95,6 +95,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterator,
     List,
     Literal,
     Mapping,
@@ -2715,6 +2716,63 @@ class HdfMesh:
             reraise_required(e)
             logger.error(f"Error extracting cell property tables from {hdf_path}: {str(e)}")
             return {}
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def iter_mesh_cell_property_tables(
+        hdf_path: Union[Path, str],
+        mesh_name: Optional[str] = None,
+        *,
+        batch_cells: int = 65536,
+    ) -> Iterator[Tuple[str, pd.DataFrame]]:
+        """Read stored cell elevation-volume rows in bounded cell batches.
+
+        Args:
+            hdf_path: Geometry or plan HDF containing the stored geometry.
+                Accepts a path string or ``Path``; the file is read only.
+            mesh_name: Exact mesh name to read, or ``None`` for all meshes in
+                stored inventory order. An absent name yields no batches.
+            batch_cells: Positive number of source cells per batch (default
+                65536). A single cell's table is indivisible and may contain
+                many rows.
+
+        Returns:
+            Iterator yielding ``(mesh_name, DataFrame)`` pairs in original cell
+            and point order. Nonempty frames have the legacy getter's columns
+            and dtypes: ``Cell ID`` (zero-based int64), ``Elevation`` and
+            ``Volume`` (float64). Values retain source length/volume units and
+            vertical datum; no transformation occurs. Missing datasets yield
+            the legacy empty three-column frame; present tables with no rows
+            yield its empty frame without columns. Empty cell batches within
+            a nonempty mesh are omitted. No HDF or native session remains open
+            between yields. Inputs must remain unchanged during iteration.
+
+        Raises:
+            ValueError: ``batch_cells`` is not a positive integer, or table
+                datasets have an incompatible shape.
+            OSError: A source read fails. Other read/backend errors propagate
+                rather than returning a silently truncated iterator; required
+                native mode preserves ``FastHdfError``.
+
+        Notes:
+            Each batch reads only referenced Info/Values ranges through the
+            existing backend adapter. Memory scales with its cell tables and
+            one indivisible cell, rather than all model rows. The existing
+            full-table getter and its return/failure policy are unchanged.
+        """
+        if (
+            isinstance(batch_cells, bool)
+            or not isinstance(batch_cells, (int, np.integer))
+            or batch_cells < 1
+        ):
+            raise ValueError("batch_cells must be a positive integer")
+        from ._cell_property_batches import iter_cell_property_batches
+
+        names = HdfMesh.get_mesh_area_names(hdf_path)
+        if mesh_name is not None:
+            names = [mesh_name] if mesh_name in names else []
+        return iter_cell_property_batches(Path(hdf_path), names, int(batch_cells))
 
     # =========================================================================
     # Spatial Query Utilities
