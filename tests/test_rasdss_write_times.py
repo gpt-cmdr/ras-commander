@@ -289,6 +289,22 @@ def _build_work(tmp_path_factory):
         for r in reqs:
             flat.append(r)
             keys.append(key)
+    # Review 2 reproduction: no engine in the worker, Java selected (before the proof
+    # requests below; the engine stays disabled for the rest of that worker run, which
+    # the proof requests do not need).
+    flat.append({"op": "disable_engine"})
+    keys.append("disable_engine")
+    refused_file, opt_out_file = root / "noengine-refused.dss", root / "noengine-optout.dss"
+    for request in (
+        {"op": "write_timeseries", "kwargs": dict(
+            dss_file=refused_file, pathname=_path("1MON"), times=_t("2020-02-29"), values=[42.0])},
+        {"op": "write_timeseries", "kwargs": dict(
+            dss_file=opt_out_file, pathname=_path("1MON"), times=_t("2020-02-29"), values=[42.0],
+            allow_unverified_calendar_times=True)},
+        {"op": "read_times", "kwargs": dict(dss_file=opt_out_file, pathname=_path("1MON"))},
+    ):
+        flat.append(request)
+        keys.append("no_engine")
     flat.append({"op": "disable_time_check"})
     keys.append("disable")
     for case, reqs in proof:
@@ -582,31 +598,154 @@ def test_invalid_arguments_keep_the_writers_own_errors(tmp_path):
         RasDss.write_timeseries(tmp_path / "x.dss", _path("1HOUR"), HOURS, [1.0])
 
 
-def test_calendar_check_without_the_engine_warns_once(monkeypatch, caplog):
-    monkeypatch.setattr(_backend, "_maybe_native", lambda: None)
-    stamps = _t("2020-02-29", "2020-03-31").to_numpy(dtype="datetime64[s]")
+class _BrokenEngine:
+    """An engine whose placement probe fails (its temporary file cannot be created)."""
+
+    @staticmethod
+    def create(*args, **kwargs):
+        raise OSError("disk full")
+
+    write_timeseries = read_timeseries = staticmethod(lambda *a, **k: None)
+
+
+class _OldEngine:
+    """An engine too old to probe: its writer takes no ``times=``."""
+
+    create = read_timeseries = staticmethod(lambda *a, **k: None)
+
+    @staticmethod
+    def write_timeseries(path, pathname, values, *, units, data_type, version):
+        raise AssertionError("never called")
+
+
+UNQUALIFIED = {
+    "engine missing": lambda: None,
+    "engine too old": lambda: _OldEngine(),
+    "probe fails": lambda: _BrokenEngine(),
+}
+UNQUALIFIED_CAUSE = {
+    "engine missing": "not installed or failed to load",
+    "engine too old": "too old to probe",
+    "probe fails": "probe failed (OSError: disk full)",
+}
+
+
+def _capability_error():
+    from ras_commander.dss import _errors
+
+    return _errors.get("DssCapabilityError")
+
+
+def _forbid_writers(monkeypatch):
+    """Any backend writer call fails the test: a refusal must come before them."""
+    def boom(*args, **kwargs):
+        raise AssertionError("a writer ran although the times were not qualified")
+
+    for name in ("_write_timeseries_java", "_write_timeseries_native", "_write_timeseries_shadow"):
+        monkeypatch.setattr(RasDss, name, staticmethod(boom))
+
+
+@pytest.mark.parametrize("cause", list(UNQUALIFIED))
+@pytest.mark.parametrize("backend", ["java", "native", "shadow"])
+def test_unqualified_calendar_times_are_refused_before_the_target(tmp_path, monkeypatch,
+                                                                  cause, backend):
+    """PR #863 review 2: placement that cannot be qualified is refused, not written."""
+    monkeypatch.setattr(_backend, "_maybe_native", UNQUALIFIED[cause])
+    monkeypatch.setattr(RasDss, "backend", backend)
+    _forbid_writers(monkeypatch)
+    target = tmp_path / "new.dss"
+    with pytest.raises(_capability_error(), match="Refused before writing") as caught:
+        RasDss.write_timeseries(target, _path("1MON"), _t("2020-02-29"), [42.0])
+    text = str(caught.value)
+    assert UNQUALIFIED_CAUSE[cause] in text
+    assert "ras-commander-fast-dss>=0.1.3" in text and "allow_unverified_calendar_times=True" in text
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("cause", list(UNQUALIFIED))
+def test_unqualified_calendar_times_leave_an_existing_file_unchanged(tmp_path, monkeypatch, cause):
+    import hashlib
+
+    target = tmp_path / "existing.dss"
+    _native_write(target, "1HOUR", HOURS, _values(6), 7)
+    before = hashlib.sha256(target.read_bytes()).hexdigest()
+    monkeypatch.setattr(_backend, "_maybe_native", UNQUALIFIED[cause])
+    monkeypatch.setattr(RasDss, "backend", "java")
+    # Without the engine the existing file's version is read through Java; keep the JVM
+    # out of this process (the Java side runs in the worker).
+    monkeypatch.setattr(RasDss, "_get_file_version_java", staticmethod(lambda path: 7))
+    _forbid_writers(monkeypatch)
+    with pytest.raises(_capability_error()):
+        RasDss.write_timeseries(target, _path("1YEAR"), _t("2020-01-01", "2021-01-01"), [1.0, 2.0])
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == before
+
+
+@pytest.mark.parametrize("cause", list(UNQUALIFIED))
+def test_the_dataframe_writer_refuses_unqualified_calendar_times(tmp_path, monkeypatch, cause):
+    monkeypatch.setattr(_backend, "_maybe_native", UNQUALIFIED[cause])
+    monkeypatch.setattr(RasDss, "backend", "java")
+    _forbid_writers(monkeypatch)
+    frame = pd.DataFrame({"value": [1.0, 2.0]}, index=_t("2020-03-01", "2020-04-01"))
+    with pytest.raises(_capability_error(), match=UNQUALIFIED_CAUSE[cause].split(" (")[0]):
+        RasDss.write_timeseries_from_dataframe(tmp_path / "df.dss", _path("1MON"), frame)
+    assert not (tmp_path / "df.dss").exists()
+
+
+@pytest.mark.parametrize("cause", list(UNQUALIFIED))
+def test_the_opt_out_warns_and_writes_unchecked(tmp_path, monkeypatch, caplog, cause):
+    monkeypatch.setattr(_backend, "_maybe_native", UNQUALIFIED[cause])
+    monkeypatch.setattr(RasDss, "backend", "java")
+    calls = []
+    monkeypatch.setattr(RasDss, "_write_timeseries_java",
+                        staticmethod(lambda *args, **kwargs: calls.append(args)))
+    frame = pd.DataFrame({"value": [42.0]}, index=_t("2020-02-29"))
     with caplog.at_level(logging.WARNING, logger="ras_commander.dss.RasDss"):
-        _times.check_regular_stamps(_path("1MON"), "1MON", stamps, 7)
-        _times.check_regular_stamps(_path("1MON"), "1MON", stamps, 7)
-    assert sum("not checked" in r.getMessage() for r in caplog.records) == 1
+        RasDss.write_timeseries(tmp_path / "a.dss", _path("1MON"), _t("2020-02-29"), [42.0],
+                                allow_unverified_calendar_times=True)
+        RasDss.write_timeseries_from_dataframe(tmp_path / "b.dss", _path("1MON"), frame,
+                                               allow_unverified_calendar_times=True)
+    assert len(calls) == 2
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 2
+    assert all("allow_unverified_calendar_times=True" in w and UNQUALIFIED_CAUSE[cause].split(" (")[0] in w
+               for w in warnings)
+
+
+def test_the_opt_out_does_not_skip_a_check_that_can_run(tmp_path):
+    """With a working engine, the opt-out changes nothing: moved times are still refused."""
+    with pytest.raises(ValueError, match="Refused before writing"):
+        RasDss.write_timeseries(tmp_path / "x.dss", _path("1MON"), _t("2020-02-29"), [42.0],
+                                allow_unverified_calendar_times=True)
+    assert not (tmp_path / "x.dss").exists()
+
+
+def test_the_opt_out_does_not_skip_the_dss6_leap_rule(tmp_path, monkeypatch):
+    """The DSS6 leap-year rule needs no engine and is never skipped."""
+    monkeypatch.setattr(_backend, "_maybe_native", lambda: None)
+    with pytest.raises(ValueError, match="DSS6 file"):
+        RasDss.write_timeseries(tmp_path / "leap6.dss", _path("1YEAR"), LEAP_YEARLY["leap year, 15 June"],
+                                _values(3), dss_version=6, allow_unverified_calendar_times=True)
+
+
+@pytest.mark.parametrize("cause", list(UNQUALIFIED))
+def test_fixed_intervals_and_irregular_series_need_no_engine(tmp_path, monkeypatch, cause):
+    monkeypatch.setattr(_backend, "_maybe_native", UNQUALIFIED[cause])
     with pytest.raises(ValueError, match="value 3 is at"):
         _times.check_regular_stamps(_path("1HOUR"), "1HOUR",
                                     HOURS.delete(3).to_numpy(dtype="datetime64[s]"), 7)
+    _times.check_regular_stamps(_path("1HOUR"), "1HOUR", HOURS.to_numpy(dtype="datetime64[s]"), 7)
+    assert _times.write_stamps(_path("IR-MONTH"), _t("2020-02-29", "2020-03-31"), [1.0, 2.0]) is None
 
 
-def test_an_engine_failure_in_the_check_does_not_block_the_write(monkeypatch, caplog):
-    class Broken:
-        @staticmethod
-        def create(*args, **kwargs):
-            raise RuntimeError("disk full")
-
-        write_timeseries = read_timeseries = staticmethod(lambda *a, **k: None)
-
-    monkeypatch.setattr(_backend, "_maybe_native", lambda: Broken())
-    stamps = _t("2020-03-01", "2020-04-01").to_numpy(dtype="datetime64[s]")
-    with caplog.at_level(logging.WARNING, logger="ras_commander.dss.RasDss"):
-        _times.check_regular_stamps(_path("1MON"), "1MON", stamps, 7)
-    assert any("unchecked" in r.getMessage() for r in caplog.records)
+def test_java_with_no_engine_refuses_by_default_and_moves_with_the_opt_out(work):
+    """The review 2 reproduction through HEC Monolith: Java selected, no engine. The
+    default refuses before the file exists; the opt-out writes, and HEC Monolith stores
+    the 29 February monthly value on 1 March (the documented risk of the opt-out)."""
+    refused, written, read = _java(work, "no_engine")
+    assert refused["error"][0] == "DssCapabilityError", refused
+    assert "ras-commander-fast-dss>=0.1.3" in refused["error"][1]
+    assert written == {"result": None}, written
+    assert read["result"][0] == ["2020-03-01 00:00:00"]
 
 
 def test_the_check_leaves_no_file_behind(tmp_path, monkeypatch):

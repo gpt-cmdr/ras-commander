@@ -20,8 +20,15 @@ The rules and their HEC Monolith evidence come from hms-commander (PR #55, revie
 11,992 multi-value and 7,774 single-value cases, 0 accepted values that HEC moves.
 Because the calendar check applies HEC-DSS 7's placement to DSS6 files too, it refuses
 some multi-value DSS6 offset series that HEC's DSS6 library would keep; the message says
-so. Without the engine the calendar part is skipped with one warning; fixed intervals are
-always checked. Irregular (``IR-``) E parts are not checked here.
+so.
+
+The calendar check fails closed (PR #863 review 2): when placement cannot be qualified
+(the engine is missing, too old to probe, or the probe itself fails), the write is refused
+with ``DssCapabilityError`` before the target is touched, naming the cause and the fix
+(install ras-commander-fast-dss>=0.1.3). ``allow_unverified_calendar_times=True`` on the
+public writers is the documented opt-out: it logs a WARNING and writes unchecked. Fixed
+intervals need no probe and are always checked; irregular (``IR-``) E parts are not
+checked here.
 
 This module is private.
 """
@@ -65,13 +72,14 @@ _ENGINE_TIMES_REFUSAL = re.compile(r"value (\d+) is at (\S+), expected (\S+)")
 #: time (a day of the month that a shorter month lacks): the two value indexes.
 _ENGINE_COLLISION_REFUSAL = re.compile(r"values (\d+) and (\d+) at one time")
 
-_calendar_check_warned = False
+#: The engine requirement named in every unqualified-placement message.
+ENGINE_REQUIREMENT = "ras-commander-fast-dss>=0.1.3"
+#: Name of the public writers' opt-out argument.
+OPT_OUT = "allow_unverified_calendar_times"
 
 
 def reset_warning() -> None:
-    """Allow the no-engine warning to be logged again (tests)."""
-    global _calendar_check_warned
-    _calendar_check_warned = False
+    """Kept for tests; the check has no once-per-process state any more."""
 
 
 def write_stamps(pathname: str, times: Any, values: Any) -> Optional[Tuple[str, np.ndarray]]:
@@ -102,11 +110,14 @@ def write_stamps(pathname: str, times: Any, values: Any) -> Optional[Tuple[str, 
 
 
 def check_regular_stamps(pathname: str, e_part: str, stamps: np.ndarray,
-                         version: Optional[int] = None) -> None:
+                         version: Optional[int] = None,
+                         allow_unverified: bool = False) -> None:
     """``ValueError`` when HEC-DSS would not store every value at its given time.
 
-    ``version`` is the target file's DSS version (6 or 7; None when unknown). See the
-    module docstring for the rules.
+    ``version`` is the target file's DSS version (6 or 7; None when unknown). Calendar
+    intervals whose placement cannot be qualified raise ``DssCapabilityError`` unless
+    ``allow_unverified`` (the public writers' ``allow_unverified_calendar_times``). See
+    the module docstring for the rules.
     """
     if len(stamps) == 0:
         return
@@ -132,7 +143,7 @@ def check_regular_stamps(pathname: str, e_part: str, stamps: np.ndarray,
     elif unit in CALENDAR_INTERVAL_UNITS:
         if version == 6 and unit in ("YEAR", "YEARS"):
             _check_dss6_yearly_start(pathname, e_part, stamps)
-        _check_calendar_stamps(pathname, e_part, stamps, version)
+        _check_calendar_stamps(pathname, e_part, stamps, version, allow_unverified)
 
 
 def _check_dss6_yearly_start(pathname: str, e_part: str, stamps: np.ndarray) -> None:
@@ -234,23 +245,57 @@ def _round_trip(dc: Any, version: int, check_path: str, stamps: np.ndarray,
     return None, None, None
 
 
+def _unqualified(pathname: str, e_part: str, cause: str, allow_unverified: bool) -> None:
+    """Placement could not be qualified: refuse (``DssCapabilityError``), or, with the
+    opt-out, warn and let the write go ahead unchecked."""
+    if allow_unverified:
+        logger.warning(
+            "Writing %s without checking its %s times against HEC-DSS's calendar placement "
+            "(%s=True): %s. HEC-DSS stores a regular series by position from its first "
+            "time, so a value given off its placement is stored at a different time "
+            "without an error.", pathname, e_part, OPT_OUT, cause)
+        return
+    from . import _errors
+
+    raise _errors.get("DssCapabilityError")(
+        f"Refused before writing {pathname!r}: the times of this {e_part} series cannot be "
+        f"checked against HEC-DSS's calendar placement, because {cause}. HEC-DSS stores a "
+        "regular series by position from its first time, so a value given off its "
+        "placement would be stored at a different time without an error. What works: "
+        f"install {ENGINE_REQUIREMENT} (pip install -U \"{ENGINE_REQUIREMENT}\"), which "
+        f"this check uses to qualify the times; or pass {OPT_OUT}=True to write without "
+        "the check, accepting that HEC-DSS may store values at other times. Minute, hour "
+        "and day intervals and irregular (IR-) series need no engine.")
+
+
+def _probe_engine() -> Tuple[Optional[Any], Optional[str]]:
+    """``(engine, None)`` when the engine can run the placement probe, else
+    ``(None, cause)``."""
+    try:
+        dc = _backend._maybe_native()
+    except Exception as exc:  # pragma: no cover - _maybe_native never raises
+        return None, f"ras-commander-fast-dss failed to load ({type(exc).__name__}: {exc})"
+    if dc is None:
+        return None, "ras-commander-fast-dss is not installed or failed to load"
+    missing = [name for name in ("create", "write_timeseries", "read_timeseries")
+               if not callable(getattr(dc, name, None))]
+    if missing or not _backend.takes_keyword(dc.write_timeseries, "times"):
+        what = ", ".join(missing) if missing else "write_timeseries(times=...)"
+        return None, (f"the installed ras-commander-fast-dss is too old to probe it "
+                      f"(no {what})")
+    return dc, None
+
+
 def _check_calendar_stamps(pathname: str, e_part: str, stamps: np.ndarray,
-                           version: Optional[int] = None) -> None:
+                           version: Optional[int] = None,
+                           allow_unverified: bool = False) -> None:
     """``ValueError`` unless HEC-DSS stores every value at its given time. Uses the
     engine's public writer and reader on a temporary DSS7 file (and, for a single DSS6
-    monthly, semi-monthly or tri-monthly value, a temporary DSS6 file)."""
-    global _calendar_check_warned
-    dc = _backend._maybe_native()
-    if dc is None or not all(callable(getattr(dc, name, None))
-                             for name in ("create", "write_timeseries", "read_timeseries")):
-        if not _calendar_check_warned:
-            _calendar_check_warned = True
-            logger.warning(
-                "Times of %s series are not checked against HEC-DSS's calendar placement "
-                "because ras-commander-fast-dss is not installed or failed to load "
-                "(install it with 'pip install ras-commander-fast-dss'). HEC-DSS stores a "
-                "regular series by position from its first time, so values given at "
-                "other times are stored at different times.", e_part)
+    monthly, semi-monthly or tri-monthly value, a temporary DSS6 file). When that cannot
+    be done, ``_unqualified`` refuses (or, with the opt-out, warns)."""
+    dc, cause = _probe_engine()
+    if dc is None:
+        _unqualified(pathname, e_part, cause, allow_unverified)
         return
     parts = pathname.split("/")
     check_path = f"/{parts[1]}/{parts[2]}/{parts[3]}//{parts[5]}/{parts[6]}/"
@@ -263,10 +308,10 @@ def _check_calendar_stamps(pathname: str, e_part: str, stamps: np.ndarray,
             dss6_keeps = _round_trip(dc, 6, check_path, stamps, values)[0] is None
             if dss6_keeps and version == 6:
                 return  # a single DSS6 value HEC's DSS6 library keeps
-    except Exception as exc:  # an engine failure must not block the write
-        logger.warning("Could not check the times of %s against HEC-DSS's calendar "
-                       "placement (%s: %s); the write goes ahead unchecked.",
-                       pathname, type(exc).__name__, exc)
+    except Exception as exc:  # the probe failed: placement is not qualified
+        _unqualified(pathname, e_part,
+                     f"the placement probe failed ({type(exc).__name__}: {exc})",
+                     allow_unverified)
         return
     if i is None:
         return

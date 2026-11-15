@@ -6,7 +6,7 @@ the Java side of the native-write tests runs here and the test compares in-proce
 argv: requests.pkl out.pkl
 Each request is ``{"op": name, "kwargs": {...}}``. ``op`` is a ``RasDss`` method name,
 or one of ``set_backend`` (``value``), ``reset_shadow``, ``shadow_records``,
-``disable_time_check`` and ``read_times`` (``read_timeseries`` as time strings and values).
+``disable_time_check``, ``disable_engine`` and ``read_times`` (``read_timeseries`` as time strings and values).
 Exit code 77 with ``R1_BRIDGE_UNAVAILABLE:`` on stdout means pyjnius, Java or Monolith
 is unavailable.
 """
@@ -38,6 +38,10 @@ def run(req):
     if op == "disable_time_check":
         # Shows why the placement check exists: Java then stores the values elsewhere.
         RasDss._check_write_times = staticmethod(lambda *a, **k: None)
+        return None
+    if op == "disable_engine":
+        # As if ras-commander-fast-dss were not installed (review 2 reproduction).
+        _backend._maybe_native = lambda: None
         return None
     if op == "read_times":
         frame = RasDss.read_timeseries(**kwargs)

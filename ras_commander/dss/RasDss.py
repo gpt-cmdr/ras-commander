@@ -4617,6 +4617,7 @@ class RasDss:
         *,
         dss_version: Optional[int] = None,
         sync: Optional[Any] = None,
+        allow_unverified_calendar_times: bool = False,
     ) -> None:
         """
         Write a time series to a DSS file.
@@ -4654,6 +4655,15 @@ class RasDss:
                 The ``java`` backend does not use it; ``shadow`` applies it to the
                 native repeat only. Stated under ``native`` with an engine that has
                 no ``write_sync_policy`` feature: ``DssCapabilityError``.
+            allow_unverified_calendar_times: Week, month, semi-month, tri-month and
+                year times are checked against HEC-DSS's calendar placement with the
+                ras-commander-fast-dss engine before anything is written. When that
+                check cannot run (the engine is missing or too old, or its probe
+                fails), the write is refused with ``DssCapabilityError`` (default
+                ``False``). ``True`` writes without the check and logs a WARNING;
+                HEC-DSS may then store values at other times than given. Minute,
+                hour and day intervals and irregular series are checked without the
+                engine and are not affected.
 
         Raises:
             FileNotFoundError: If DSS file doesn't exist and create_if_missing=False
@@ -4666,7 +4676,9 @@ class RasDss:
             ImportError: If pyjnius (``java``) or ras-commander-fast-dss (``native``) is
                 not installed
             DssCapabilityError: ``native`` with a ras-commander-fast-dss wheel that
-                has no writers (a ``NotImplementedError``)
+                has no writers (a ``NotImplementedError``); and, on every backend,
+                calendar-interval times whose placement cannot be checked (see
+                ``allow_unverified_calendar_times``). Nothing is written.
             RuntimeError: If Java write operation fails, including a read-only target,
                 a refusal the HEC-DSS library only reports as a message, and a record
                 missing from the file's catalog afterwards. Native engine errors
@@ -4727,7 +4739,8 @@ class RasDss:
         backend = RasDss._write_backend()
         args = (dss_file, pathname, times, values, units, data_type, create_if_missing)
         with _backend.write_sync(sync, backend):
-            RasDss._check_write_times(dss_file, pathname, times, values, dss_version)
+            RasDss._check_write_times(dss_file, pathname, times, values, dss_version,
+                                      allow_unverified_calendar_times)
             if backend == "native":
                 return RasDss._write_timeseries_native(*args, dss_version=dss_version)
             if backend == "shadow":
@@ -4735,19 +4748,22 @@ class RasDss:
             return RasDss._write_timeseries_java(*args, dss_version=dss_version)
 
     @staticmethod
-    def _check_write_times(dss_file, pathname, times, values, dss_version=None) -> None:
+    def _check_write_times(dss_file, pathname, times, values, dss_version=None,
+                           allow_unverified_calendar_times: bool = False) -> None:
         """Refuse times HEC-DSS would store elsewhere, before any backend writes.
 
         Runs once per public write, on every backend (see ``_times``). The target's DSS
         version decides the DSS6 rules: an existing file's own version, else
-        ``dss_version``, else 7 (a new file's default on both backends).
+        ``dss_version``, else 7 (a new file's default on both backends). Calendar times
+        that cannot be qualified are refused unless ``allow_unverified_calendar_times``.
         """
         found = _times.write_stamps(pathname, times, values)
         if found is None:
             return
         e_part, stamps = found
         _times.check_regular_stamps(pathname, e_part, stamps,
-                                    RasDss._target_version(dss_file, dss_version))
+                                    RasDss._target_version(dss_file, dss_version),
+                                    allow_unverified=bool(allow_unverified_calendar_times))
 
     @staticmethod
     def _target_version(dss_file, dss_version=None) -> Optional[int]:
@@ -5179,6 +5195,7 @@ class RasDss:
         *,
         dss_version: Optional[int] = None,
         sync: Optional[Any] = None,
+        allow_unverified_calendar_times: bool = False,
     ) -> None:
         """
         Write a time series DataFrame to a DSS file.
@@ -5201,6 +5218,10 @@ class RasDss:
                 ras-commander-fast-dss unchanged; ``None`` (default) leaves the
                 installed engine's own default. The ``java`` backend does not
                 use it. See ``write_timeseries``.
+
+            allow_unverified_calendar_times: As in ``write_timeseries``: ``False``
+                (default) refuses calendar-interval times whose placement cannot be
+                checked; ``True`` writes them unchecked with a WARNING.
 
         Example:
             >>> # Read from one DSS file, write to another
@@ -5228,6 +5249,7 @@ class RasDss:
             create_if_missing=create_if_missing,
             dss_version=dss_version,
             sync=sync,
+            allow_unverified_calendar_times=allow_unverified_calendar_times,
         )
 
     # ------------------------------------------------------------------
