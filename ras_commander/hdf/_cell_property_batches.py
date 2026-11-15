@@ -105,6 +105,7 @@ def _iter_batches(
             if not frame.empty:
                 produced = True
                 yield mesh_name, frame
+            del frame
         if not produced:
             yield mesh_name, pd.DataFrame()
 

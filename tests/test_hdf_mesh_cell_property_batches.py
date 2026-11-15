@@ -151,6 +151,32 @@ def test_required_failure_is_not_swallowed(cell_hdf, monkeypatch):
     assert raised.value is failure
 
 
+def test_reader_releases_previous_frame_before_allocating_next(cell_hdf, monkeypatch):
+    import weakref
+
+    original = batches._read_batch
+    references = []
+
+    def read(*args, **kwargs):
+        assert all(reference() is None for reference in references)
+        frame = original(*args, **kwargs)
+        references.append(weakref.ref(frame))
+        return frame
+
+    monkeypatch.setattr(batches, "_read_batch", read)
+    iterator = HdfMesh.iter_mesh_cell_property_tables(
+        cell_hdf, mesh_name="First", batch_cells=2
+    )
+    while True:
+        try:
+            _, frame = next(iterator)
+        except StopIteration:
+            break
+        del frame
+    assert len(references) == 3
+    assert all(reference() is None for reference in references)
+
+
 def test_auto_native_failure_falls_back_to_exact_python_frames(cell_hdf, monkeypatch):
     expected = _assembled(cell_hdf, 2)
     attempts = []
