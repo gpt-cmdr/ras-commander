@@ -232,9 +232,16 @@ nav:
       - Rust API (docs.rs): https://docs.rs/ras-commander-fast-map
     - DSS Engine:
       - Guide: https://rascommander.info/ras/native-engine/#dss-engine
-      - Gridded Import and Tools: https://rascommander.info/ras/native-engine/#gridded-import-and-tools
+      - Installation: https://rascommander.info/ras/native-engine/#dss-installation
       - Read and Write Backends: https://rascommander.info/ras/user-guide/dss-native-backend/
+      - Gridded Import and Tools: https://rascommander.info/ras/native-engine/#gridded-import-and-tools
+      - Interrupted Writes and Repair: https://rascommander.info/ras/native-engine/#dss-repair
+      - Intended Differences: https://rascommander.info/ras/native-engine/#dss-intended-differences
+      - Performance: https://rascommander.info/ras/native-engine/#dss-performance
       - Notebook Qualification: https://rascommander.info/ras/development/dss-native-notebook-qualification/
+      - HMS Commander Backends: https://rascommander.info/hms/user_guide/dss_native_backend/
+      - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-dss
+      - Package (PyPI): https://pypi.org/project/ras-commander-fast-dss/
   - User Guide:
     - Running Plans:
       - Plan Execution: user-guide/plan-execution.md
