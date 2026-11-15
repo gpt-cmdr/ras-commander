@@ -51,6 +51,23 @@ def no_jvm(monkeypatch):
 
 
 @pytest.fixture
+def engine_release(monkeypatch):
+    """Report a released engine version (0.1.3 is not on PyPI yet; the installed engine's
+    behaviour is unchanged, only the version the automatic default reads)."""
+    dc = pytest.importorskip("ras_commander_fast_dss")
+
+    def set_version(version="0.1.3"):
+        if version is None:
+            monkeypatch.delattr(dc, "__version__", raising=False)
+        else:
+            monkeypatch.setattr(dc, "__version__", version, raising=False)
+        return dc
+
+    set_version()
+    return set_version
+
+
+@pytest.fixture
 def without_ras_commander_fast_dss(monkeypatch):
     """Simulate an environment where ras_commander_fast_dss is not installed."""
     monkeypatch.setitem(sys.modules, "ras_commander_fast_dss", None)
@@ -67,8 +84,7 @@ def test_default_backend_is_auto():
     assert _backend.explicit_backend(RasDss.backend) is None
 
 
-def test_auto_default_is_native_with_a_ready_engine(caplog):
-    pytest.importorskip("ras_commander_fast_dss")
+def test_auto_default_is_native_with_a_ready_engine(caplog, engine_release):
     ready, reason = _backend.native_default_ready()
     assert ready, reason
     caplog.set_level(logging.INFO, logger=LOGGER)
@@ -77,7 +93,7 @@ def test_auto_default_is_native_with_a_ready_engine(caplog):
     lines = [r for r in caplog.records if r.getMessage().startswith("DSS backend:")]
     assert len(lines) == 1, "the active backend is logged once"
     assert lines[0].levelno == logging.INFO
-    assert lines[0].getMessage().startswith("DSS backend: native (ras-commander-fast-dss ")
+    assert lines[0].getMessage() == "DSS backend: native (ras-commander-fast-dss 0.1.3)"
     attrs = RasDss.get_capabilities().attrs
     assert attrs["requested_backend"] == "native"
     assert attrs["backend_source"] == "auto"
@@ -105,8 +121,8 @@ def test_auto_default_is_java_without_the_engine(
 
 
 @pytest.mark.parametrize("missing", list(_backend.DEFAULT_REQUIRED_FEATURES))
-def test_auto_default_is_java_when_the_engine_lacks_a_feature(monkeypatch, missing):
-    pytest.importorskip("ras_commander_fast_dss")
+def test_auto_default_is_java_when_the_engine_lacks_a_feature(monkeypatch, missing,
+                                                              engine_release):
     real = _backend.native_feature
     monkeypatch.setattr(_backend, "native_feature", lambda name: name != missing and real(name))
     ready, reason = _backend.native_default_ready()
@@ -117,8 +133,7 @@ def test_auto_default_is_java_when_the_engine_lacks_a_feature(monkeypatch, missi
     assert RasDss.get_backend() == "native"
 
 
-def test_auto_default_is_java_when_the_engine_lacks_the_writers(monkeypatch):
-    pytest.importorskip("ras_commander_fast_dss")
+def test_auto_default_is_java_when_the_engine_lacks_the_writers(monkeypatch, engine_release):
     monkeypatch.setattr(_backend, "native_writes_available", lambda: False)
     ready, reason = _backend.native_default_ready()
     assert not ready and "writer API" in reason
@@ -151,9 +166,9 @@ def test_explicit_java_forces_java_with_a_ready_engine(monkeypatch, no_jvm, tmp_
 
 
 @pytest.mark.parametrize("source", ["attribute", "environment"])
-def test_explicit_java_capabilities_do_not_announce_native(monkeypatch, caplog, source):
+def test_explicit_java_capabilities_do_not_announce_native(monkeypatch, caplog, source,
+                                                           engine_release):
     """PR #863 review 1: an explicit java must not be logged as a native selection."""
-    pytest.importorskip("ras_commander_fast_dss")
     if source == "attribute":
         monkeypatch.setattr(RasDss, "backend", "java")
     else:
@@ -170,6 +185,66 @@ def test_explicit_java_capabilities_do_not_announce_native(monkeypatch, caplog, 
     RasDss.get_capabilities()
     lines = [r for r in caplog.records if r.getMessage().startswith("DSS backend:")]
     assert [r.getMessage().split(" (")[0] for r in lines] == ["DSS backend: native"]
+
+
+#: Engine ``__version__`` values and whether the automatic default selects native
+#: (PR #863 review 2: auto needs a final release of at least 0.1.3).
+ENGINE_VERSIONS = {
+    "0.1.2": (False, "older than 0.1.3"),
+    "0.1.3": (True, "ras-commander-fast-dss 0.1.3"),
+    "0.1.3.post1": (True, "ras-commander-fast-dss 0.1.3.post1"),
+    "0.1.4": (True, "ras-commander-fast-dss 0.1.4"),
+    "0.2.0": (True, "ras-commander-fast-dss 0.2.0"),
+    "0.1.3rc1": (False, "not a final release"),
+    "0.1.3.dev0": (False, "not a final release"),
+    "0.1.3+local": (False, "not a final release"),
+    "0.0.1": (False, "older than 0.1.3"),
+    "1.0": (False, "not a final release"),
+    "": (False, "not a final release"),
+    None: (False, "reports no __version__"),
+}
+
+
+@pytest.mark.parametrize("version", list(ENGINE_VERSIONS), ids=repr)
+def test_auto_needs_an_engine_release_of_at_least_0_1_3(engine_release, caplog, version):
+    engine_release(version)
+    ready, needs = ENGINE_VERSIONS[version]
+    ok, reason = _backend.native_default_ready()
+    assert ok is ready and needs in reason, reason
+    caplog.set_level(logging.INFO, logger=LOGGER)
+    assert RasDss.get_backend() == ("native" if ready else "java")
+    line = [r.getMessage() for r in caplog.records if r.getMessage().startswith("DSS backend:")]
+    assert len(line) == 1 and needs in line[0]
+    if not ready:
+        assert "0.1.3" in line[0] and "RasDss.backend" in line[0]
+
+
+def test_a_non_string_engine_version_is_not_ready(engine_release):
+    engine_release(3)
+    ok, reason = _backend.native_default_ready()
+    assert not ok and "non-string" in reason
+
+
+@pytest.mark.parametrize("version", ["0.1.2", None, "0.1.3rc1"])
+@pytest.mark.parametrize("source", ["attribute", "environment"])
+def test_explicit_native_and_shadow_ignore_the_version_gate(monkeypatch, engine_release,
+                                                            version, source):
+    """The version requirement is the automatic default's; explicit choices stay the
+    caller's."""
+    engine_release(version)
+    for value in ("native", "shadow"):
+        if source == "attribute":
+            monkeypatch.setattr(RasDss, "backend", value)
+        else:
+            monkeypatch.setenv(_backend.ENV_VAR, value)
+        assert RasDss.get_backend() == value
+        assert RasDss.get_capabilities().attrs["auto_backend"] == "java"
+
+
+def test_explicit_java_with_a_released_engine(monkeypatch, engine_release):
+    monkeypatch.setattr(RasDss, "backend", "java")
+    assert RasDss.get_backend() == "java"
+    assert RasDss.get_capabilities().attrs["auto_backend"] == "native"
 
 
 @pytest.mark.parametrize("value", ["java", "native", "shadow"])

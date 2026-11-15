@@ -3,8 +3,10 @@
 ``python scripts/ci/native_dss_ci_guard.py engine [--expect-backend NAME]``
     Fails unless ras-commander-fast-dss is installed at 0.1.2 or later (below 0.2),
     imports, advertises the features the wrappers use, and RasDss reports it. With
-    --expect-backend, RasDss.get_backend() must also return NAME (the default leg
-    checks that the automatic default resolves to "native").
+    --expect-backend, RasDss.get_backend() must also return NAME. ``auto`` (the default
+    leg) expects what the automatic default must select: ``native`` when the engine's
+    own ``__version__`` is a release of at least 0.1.3, otherwise ``java`` (0.1.2 is
+    installable but does not qualify).
 
 ``python scripts/ci/native_dss_ci_guard.py junit REPORT.xml [--min-passed N] [--java]``
     Fails unless the pytest JUnit report shows at least N passed tests in total, no
@@ -55,13 +57,21 @@ def _version_tuple(text: str):
     return tuple(int(part) for part in text.split(".")[:3])
 
 
+#: Installed distributions the job accepts: 0.1.2 until 0.1.3 is on PyPI (the job cannot
+#: install 0.1.3 yet). Accepting 0.1.2 for installation does not make it qualify for the
+#: automatic default: that needs the engine's own __version__ >= 0.1.3 (see --expect-backend).
+INSTALLABLE = ((0, 1, 2), (0, 2, 0))
+
+
 def check_engine(expect_backend=None) -> int:
     version = importlib.metadata.version("ras-commander-fast-dss")
-    if not (0, 1, 2) <= _version_tuple(version) < (0, 2, 0):
+    low, high = INSTALLABLE
+    if not low <= _version_tuple(version) < high:
         print(f"ras-commander-fast-dss {version} is outside >=0.1.2,<0.2")
         return 1
     import ras_commander_fast_dss as engine
     from ras_commander import RasDss
+    from ras_commander.dss import _backend
 
     missing = [name for name in FEATURES if name not in engine.FEATURES]
     if missing:
@@ -72,9 +82,18 @@ def check_engine(expect_backend=None) -> int:
         print(f"RasDss does not see the engine: {attrs}")
         return 1
     backend = RasDss.get_backend()
+    release, release_text = _backend.engine_release(engine)
+    qualifies = release is not None and release >= _backend.MIN_DEFAULT_ENGINE_VERSION
     print(f"ras-commander-fast-dss {version}; {len(engine.FEATURES)} features; "
+          f"{release_text}; qualifies for the automatic default: {qualifies}; "
           f"RasDss backend {backend} ({attrs['backend_source']}: "
           f"{attrs['default_backend_reason']})")
+    if expect_backend == "auto":
+        # The automatic default: native only with an engine release >= 0.1.3.
+        expect_backend = "native" if qualifies else "java"
+        if attrs["backend_source"] != "auto":
+            print(f"--expect-backend auto needs no backend override; got {attrs}")
+            return 1
     if expect_backend and backend != expect_backend:
         print(f"RasDss backend is {backend!r}, expected {expect_backend!r}")
         return 1
@@ -128,7 +147,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     engine = sub.add_parser("engine")
-    engine.add_argument("--expect-backend", choices=("java", "native", "shadow"))
+    engine.add_argument("--expect-backend", choices=("auto", "java", "native", "shadow"))
     junit = sub.add_parser("junit")
     junit.add_argument("report")
     junit.add_argument("--min-passed", type=int, default=600)

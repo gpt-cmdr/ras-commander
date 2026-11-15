@@ -6,7 +6,8 @@ name: Native DSS engine
 #
 # default: no RAS_COMMANDER_DSS_BACKEND, a plain install (FAST-DSS is a core
 #   dependency) on the latest NumPy, no Java. The automatic default must resolve
-#   to "native" (guard: engine --expect-backend native).
+#   to "native" with an engine release >= 0.1.3 and to "java" with 0.1.2, the release
+#   PyPI has until 0.1.3 is published (guard: engine --expect-backend auto).
 # native: RAS_COMMANDER_DSS_BACKEND=native with the dss-native extra, no Java. The
 #   guard step fails the job if the engine is not the one from PyPI or if the
 #   native wrapper modules did not run (scripts/ci/native_dss_ci_guard.py).
@@ -124,7 +125,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.backend }}" = "default" ]; then
-            python scripts/ci/native_dss_ci_guard.py engine --expect-backend native
+            python scripts/ci/native_dss_ci_guard.py engine --expect-backend auto
           else
             python scripts/ci/native_dss_ci_guard.py engine
           fi

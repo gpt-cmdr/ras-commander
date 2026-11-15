@@ -64,6 +64,15 @@ def no_jvm(monkeypatch):
     monkeypatch.setattr(RasDss, "_configure_jvm", staticmethod(_raise))
 
 
+@pytest.fixture(autouse=True)
+def released_engine(monkeypatch):
+    """The automatic default needs engine __version__ >= 0.1.3 (PR #863 review 2); 0.1.3
+    is not on PyPI yet, so report it here. The engine's behaviour is unchanged."""
+    import ras_commander_fast_dss as dc
+
+    monkeypatch.setattr(dc, "__version__", "0.1.3", raising=False)
+
+
 def _require_ready():
     ready, reason = _backend.native_default_ready()
     if not ready:

@@ -36,6 +36,7 @@ import importlib
 import inspect
 import logging
 import os
+import re
 import threading
 from collections import Counter, deque
 from collections.abc import Mapping
@@ -123,35 +124,67 @@ def explicit_backend(attribute_value: Any) -> Optional[str]:
     return None if name == AUTO else name
 
 
+#: Lowest engine release the automatic default selects: 0.1.3 reads and writes DSS6
+#: calendar (yearly) times as HEC does (engine gaps EG2/EG3 of the native-default audit).
+MIN_DEFAULT_ENGINE_VERSION = (0, 1, 3)
+#: A final release: ``X.Y.Z``, optionally ``.postN``. Pre-releases (``a``, ``b``, ``rc``),
+#: development and local versions do not qualify.
+_RELEASE_VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:\.post\d+)?")
+
+
+def engine_release(dc: Any) -> Tuple[Optional[Tuple[int, int, int]], str]:
+    """``(release, text)`` from the engine's public ``__version__``.
+
+    ``release`` is ``(major, minor, patch)`` for a final release and None when the
+    attribute is missing, not a string, or not a final release; ``text`` describes it for
+    messages. The distribution metadata is not consulted: an engine qualifies for the
+    automatic default only by the version it reports itself.
+    """
+    version = getattr(dc, "__version__", None)
+    if version is None:
+        try:
+            import importlib.metadata as metadata
+
+            installed = f" (installed distribution {metadata.version('ras-commander-fast-dss')})"
+        except Exception:
+            installed = ""
+        return None, f"ras-commander-fast-dss{installed} reports no __version__"
+    if not isinstance(version, str):
+        return None, f"ras-commander-fast-dss reports a non-string __version__ ({version!r})"
+    match = _RELEASE_VERSION.fullmatch(version.strip())
+    if not match:
+        return None, f"ras-commander-fast-dss __version__ {version!r} is not a final release"
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3))),         f"ras-commander-fast-dss {version.strip()}"
+
+
 def native_default_ready() -> Tuple[bool, str]:
     """Whether ``auto`` resolves to ``native``, and why. Never raises.
 
-    Ready means: ``ras_commander_fast_dss`` imports, provides the writer API
-    (``native_writes_available``) and lists every name in ``DEFAULT_REQUIRED_FEATURES``.
-    A capability check, not a version pin.
+    Ready means: ``ras_commander_fast_dss`` imports, reports a final-release
+    ``__version__`` of at least ``MIN_DEFAULT_ENGINE_VERSION`` (0.1.3), provides the
+    writer API (``native_writes_available``) and lists every name in
+    ``DEFAULT_REQUIRED_FEATURES``. An explicit ``native`` is not subject to the version
+    requirement: that choice stays the caller's.
     """
     dc = _maybe_native()
     if dc is None:
         return False, "ras-commander-fast-dss is not installed or failed to load"
-    version = _engine_version(dc)
+    try:
+        release, version = engine_release(dc)
+    except Exception as exc:  # never raise
+        return False, f"ras-commander-fast-dss version could not be read ({type(exc).__name__})"
+    needed = ".".join(str(part) for part in MIN_DEFAULT_ENGINE_VERSION)
+    if release is None:
+        return False, f"{version}; the automatic default needs {needed} or later"
+    if release < MIN_DEFAULT_ENGINE_VERSION:
+        return False, f"{version} is older than {needed}, which the automatic default needs"
     if not native_writes_available():
-        return False, f"ras-commander-fast-dss {version} lacks the writer API"
+        return False, f"{version} lacks the writer API"
     missing = [name for name in DEFAULT_REQUIRED_FEATURES if not native_feature(name)]
     if missing:
-        return False, f"ras-commander-fast-dss {version} lacks {', '.join(missing)}"
-    return True, f"ras-commander-fast-dss {version}"
+        return False, f"{version} lacks {', '.join(missing)}"
+    return True, version
 
-
-def _engine_version(dc: Any) -> str:
-    version = getattr(dc, "__version__", None)
-    if not isinstance(version, str) or not version:
-        try:
-            import importlib.metadata as metadata
-
-            version = metadata.version("ras-commander-fast-dss")
-        except Exception:
-            version = "(unknown version)"
-    return str(version)
 
 
 def default_backend(announce: bool = True) -> Tuple[str, str]:
