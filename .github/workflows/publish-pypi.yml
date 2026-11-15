@@ -12,18 +12,21 @@ name: Publish PyPI Release
 #              else; this job validates nothing.
 #   validate - a fresh job that runs no package code. It checks the built files with the release
 #              gate (.github/scripts/release_version_gate.py) taken from the DEFAULT BRANCH for
-#              tag pushes and dispatches, never from the tag or the build job. Version files are
+#              published releases and dispatches, never from the tag or the build job. Version files are
 #              read from a sparse checkout, not executed. Then: tag == declared version and
 #              __version__, Name and Version inside the wheel and sdist, twine check --strict.
 #              On a release run it re-uploads exactly the files it checked.
-#   publish  - publishes only the files `validate` checked, only for a vMAJOR.MINOR.PATCH tag push
-#              or a manual dispatch, only when the repository variable PUBLISH_PYPI is 'true',
+#   publish  - publishes only the files `validate` checked, only for a published GitHub release
+#              (vMAJOR.MINOR.PATCH tag) or a manual dispatch, only when the repository variable PUBLISH_PYPI is 'true',
 #              and only after the `pypi` environment's required reviewers approve.
 #
-# What remains: on a tag push GitHub runs THIS FILE as it exists at the tagged commit, so someone
-# who can push a release tag can also change this workflow, including the validate job. The
-# protected `pypi` environment (required reviewers, deployment rules for tag v* and branch main)
-# is therefore the real final gate. Reviewers should approve only tags they expect, from main.
+# Trigger: publishing a GitHub release (release: published) starts a release run. A tag push
+# alone starts nothing. For a release event GitHub runs THIS FILE as it exists at the release's
+# tagged commit, so someone who can publish a release can also change this workflow, including
+# the validate job. The protected `pypi` environment (the maintainer as required reviewer,
+# deployment policy for tags v*) is therefore the real final gate. Reviewers should approve only
+# releases they expect, from main. A manual dispatch must be started from the release tag
+# (Use workflow from: the vX.Y.Z tag), or the `v*` tag deployment policy rejects `publish`.
 #
 # Pull requests that touch packaging run plan, build and validate as a dry run for two targets
 # and never publish: `head` (the pull request against its declared version) and `latest-tag`
@@ -33,15 +36,15 @@ name: Publish PyPI Release
 #
 # Runners: plan, build and validate run on CLB's self-hosted Linux runners (clb-ci-linux) for
 # every event, with no GitHub-hosted fallback; pull requests from forks skip them. Nothing runs
-# on a branch push: only a v* tag push, a manual dispatch or a pull request that touches
+# on any push: only a published release, a manual dispatch or a pull request that touches
 # packaging starts this workflow. The only GitHub-hosted job is `publish`, because
 # pypa/gh-action-pypi-publish is a Docker container action and the CLB runners have no Docker.
 # It declares the protected `pypi` environment, so no hosted runner starts until a required
 # reviewer approves the deployment, and it never runs for pull requests.
 
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -81,7 +84,7 @@ jobs:
         id: resolve
         env:
           EVENT: ${{ github.event_name }}
-          PUSHED_TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || '' }}
+          RELEASE_EVENT_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
           INPUT_TAG: ${{ inputs.tag }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
@@ -93,7 +96,7 @@ jobs:
                           | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
             [[ "$latest_tag" =~ $tag_re ]] || { echo "::error::no existing vMAJOR.MINOR.PATCH tag found"; exit 1; }
           else
-            release_tag="${PUSHED_TAG:-$INPUT_TAG}"
+            release_tag="${RELEASE_EVENT_TAG:-$INPUT_TAG}"
             [[ "$release_tag" =~ $tag_re ]] || { echo "::error::'$release_tag' is not a vMAJOR.MINOR.PATCH tag"; exit 1; }
           fi
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
@@ -158,7 +161,7 @@ jobs:
     env:
       TARGET_TAG: ${{ matrix.target == 'release' && needs.plan.outputs.release_tag || (matrix.target == 'latest-tag' && needs.plan.outputs.latest_tag || '') }}
     steps:
-      # The gate: from the default branch for tag pushes and dispatches (independent of the tag
+      # The gate: from the default branch for published releases and dispatches (independent of the tag
       # and of the build job); from the pull request itself for pull-request dry runs.
       - name: Check out the release gate (default branch)
         if: ${{ github.event_name != 'pull_request' }}
@@ -247,7 +250,7 @@ jobs:
   publish:
     name: Publish to PyPI (trusted publishing)
     needs: validate
-    if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
+    if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'release') }}
     # GitHub-hosted (Docker action). The `pypi` environment's required reviewers approve the
     # deployment before this runner is requested.
     runs-on: ubuntu-latest
