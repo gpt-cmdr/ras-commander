@@ -14,9 +14,12 @@ name: Native DSS engine
 # shadow (Windows only, see the matrix): adds a JDK, pyjnius and HEC Monolith
 #   (downloaded by ras-commander from HEC's public Nexus and Maven Central before
 #   the tests, cached between runs), so the Java-path comparisons run too.
-# macOS (default leg, non-blocking): ras-commander-fast-dss publishes macOS wheels
-#   from 0.1.3. Until a 0.1.3 macOS wheel is on PyPI the leg records a notice and
-#   skips its steps; it never builds the Rust source distribution.
+#
+# Every job runs on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). There is no GitHub-hosted fallback: pull requests from forks
+# skip the job (shown as skipped), and a maintainer runs the checks from a branch
+# in this repository instead. The GitHub-hosted macOS default leg is the separate,
+# dispatch-only native-dss-macos.yml (off by default; maintainer approval per run).
 
 on:
   pull_request:
@@ -30,24 +33,33 @@ permissions:
 jobs:
   native-dss:
     name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
-    runs-on: ${{ matrix.os }}
-    # macOS is non-blocking until ras-commander-fast-dss 0.1.3 macOS wheels are on PyPI.
-    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        backend: [default, native, shadow]
+        # Explicit rows with literal runner labels (no axes, no exclude), so the
+        # runner for every job is statically verifiable.
+        # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
+        # aborts intermittently in DSS6 time-series writes ("Substring out of
+        # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
+        # Shadow runs on Windows; Linux runs the native leg.
         include:
-          - os: macos-latest
+          - os: linux
             backend: default
-        exclude:
-          # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
-          # aborts intermittently in DSS6 time-series writes ("Substring out of
-          # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
-          # Shadow runs on Windows; Linux runs the native leg.
-          - os: ubuntu-latest
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+          - os: windows
+            backend: default
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: linux
+            backend: native
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+          - os: windows
+            backend: native
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: windows
             backend: shadow
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
     env:
       CI: '1'
       PYTHONUTF8: '1'
@@ -60,23 +72,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Check for a macOS ras-commander-fast-dss wheel
-        id: wheel
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          if python -m pip download --only-binary :all: --no-deps -d "$RUNNER_TEMP/fastdss" \
-              "ras-commander-fast-dss>=0.1.3,<0.2"; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=macOS native DSS leg skipped::no ras-commander-fast-dss>=0.1.3,<0.2 macOS wheel on PyPI yet (first expected with 0.1.3)."
-          fi
-
       - name: Install the library (default leg)
-        if: matrix.backend == 'default' && steps.wheel.outputs.available == 'true'
+        if: matrix.backend == 'default'
         shell: bash
         # A plain install: FAST-DSS comes from the core dependencies, NumPy is unpinned.
         run: >-
@@ -86,7 +83,7 @@ jobs:
           xarray rasterio scipy tqdm psutil
 
       - name: Check NumPy 2 in the default leg
-        if: matrix.backend == 'default' && steps.wheel.outputs.available == 'true'
+        if: matrix.backend == 'default'
         run: python -c "import numpy; print('numpy', numpy.__version__); assert int(numpy.__version__.split('.')[0]) >= 2"
 
       - name: Install the library with the dss-native extra
@@ -121,7 +118,6 @@ jobs:
         run: python -c "from ras_commander.dss._hec_monolith import HecMonolithDownloader as D; d = D(); d.install(); assert d.is_installed(); print(d.get_info())"
 
       - name: Check the installed engine
-        if: steps.wheel.outputs.available == 'true'
         shell: bash
         run: |
           if [ "${{ matrix.backend }}" = "default" ]; then
@@ -131,7 +127,6 @@ jobs:
           fi
 
       - name: Run the DSS and wrapper tests
-        if: steps.wheel.outputs.available == 'true'
         shell: bash
         run: |
           files=$(ls tests/test_*dss*.py tests/test_hec_monolith_logging.py \
@@ -141,7 +136,7 @@ jobs:
             --basetemp="$RUNNER_TEMP/pytest-dss" --junitxml="$RUNNER_TEMP/native-dss.xml"
 
       - name: Fail if the native tests did not run
-        if: always() && steps.wheel.outputs.available == 'true'
+        if: always()
         shell: bash
         run: |
           extra=""

@@ -16,7 +16,10 @@ concurrency:
 
 jobs:
   notify:
-    runs-on: ubuntu-latest
+    # CLB self-hosted Linux runner, no GitHub-hosted fallback. The runner image has
+    # curl and jq but not the gh CLI, so the dispatch is a plain REST call.
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
+    timeout-minutes: 5
     steps:
       - name: Notify the plugin repository of library changes
         env:
@@ -27,6 +30,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         shell: bash
         run: |
+          set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::Set PLUGIN_DISPATCH_TOKEN with Contents: write on gpt-cmdr/ras-commander-plugin."
             exit 1
@@ -35,8 +39,16 @@ jobs:
           if [ "$EVENT_NAME" = release ]; then
             event_type=library-release
           fi
-          gh api --method POST repos/gpt-cmdr/ras-commander-plugin/dispatches \
-            -f "event_type=$event_type" \
-            -f "client_payload[repository]=$LIBRARY_REPOSITORY" \
-            -f "client_payload[commit]=$LIBRARY_COMMIT" \
-            -f "client_payload[tag]=$RELEASE_TAG"
+          payload=$(jq -n \
+            --arg event_type "$event_type" \
+            --arg repository "$LIBRARY_REPOSITORY" \
+            --arg commit "$LIBRARY_COMMIT" \
+            --arg tag "$RELEASE_TAG" \
+            '{event_type: $event_type, client_payload: {repository: $repository, commit: $commit, tag: $tag}}')
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$payload" \
+            https://api.github.com/repos/gpt-cmdr/ras-commander-plugin/dispatches

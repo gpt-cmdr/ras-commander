@@ -72,8 +72,10 @@ alone does not identify a development checkout.
 - Notebooks 310, 312, 313 and 318 print paths relative to `examples/` (or file names)
   and were re-executed on the native default; `ras_commander.usgs` logs the geometry HDF
   file name at INFO and its full path at DEBUG.
-- The native DSS CI job gains a default leg (no backend set, NumPy 2) and a
-  non-blocking macOS leg that runs once a 0.1.3 macOS wheel is on PyPI.
+- The native DSS CI job (`native-dss.yml`, CLB self-hosted runners) gains a default
+  leg on Linux and Windows (no backend set, NumPy 2). A GitHub-hosted macOS default leg
+  is a separate dispatch-only workflow, `native-dss-macos.yml` (`include_macos` off by
+  default; maintainer approval per run); it skips until a 0.1.3 macOS wheel is on PyPI.
 - **Corrected notebook 731's DSS export.** Its earlier grids, from HEC-Vortex or the
   native importer's `align="vortex"`, had 7 corner cells missing in every record. They
   were not NOAA NoData: they were corners of an unsnapped rectangular output lattice
