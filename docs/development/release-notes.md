@@ -45,6 +45,18 @@ alone does not identify a development checkout.
   for DSS6. HEC Monolith used to store such values at other times and report success.
   The message names the value, where HEC would store it and what works. See
   [Time placement](../user-guide/dss-native-backend.md#time-placement).
+- **Behaviour change for Java-only installs: calendar times need the engine.** The time
+  check of `write_timeseries` and `write_timeseries_from_dataframe` fails closed: when the
+  placement of week, month, semi-month, tri-month or year times cannot be qualified (no
+  ras-commander-fast-dss, an engine too old to probe, or a failed probe), the write
+  raises `DssCapabilityError` before the file is touched, naming the cause and the fix
+  (install `ras-commander-fast-dss>=0.1.3`). Pass `allow_unverified_calendar_times=True`
+  to write such times unchecked, with a WARNING. Minute, hour and day intervals and
+  irregular series are unaffected.
+- **The automatic default needs engine 0.1.3.** `auto` selects `native` only when the
+  engine's `__version__` is a final release of at least 0.1.3; with 0.1.2 (no
+  `__version__`) it selects `java` and logs why. Explicit `native` and `shadow` are
+  unaffected.
 - **ras-commander-fast-dss 0.1.2 misdates some DSS6 yearly data** (for example a
   HEC-written 2020-06-15 reads as 2020-06-14) and refuses to write those times; the
   native default ships with 0.1.3, which reads and writes them as HEC does. Until then,

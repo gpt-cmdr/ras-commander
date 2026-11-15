@@ -108,10 +108,12 @@ $env:RAS_COMMANDER_DSS_BACKEND = "java"   # keep the Java backend for a whole pr
 ```
 
 **How `auto` resolves.** `auto` selects `native` when `ras_commander_fast_dss`
-imports, provides the writers and lists the features `grid_srs_monolith_parity`,
-`write_sync_modes` and `repair_copy_out` in `FEATURES` (0.1.2 and later do).
-Otherwise it selects `java`. The first DSS call logs one INFO line, for example
-`DSS backend: native (ras-commander-fast-dss 0.1.2)` or
+imports, reports a `__version__` that is a final release of at least 0.1.3, provides
+the writers and lists the features `grid_srs_monolith_parity`, `write_sync_modes` and
+`repair_copy_out` in `FEATURES`. Otherwise it selects `java`; with 0.1.2 installed
+(no `__version__`), `auto` selects `java`. An explicit `native` or `shadow` is not
+subject to the version requirement. The first DSS call logs one INFO line, for example
+`DSS backend: native (ras-commander-fast-dss 0.1.3)` or
 `DSS backend: java (ras-commander-fast-dss is not installed or failed to load)`.
 A broken wheel counts as absent. A call that runs on `native` never falls back
 to Java, whatever it raises.

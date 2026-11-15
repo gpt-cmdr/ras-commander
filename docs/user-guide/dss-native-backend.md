@@ -9,7 +9,7 @@ the engine is installed and ready, and `java` elsewhere.
 
 !!! warning "Behaviour change: native is the default"
     From this release `RasDss.backend` defaults to `auto`, which selects `native`
-    when `ras-commander-fast-dss` is installed (it is a default dependency on
+    when `ras-commander-fast-dss` 0.1.3 or later is installed (it is a default dependency on
     Windows x64, Linux x86_64/aarch64 and macOS). Results differ from the Java
     path only as listed on this page: missing values are `NaN`, `start_date` and
     `end_date` are honored, errors are typed, and some input the Java path
@@ -53,18 +53,27 @@ An unknown name raises `ValueError`.
 
 ### How `auto` resolves {#auto-default}
 
-`auto` selects `native` when `ras_commander_fast_dss` imports, provides the
-writers (`create`, `write_timeseries`, `write_paired_data`, `write_grid`) and
-lists `grid_srs_monolith_parity`, `write_sync_modes` and `repair_copy_out` in
-`FEATURES`. ras-commander-fast-dss 0.1.2 and later do. Otherwise `auto` selects
-`java`: the engine is not installed (Windows ARM64, PyPy, or an install without
-dependencies), fails to load, or is an older build. This is a capability check,
-not a version pin.
+`auto` selects `native` when `ras_commander_fast_dss` imports, reports a
+`__version__` that is a final release of at least **0.1.3**, provides the writers
+(`create`, `write_timeseries`, `write_paired_data`, `write_grid`) and lists
+`grid_srs_monolith_parity`, `write_sync_modes` and `repair_copy_out` in `FEATURES`.
+Otherwise `auto` selects `java`:
 
-The first DSS call logs the result once at INFO, with the reason:
+- the engine is not installed (Windows ARM64, PyPy, or an install without dependencies)
+  or fails to load;
+- its `__version__` is missing, unparsable, a pre-release, development or local build, or
+  older than 0.1.3. ras-commander-fast-dss 0.1.2 reports no `__version__` and misdates some
+  DSS6 yearly data (see [Time placement](#time-placement)), so with 0.1.2 installed `auto`
+  selects `java`;
+- the engine lacks the writers or a required feature.
+
+An explicit `RasDss.backend = "native"` (or `"shadow"`) is not subject to the version
+requirement: that choice stays the caller's. The first DSS call logs the result once at
+INFO, with the reason:
 
 ```text
-DSS backend: native (ras-commander-fast-dss 0.1.2)
+DSS backend: native (ras-commander-fast-dss 0.1.3)
+DSS backend: java (ras-commander-fast-dss (installed distribution 0.1.2) reports no __version__; the automatic default needs 0.1.3 or later). Set RasDss.backend = ...
 DSS backend: java (ras-commander-fast-dss is not installed or failed to load). Set RasDss.backend = ...
 ```
 
@@ -607,10 +616,29 @@ placement to DSS6 files too, it refuses some multi-value DSS6 offset series that
 DSS6 library would keep (127 of the 11,992 oracle cases below, all DSS6); the message
 says so.
 
-Without the engine (for example under an explicit `java` on a platform with no wheel),
-the calendar part is skipped with one WARNING; fixed intervals are always checked. The
-calendar check imports the engine when it is installed, also under an explicit `java`;
-a broken wheel only skips it, with the same warning.
+**The calendar check fails closed.** When the placement of week, month, semi-month,
+tri-month or year times cannot be qualified, the write is refused with
+`DssCapabilityError` before the target file is created or changed. This happens when the
+engine is not installed or fails to load, is too old to probe (no `times=` writer), or
+the probe itself fails (for example its temporary file cannot be written). The message
+names the cause and the fix: install `ras-commander-fast-dss>=0.1.3`. The calendar check
+imports the engine when it is installed, also under an explicit `java`.
+
+**Opt-out.** Pass `allow_unverified_calendar_times=True` to `write_timeseries` or
+`write_timeseries_from_dataframe` to write such times without the check. A WARNING
+names the cause, and HEC-DSS may store values at other times than given (with Java
+selected and no engine, a `1MON` value at 2020-02-29 is stored at 2020-03-01). The
+opt-out applies only when the check cannot run: with a working engine, moved times are
+still refused, and the DSS6 leap-year rule never needs the engine.
+
+Minute, hour and day intervals and irregular (`IR-`) series need no engine and are not
+affected.
+
+!!! warning "Behaviour change for Java-only installs"
+    Without ras-commander-fast-dss (Java-only installs, Windows ARM64, PyPy), writes of
+    week, month, semi-month, tri-month and year series now raise `DssCapabilityError`
+    instead of being written unchecked. Install `ras-commander-fast-dss>=0.1.3`, or pass
+    `allow_unverified_calendar_times=True` to accept the risk.
 
 **Evidence.** The rules and their HEC Monolith 3.3.27 oracle come from hms-commander,
 which adopted the same check: 11,992 multi-value and 7,774 single-value cases written
