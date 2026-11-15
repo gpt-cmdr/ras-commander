@@ -1,7 +1,7 @@
 name: Optional FIM engine
 
-# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
-# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
+# Trusted jobs use local CLB runners only; external fork jobs are skipped.
+# There is no GitHub-hosted fallback.
 on:
   pull_request:
     paths:
@@ -47,6 +47,7 @@ permissions:
 
 jobs:
   python-interface:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -56,7 +57,7 @@ jobs:
             self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
           - os: windows-latest
             self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('["{0}"]', matrix.os) || matrix.self_hosted || format('["{0}"]', matrix.os)) }}
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

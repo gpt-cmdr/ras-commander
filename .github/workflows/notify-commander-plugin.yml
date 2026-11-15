@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   notify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     steps:
       - name: Notify the plugin repository of library changes
         env:

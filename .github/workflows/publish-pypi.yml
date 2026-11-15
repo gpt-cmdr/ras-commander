@@ -61,8 +61,9 @@ env:
 
 jobs:
   plan:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Resolve the release tag
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     outputs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       latest_tag: ${{ steps.resolve.outputs.latest_tag }}
@@ -91,9 +92,10 @@ jobs:
           echo "release_tag=${release_tag:-<none>} latest_tag=${latest_tag:-<none>}"
 
   build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Build distributions (${{ matrix.target }})
     needs: plan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     strategy:
       fail-fast: false
       matrix:
@@ -138,9 +140,10 @@ jobs:
           retention-days: 3
 
   validate:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Validate distributions (${{ matrix.target }})
     needs: [plan, build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     strategy:
       fail-fast: false
       matrix:
@@ -237,8 +240,8 @@ jobs:
   publish:
     name: Publish to PyPI (trusted publishing)
     needs: validate
-    if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))))
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     environment:
       name: pypi
       url: https://pypi.org/project/ras-commander/

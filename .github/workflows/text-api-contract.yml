@@ -1,7 +1,7 @@
 name: Text API contract
 
-# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
-# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
+# Trusted jobs use local CLB runners only; external fork jobs are skipped.
+# There is no GitHub-hosted fallback.
 on:
   pull_request:
   push:
@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   text-api:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted", "Linux", "X64", "clb-ci-linux"]') }}
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +30,7 @@ jobs:
         run: python -m pip install -e . pytest geopandas 'shapely>=2.0' xarray requests rasterio psutil scipy tqdm nbformat
       - name: Check text API and geometry write safety
         run: >-
-          python -m pytest tests/ras_text_read_only_test.py
+          python -m pytest tests/test_ci_runner_routing.py tests/ras_text_read_only_test.py
           tests/test_geom_storage_record_preservation.py
           tests/test_geom_storage_2d_flow_area_writer.py
           tests/test_geom_storage_perimeter_serialization.py

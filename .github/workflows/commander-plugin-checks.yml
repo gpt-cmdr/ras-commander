@@ -1,6 +1,6 @@
 name: Commander plugin contracts
-# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
-# clb-ci-windows). Pull requests from forks always use GitHub-hosted runners.
+# Trusted jobs use local CLB runners only; external fork jobs are skipped.
+# There is no GitHub-hosted fallback.
 on:
   pull_request:
   push:
@@ -10,7 +10,8 @@ permissions:
   contents: read
 jobs:
   contracts:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted", "Linux", "X64", "clb-ci-linux"]') }}
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

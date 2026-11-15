@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   propose-update:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
     steps:
       - uses: actions/checkout@v4
         with:
