@@ -5,14 +5,16 @@ name: Native HDF extension
 # published wheel from PyPI and runs ras-commander's binding and fallback tests.
 # ras-commander-fast-hdf 0.5.0 is the first published API 12 build, so no engine
 # is built from source here.
-# macOS is GitHub-hosted, slow and expensive: it runs only when requested with
-# include_macos, never on pull requests. Linux and Windows run on CLB's
-# self-hosted Slurm runners; pull requests from forks use GitHub-hosted runners.
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows) with no GitHub-hosted fallback; pull requests from forks skip
+# the job. macOS arm64 (macos-15) is GitHub-hosted, slow and expensive: it runs
+# only from a manual dispatch with include_macos (off by default), and only after
+# the maintainer approves that run. Nothing automatic selects it.
 on:
   workflow_dispatch:
     inputs:
       include_macos:
-        description: "Also run on macOS"
+        description: "Also run on GitHub-hosted macOS arm64 (macos-15); needs maintainer approval"
         type: boolean
         default: false
   pull_request:
@@ -41,17 +43,14 @@ permissions:
 
 jobs:
   native:
+    name: native (${{ matrix.os }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.include_macos && '["windows-latest", "ubuntu-latest", "macos-15"]' || '["windows-latest", "ubuntu-latest"]') }}
-        include:
-          - os: ubuntu-latest
-            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
-          - os: windows-latest
-            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
-    # Fork pull requests -> GitHub-hosted matrix.os; otherwise the self-hosted labels (macOS stays hosted).
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && format('["{0}"]', matrix.os) || matrix.self_hosted || format('["{0}"]', matrix.os)) }}
+        # The macOS row exists only on a workflow_dispatch with include_macos: true.
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.include_macos && '[{"os":"windows","runner":["self-hosted","Windows","X64","clb-ci-windows"]},{"os":"linux","runner":["self-hosted","Linux","X64","clb-ci-linux"]},{"os":"macos-15","runner":["macos-15"]}]' || '[{"os":"windows","runner":["self-hosted","Windows","X64","clb-ci-windows"]},{"os":"linux","runner":["self-hosted","Linux","X64","clb-ci-linux"]}]') }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

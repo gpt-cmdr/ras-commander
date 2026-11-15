@@ -30,6 +30,14 @@ name: Publish PyPI Release
 # (the newest existing vX.Y.Z tag, built and validated exactly as a manual dispatch would). On a
 # pull request the gate comes from the pull request itself, because the pull request may be the
 # change to the gate; pull-request runs have no publish path.
+#
+# Runners: plan, build and validate run on CLB's self-hosted Linux runners (clb-ci-linux) for
+# every event, with no GitHub-hosted fallback; pull requests from forks skip them. Nothing runs
+# on a branch push: only a v* tag push, a manual dispatch or a pull request that touches
+# packaging starts this workflow. The only GitHub-hosted job is `publish`, because
+# pypa/gh-action-pypi-publish is a Docker container action and the CLB runners have no Docker.
+# It declares the protected `pypi` environment, so no hosted runner starts until a required
+# reviewer approves the deployment, and it never runs for pull requests.
 
 on:
   push:
@@ -62,7 +70,9 @@ env:
 jobs:
   plan:
     name: Resolve the release tag
-    runs-on: ubuntu-latest
+    # build, validate and publish all need this job, so a skipped fork pull request skips them too.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
     outputs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       latest_tag: ${{ steps.resolve.outputs.latest_tag }}
@@ -93,7 +103,7 @@ jobs:
   build:
     name: Build distributions (${{ matrix.target }})
     needs: plan
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
     strategy:
       fail-fast: false
       matrix:
@@ -140,7 +150,7 @@ jobs:
   validate:
     name: Validate distributions (${{ matrix.target }})
     needs: [plan, build]
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
     strategy:
       fail-fast: false
       matrix:
@@ -238,6 +248,8 @@ jobs:
     name: Publish to PyPI (trusted publishing)
     needs: validate
     if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
+    # GitHub-hosted (Docker action). The `pypi` environment's required reviewers approve the
+    # deployment before this runner is requested.
     runs-on: ubuntu-latest
     environment:
       name: pypi
