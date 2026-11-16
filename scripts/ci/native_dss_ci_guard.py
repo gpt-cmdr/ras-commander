@@ -1,13 +1,18 @@
 """CI guards for the native DSS engine job (.github/workflows/native-dss.yml).
 
-``python scripts/ci/native_dss_ci_guard.py engine``
+``python scripts/ci/native_dss_ci_guard.py engine [--expect-backend NAME]``
     Fails unless ras-commander-fast-dss is installed at 0.1.2 or later (below 0.2),
-    imports, advertises the features the wrappers use, and RasDss reports it.
+    imports, advertises the features the wrappers use, and RasDss reports it. With
+    --expect-backend, RasDss.get_backend() must also return NAME. ``auto`` (the default
+    leg) expects what the automatic default must select: ``native`` when the engine's
+    own ``__version__`` is a release of at least 0.1.3, otherwise ``java`` (0.1.2 is
+    installable but does not qualify).
 
 ``python scripts/ci/native_dss_ci_guard.py junit REPORT.xml [--min-passed N] [--java]``
     Fails unless the pytest JUnit report shows at least N passed tests in total, no
     failures or errors, and every native-engine module in REQUIRED_MODULES ran: it
-    has passed tests and none of its tests were skipped. A job whose engine is
+    has passed tests and none of its tests were skipped. Expected failures
+    (``pytest.xfail``, for documented engine gaps) are counted apart, not as skips. A job whose engine is
     missing, or whose native tests all skip, cannot pass this check. With --java,
     the Java-bridge modules in JAVA_MODULES must also have run (shadow leg).
 """
@@ -34,6 +39,8 @@ REQUIRED_MODULES = (
 JAVA_MODULES = (
     "tests.test_rasdss_native_parity",
     "tests.test_rasdss_native_writes",
+    "tests.test_rasdss_native_default",
+    "tests.test_rasdss_write_times",
 )
 
 #: Skip reasons that are intended on some platforms and do not make a required module
@@ -50,13 +57,21 @@ def _version_tuple(text: str):
     return tuple(int(part) for part in text.split(".")[:3])
 
 
-def check_engine() -> int:
+#: Installed distributions the job accepts: 0.1.2 until 0.1.3 is on PyPI (the job cannot
+#: install 0.1.3 yet). Accepting 0.1.2 for installation does not make it qualify for the
+#: automatic default: that needs the engine's own __version__ >= 0.1.3 (see --expect-backend).
+INSTALLABLE = ((0, 1, 2), (0, 2, 0))
+
+
+def check_engine(expect_backend=None) -> int:
     version = importlib.metadata.version("ras-commander-fast-dss")
-    if not (0, 1, 2) <= _version_tuple(version) < (0, 2, 0):
+    low, high = INSTALLABLE
+    if not low <= _version_tuple(version) < high:
         print(f"ras-commander-fast-dss {version} is outside >=0.1.2,<0.2")
         return 1
     import ras_commander_fast_dss as engine
     from ras_commander import RasDss
+    from ras_commander.dss import _backend
 
     missing = [name for name in FEATURES if name not in engine.FEATURES]
     if missing:
@@ -66,8 +81,22 @@ def check_engine() -> int:
     if not (attrs["native_installed"] and attrs["native_writes_available"]):
         print(f"RasDss does not see the engine: {attrs}")
         return 1
+    backend = RasDss.get_backend()
+    release, release_text = _backend.engine_release(engine)
+    qualifies = release is not None and release >= _backend.MIN_DEFAULT_ENGINE_VERSION
     print(f"ras-commander-fast-dss {version}; {len(engine.FEATURES)} features; "
-          f"RasDss backend {RasDss.get_backend()}")
+          f"{release_text}; qualifies for the automatic default: {qualifies}; "
+          f"RasDss backend {backend} ({attrs['backend_source']}: "
+          f"{attrs['default_backend_reason']})")
+    if expect_backend == "auto":
+        # The automatic default: native only with an engine release >= 0.1.3.
+        expect_backend = "native" if qualifies else "java"
+        if attrs["backend_source"] != "auto":
+            print(f"--expect-backend auto needs no backend override; got {attrs}")
+            return 1
+    if expect_backend and backend != expect_backend:
+        print(f"RasDss backend is {backend!r}, expected {expect_backend!r}")
+        return 1
     return 0
 
 
@@ -83,6 +112,9 @@ def check_junit(path: str, min_passed: int, java: bool) -> int:
         skipped = case.find("skipped")
         if case.find("failure") is not None or case.find("error") is not None:
             state = "failed"
+        elif skipped is not None and skipped.get("type") == "pytest.xfail":
+            # A declared expected failure (a documented engine gap), not a skipped test.
+            state = "xfailed"
         elif skipped is not None:
             reason = (skipped.get("message") or "") + (skipped.text or "")
             state = "platform_skip" if any(r in reason for r in ALLOWED_SKIP_REASONS) else "skipped"
@@ -114,14 +146,15 @@ def check_junit(path: str, min_passed: int, java: bool) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("engine")
+    engine = sub.add_parser("engine")
+    engine.add_argument("--expect-backend", choices=("auto", "java", "native", "shadow"))
     junit = sub.add_parser("junit")
     junit.add_argument("report")
     junit.add_argument("--min-passed", type=int, default=600)
     junit.add_argument("--java", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "engine":
-        return check_engine()
+        return check_engine(args.expect_backend)
     return check_junit(args.report, args.min_passed, args.java)
 
 

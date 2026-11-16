@@ -1,10 +1,27 @@
 # DSS Read and Write Backends (Java, Native, Shadow)
 
 `RasDss` reads and writes DSS files through one of three backends. The
-default in this release is still `java`. The `native` backend reads and writes
-DSS6 and DSS7 files through the optional `ras-commander-fast-dss` package (a pure-Rust
-engine) and never starts a JVM or downloads HEC Monolith. `shadow` runs both
-and logs every difference.
+`native` backend reads and writes DSS6 and DSS7 files through the
+`ras-commander-fast-dss` package (a pure-Rust engine) and never starts a JVM or
+downloads HEC Monolith. `java` uses HEC Monolith through pyjnius. `shadow` runs
+both and logs every difference. The default, `auto`, selects `native` wherever
+the engine is installed and ready, and `java` elsewhere.
+
+!!! warning "Behaviour change: native is the default"
+    From this release `RasDss.backend` defaults to `auto`, which selects `native`
+    when `ras-commander-fast-dss` 0.1.3 or later is installed (it is a default dependency on
+    Windows x64, Linux x86_64/aarch64 and, with the macOS wheels planned starting with
+    0.1.3, macOS; 0.1.3 is not yet on PyPI). Results differ from the Java
+    path only as listed on this page: missing values are `NaN`, `start_date` and
+    `end_date` are honored, errors are typed, and some input the Java path
+    truncated or stored unreadably is refused. To keep the Java backend:
+
+    ```python
+    RasDss.backend = "java"
+    ```
+
+    or set the environment variable `RAS_COMMANDER_DSS_BACKEND=java`. The Java
+    backend needs `pip install "ras-commander[dss]"` (pyjnius) and Java 8+.
 
 This page is the migration note for the native backend: it lists every
 intended difference from the Java path.
@@ -14,8 +31,8 @@ intended difference from the Java path.
 ```python
 from ras_commander import RasDss
 
-RasDss.backend = "native"     # "java" (default) | "native" | "shadow"
-print(RasDss.get_backend())   # backend the next read will use
+print(RasDss.get_backend())   # backend the next call will use ("native" or "java" under auto)
+RasDss.backend = "java"       # "auto" (default) | "java" | "native" | "shadow"
 ```
 
 The environment variable `RAS_COMMANDER_DSS_BACKEND` overrides
@@ -23,39 +40,71 @@ The environment variable `RAS_COMMANDER_DSS_BACKEND` overrides
 without changing code:
 
 ```powershell
-$env:RAS_COMMANDER_DSS_BACKEND = "native"
+$env:RAS_COMMANDER_DSS_BACKEND = "java"
 ```
 
 An unknown name raises `ValueError`.
 
 | Backend | Reads through | Requires | Returns |
 |---|---|---|---|
-| `java` | HEC Monolith via pyjnius | Java 8+, pyjnius, Monolith (auto-downloaded) | Java result (unchanged behavior) |
+| `auto` (default) | `native` when the engine is ready, otherwise `java` | as the resolved backend | as the resolved backend |
+| `java` | HEC Monolith via pyjnius | Java 8+, pyjnius, Monolith (auto-downloaded) | Java result |
 | `native` | ras-commander-fast-dss | `ras-commander-fast-dss` | Native result; no JVM |
 | `shadow` | both | both | Native result; Java result compared and logged |
 
+### How `auto` resolves {#auto-default}
+
+`auto` selects `native` when `ras_commander_fast_dss` imports, reports a
+`__version__` that is a final release of at least **0.1.3**, provides the writers
+(`create`, `write_timeseries`, `write_paired_data`, `write_grid`) and lists
+`grid_srs_monolith_parity`, `write_sync_modes` and `repair_copy_out` in `FEATURES`.
+Otherwise `auto` selects `java`:
+
+- the engine is not installed (Windows ARM64, PyPy, or an install without dependencies)
+  or fails to load;
+- its `__version__` is missing, unparsable, a pre-release, development or local build, or
+  older than 0.1.3. ras-commander-fast-dss 0.1.2 reports no `__version__` and misdates some
+  DSS6 yearly data (see [Time placement](#time-placement)), so with 0.1.2 installed `auto`
+  selects `java`;
+- the engine lacks the writers or a required feature.
+
+An explicit `RasDss.backend = "native"` (or `"shadow"`) is not subject to the version
+requirement: that choice stays the caller's. The first DSS call logs the result once at
+INFO, with the reason:
+
+```text
+DSS backend: native (ras-commander-fast-dss 0.1.3)
+DSS backend: java (ras-commander-fast-dss (installed distribution 0.1.2) reports no __version__; the automatic default needs 0.1.3 or later). Set RasDss.backend = ...
+DSS backend: java (ras-commander-fast-dss is not installed or failed to load). Set RasDss.backend = ...
+```
+
+`RasDss.get_capabilities().attrs` reports `requested_backend` (with `auto`
+resolved), `backend_source` (`"auto"` or `"explicit"`) and
+`default_backend_reason`. A call that runs on `native` never falls back to Java,
+whatever it raises; the differences below apply to every call that `auto` sends
+to `native`. `RasDss.shutdown_jvm()` is a silent no-op under `auto`.
+
 ## Installing ras-commander-fast-dss
 
-`ras-commander-fast-dss` (import name `ras_commander_fast_dss`) is the optional
-dependency for the native backend. The current release is 0.1.2
+`ras-commander-fast-dss` (import name `ras_commander_fast_dss`) is the engine of
+the native backend and a core dependency of ras-commander. The current release is 0.1.2
 ([pypi.org/project/ras-commander-fast-dss](https://pypi.org/project/ras-commander-fast-dss/);
 source: [gpt-cmdr/ras-commander-fast-dss](https://github.com/gpt-cmdr/ras-commander-fast-dss)).
 
 ```bash
-pip install ras-commander-fast-dss
-# or, with the rest of the DSS stack:
-pip install "ras-commander[dss]"
+pip install ras-commander             # includes ras-commander-fast-dss where wheels exist
+pip install "ras-commander[dss]"      # adds pyjnius for the java and shadow backends
 ```
 
-The `dss`, `dss-native` and `all` extras request `ras-commander-fast-dss>=0.1.2,<0.2`
-on the platforms with published wheels: CPython on Windows x64 and Linux x86_64
-and aarch64 (see [Installation](../native-engine.md#dss-installation)). There are
-no macOS wheels; macOS users can build it from source with
-`pip install ras-commander-fast-dss` and a Rust toolchain. Installing it does
-not change the default backend, which stays `java`.
+`ras-commander` requests `ras-commander-fast-dss>=0.1.2,<0.2` on CPython for
+Windows x64, Linux x86_64 and aarch64, and macOS arm64 and x86_64 (macOS wheels
+are planned starting with 0.1.3, which is not yet on PyPI; see
+[Installation](../native-engine.md#dss-installation)). Elsewhere
+it is not requested and `auto` selects `java`.
 
 If `ras-commander-fast-dss` is not installed:
 
+- `backend = "auto"` (the default) selects `java` and logs why, once, at INFO.
 - `backend = "native"` raises `ImportError` with installation guidance.
 - `backend = "java"` is unaffected.
 - `backend = "shadow"` falls back to Java and logs one warning per process.
@@ -335,9 +384,9 @@ whole-dataset frame is cut to the same window first.
 
 ## Removal plan
 
-`java` stays the default for this release. `native` becomes the default after
-the shadow release. The Java read path and pyjnius are then removed (decision
-D4).
+`native` is the default (`auto`) from this release, after the shadow release.
+The Java backend stays available with `RasDss.backend = "java"`; its removal,
+with pyjnius, is a later decision (D4).
 
 ### Shadow acceptance after Java timestamp corrections
 
@@ -369,7 +418,6 @@ and all non-missing value bits.
 
 This is sampled read-contract qualification for these artifacts and runtimes,
 not a claim that every possible DSS record or native-engine version is covered.
-Java remains the default backend.
 Future engine or comparison changes require a fresh corpus run.
 
 ## Paired data on each backend
@@ -452,6 +500,12 @@ Shadow judges cells and metadata separately; diffs are prefixed `cells:` or
 | G3 | Untimed grid records: native reports no time; Java reports the header times. |
 | G4 | `metadata["number_missing"]`: Java's count against native's NaN-cell count. |
 
+A DSS6 PRECIP_2_BYTE grid stored with scale 0 and base 100 cannot be decoded: the
+Java path returns every cell as missing, and the native route raises
+`DssFormatError` ("invalid PRECIP_2_BYTE scale/base"). Earlier releases of the Java
+route wrote such records (see [Java-route fixes](#java-route-fixes)); the cells are
+lost and must be rewritten from their source.
+
 The native and Java backends were compared on every grid record of the public
 RasExamples DSS files and on synthetic grid fixtures. Cells matched bit for bit,
 and the remaining differences were limited to the classified labels above.
@@ -531,11 +585,86 @@ checks the installed package's API (`create`, `write_timeseries`,
   stores: DSS7 specified grids, PER-CUM, ZLIB, the WKT1_GDAL CRS and its name,
   and no time zone. It needs `affine` and `pyproj` but not pydsstools.
 
+### Time placement on every backend {#time-placement}
+
+HEC-DSS stores a regular series by position from its first time. HEC Monolith
+silently stored values given at other times where its own placement put them, single
+values included, and reported success. `write_timeseries` and
+`write_timeseries_from_dataframe` now check the times once, before any backend writes,
+and refuse with `ValueError` ("Refused before writing ...") anything HEC-DSS would store
+elsewhere. Nothing is written and no file is created. The rules:
+
+- **Minute, hour and day intervals** need a constant step. An offset start such as 00:15
+  under `1HOUR` is kept, as HEC keeps it, and a single value at any whole minute is kept.
+- **Week, month, semi-month, tri-month and year intervals** follow HEC-DSS's calendar
+  placement: leap years, month lengths, end-of-period stamps and the weekly decade
+  block. The series is written to a temporary DSS7 file by the ras-commander-fast-dss
+  engine and read back; every value must come back at its given time. For example, a
+  yearly series from 29 February continues on 1 March; a single `1MON` value on
+  29 February is stored on 1 March, so it is refused; a day of the month that a shorter
+  month lacks (the 29th to the 31st) is refused because HEC-DSS stores two values at one
+  time there.
+- **DSS6 yearly series** whose first time falls in a leap year after 2 March 00:00 are
+  stored one day later by HEC's DSS6 library, so they are refused for DSS6 files. The same
+  times work in a DSS7 file.
+- **Single DSS6 monthly, semi-monthly and tri-monthly values** are also qualified by a
+  DSS6 dry run, because HEC keeps exactly those the engine's DSS6 writer and reader keep.
+- **Irregular E parts** (`IR-DAY` to `IR-CENTURY`) store each value at its own time and
+  are not checked.
+
+Each message names the value, where HEC-DSS would store it, whether another DSS
+version works, and what to do instead. Because the calendar check applies HEC-DSS 7's
+placement to DSS6 files too, it refuses some multi-value DSS6 offset series that HEC's
+DSS6 library would keep (127 of the 11,992 oracle cases below, all DSS6); the message
+says so.
+
+**The calendar check fails closed.** When the placement of week, month, semi-month,
+tri-month or year times cannot be qualified, the write is refused with
+`DssCapabilityError` before the target file is created or changed. This happens when the
+engine is not installed or fails to load, is too old to probe (no `times=` writer), or
+the probe itself fails (for example its temporary file cannot be written). The message
+names the cause and the fix: install `ras-commander-fast-dss>=0.1.3`. The calendar check
+imports the engine when it is installed, also under an explicit `java`.
+
+**Opt-out.** Pass `allow_unverified_calendar_times=True` to `write_timeseries` or
+`write_timeseries_from_dataframe` to write such times without the check. A WARNING
+names the cause, and HEC-DSS may store values at other times than given (with Java
+selected and no engine, a `1MON` value at 2020-02-29 is stored at 2020-03-01). The
+opt-out applies only when the check cannot run: with a working engine, moved times are
+still refused, and the DSS6 leap-year rule never needs the engine.
+
+Minute, hour and day intervals and irregular (`IR-`) series need no engine and are not
+affected.
+
+!!! warning "Behaviour change for Java-only installs"
+    Without ras-commander-fast-dss (Java-only installs, Windows ARM64, PyPy), writes of
+    week, month, semi-month, tri-month and year series now raise `DssCapabilityError`
+    instead of being written unchecked. Install `ras-commander-fast-dss>=0.1.3`, or pass
+    `allow_unverified_calendar_times=True` to accept the risk.
+
+**Evidence.** The rules and their HEC Monolith 3.3.27 oracle come from hms-commander,
+which adopted the same check: 11,992 multi-value and 7,774 single-value cases written
+and read back by HEC Monolith (DSS6 weekly read natively, label D8), across every start
+day of 2019-2020 and the leap-year, decade-week and month-overflow boundaries. Scored
+against that oracle, RasDss's check accepts no value HEC moves (0 of 19,766) with
+ras-commander-fast-dss 0.1.2 and with the 0.1.3 candidate; the 141 refused-but-kept
+cases are all DSS6. `tests/test_rasdss_write_times.py` writes the oracle's
+representative cases on both backends and reads them back with both readers, and shows
+that HEC Monolith moves the refused cases when the check is disabled.
+
+**Engine 0.1.2 and DSS6 yearly data.** ras-commander-fast-dss 0.1.2 reads some DSS6
+yearly series that HEC wrote one day early (for example the 2020 value of
+2019-06-15 / 2020-06-15 / 2021-06-15 reads as 2020-06-14) and refuses to write those
+times. The native default is planned to ship with 0.1.3 (not yet on PyPI); its release
+candidate reads and writes them
+as HEC does (checked on the same oracle: 0 differences). Until then, keep `RasDss.backend = "java"`
+for DSS6 yearly data.
+
 ### Intended differences
 
 | # | Case | Java backend | Native backend |
 |---|---|---|---|
-| W1 | Regular E part with times that are not exactly regular | Stores the values with a time offset, shifted onto the interval | `ValueError` |
+| W1 | Regular E part with times HEC-DSS would store elsewhere (an irregular step, or a calendar time off HEC's placement, single values included) | Refused on both backends since PR #863 review 1 (Monolith used to store them shifted and report success); see [Time placement](#time-placement) | `ValueError`, before any write |
 | W1 | DSS6 time-series units or type longer than 8 characters; DSS6 grid units longer than 12 | Truncated | `ValueError` |
 | W1 | Pathname without exactly 7 slashes, or with non-ASCII characters | Stores a truncated pathname or drops the characters, or raises a Java error | `ValueError` |
 | W1 | Infinite time-series values | Stored | `ValueError` |
@@ -547,9 +676,9 @@ checks the installed package's API (`create`, `write_timeseries`,
 | W1 | Paired data: a time series or other record already at the pathname | Replaced | `DssUnsupportedRecordError`, file unchanged |
 | W1 | Paired data: `ELEV` parameter with a <code>&#124;</code> in an elevation-side unit, or (DSS7) a location record holding vertical-datum information | The unit is stored as given and truncated on DSS6; HEC's datum handling applies to the location case (not exercised here) | `DssUnsupportedRecordError`, file unchanged |
 | W1 | Grid data type `FREQ`, `PER-MIN` or `PER-MAX` | Stored with a code the readers do not name | `ValueError` |
-| W1 | DSS6 grid with `compression="NONE"` | Writes a record that ras-commander-fast-dss cannot decode (invalid PRECIP_2_BYTE scale/base) | `DssUnsupportedRecordError` |
+| W1 | DSS6 grid with `compression="NONE"` | Refused with `DssUnsupportedRecordError` from this release; earlier releases wrote a record whose cells all read as missing (invalid PRECIP_2_BYTE scale/base) | `DssUnsupportedRecordError` |
 | W1 | DSS6 PRECIP_2_BYTE cells that the given scale and base would store as missing | Stored as missing | `ValueError` |
-| W4 | DSS6 PRECIP_2_BYTE scale and base | `compression_base` and `compression_scale_factor` reach Monolith's setter in swapped positions. `dss_version=6` therefore supplies swapped defaults; a write into an existing DSS6 file without `dss_version` stores scale 0 and base 100, which ras-commander-fast-dss cannot decode | Stored as named. Without them, scale and base are chosen as Monolith chooses them (100 and 0, adjusted for negative minima and wide ranges). No workaround is needed |
+| W4 | DSS6 PRECIP_2_BYTE scale and base | `compression_base` and `compression_scale_factor` reach Monolith's setter in swapped positions. The Java route therefore supplies swapped defaults whenever the target is DSS6 (from this release also for an existing DSS6 file written without `dss_version`, which earlier stored scale 0 and base 100 and lost every cell) | Stored as named. Without them, scale and base are chosen as Monolith chooses them (100 and 0, adjusted for negative minima and wide ranges). No workaround is needed |
 | W5 | Negative DSS6 PRECIP_2_BYTE cells with the default scale and base | Stored as missing | Stored |
 | W2 | Null value of DSS7 HRAP and Albers grids | 0.0 | -FLT_MAX. Neither reader treats it as data |
 | W3 | DSS6 ZLIB scale and base header words (unused) | 0 and 100 | -FLT_MAX |
@@ -558,6 +687,7 @@ checks the installed package's API (`create`, `write_timeseries`,
 | W8 | File held open by HEC software (HEC-RAS, HEC-DSSVue, ...) | Written | `DssLockedError` (a `RuntimeError`), file unchanged |
 | W9 | Write errors | `RuntimeError` wrapping the Java exception | `ValueError` for refused input; typed `DssError` subclasses (all `RuntimeError`) otherwise |
 | W10 | DSS6 paired-data display precision after an earlier write in the process set one | Monolith keeps the earlier precision, even when the later write asks for none | Stored as each write asks |
+| W11 | DSS6 grid with `compression_base=100` and `compression_scale_factor=0`, the Java route's swapped convention | Stored correctly (Monolith's DSS6 setter swaps them) | `ValueError` naming the convention; the values are never reinterpreted. Omit both, or pass `compression_scale_factor=100` and `compression_base=0` |
 
 Compressed grid bytes differ, because a different deflate library writes the
 same cells, and new DSS7 files carry HEC's `7-JA` version string (Monolith
@@ -591,6 +721,17 @@ labels, `NaN`, blank metadata, a replacement that changes the record type), plus
 curve of the public fixtures. `BaldEagleCrkMulti2D` holds no paired-data record, so
 the curves are derived from its series. Both readers read the native-written and
 Java-written records equal, apart from the known reader differences PD1 to PD4.
+
+### Java-route fixes {#java-route-fixes}
+
+The Java route no longer writes DSS6 grids whose cells are all lost:
+
+- **Uncompressed DSS6 grids** (`compression="NONE"`) are refused with
+  `DssUnsupportedRecordError` before any file changes, as on `native`. HEC Monolith
+  stored them with an invalid PRECIP_2_BYTE header, and every cell read as missing.
+- **Writes into an existing DSS6 file without `dss_version`** now apply the DSS6
+  scale/base workaround. Before, the workaround keyed on the `dss_version` argument
+  only, so these writes stored scale 0 and base 100 and every cell read as missing.
 
 ### Failed Java writes
 

@@ -5,20 +5,28 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 ## Scope
 
 - Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
-- This directory handles HEC-DSS access through the Java-based monolith bridge,
-  the optional native backend (ras-commander-fast-dss: reads and writes), and optional
-  precipitation-grid writing through pydsstools.
+- This directory handles HEC-DSS access through the native engine
+  (ras-commander-fast-dss: reads and writes; the default backend through `auto`), the
+  Java-based Monolith bridge (`java`, `shadow`, and `auto` where the engine is absent),
+  and optional precipitation-grid writing through pydsstools on `java`.
 
 ## Architecture
 
 - Public API: `RasDss`, `RasDssGrid`
 - Private support: `_hec_monolith.py`, `_backend.py`, `_errors.py`, `_native_grid.py`
-- Backends (`_backend.py`): `RasDss.backend` = `"java"` (default this
-  release) | `"native"` | `"shadow"`; the environment variable
-  `RAS_COMMANDER_DSS_BACKEND` overrides it when set. `RasDss.get_backend()`
-  returns the effective backend.
-  - `native` reads through the optional `ras_commander_fast_dss` package. It never calls
-    `_configure_jvm()` or `_ensure_monolith()`.
+- Backends (`_backend.py`): `RasDss.backend` = `"auto"` (default) | `"java"` |
+  `"native"` | `"shadow"`; the environment variable `RAS_COMMANDER_DSS_BACKEND`
+  overrides it when set. `RasDss.get_backend()` returns the effective backend.
+  - `auto` resolves to `native` when `_backend.native_default_ready()` (engine
+    imports, writer API, `DEFAULT_REQUIRED_FEATURES`), otherwise `java`, and logs
+    the choice once at INFO. Never fall back to Java per operation: an engine gap
+    is a typed error or a documented refusal, not a silent backend switch.
+    `_backend.explicit_backend()` is `None` under `auto`.
+  - Tests and workers that exercise the Java route must pin
+    `RasDss.backend = "java"` (unsetting the environment variable now selects
+    `auto`, i.e. native).
+  - `native` reads through the `ras_commander_fast_dss` package (a core dependency
+    where wheels exist). It never calls `_configure_jvm()` or `_ensure_monolith()`.
   - `shadow` returns the native result, also runs the Java path, and logs
     every difference without raising.
   - `get_catalog`, `read_timeseries`, `read_multiple_timeseries`,
@@ -123,17 +131,26 @@ This file is the canonical local instruction file for `ras_commander/dss/`.
 - Shadow classifications (`_backend.classify_*`) name every known difference
   (D*, J*, PD1-PD4, G-CRS, G1-G4; G-CRS only while the grid CRS is unqualified). Anything else is `unexpected`; do not widen
   an allowance without corpus evidence.
-- Keep `java` the default until the shadow release ends (decision D4).
+- The maintainer made `native` the default (`auto`) after the shadow release
+  (decision D4, 2026-11-14); it is to ship with ras-commander-fast-dss 0.1.3 (not yet
+  on PyPI). Keep `java`
+  selectable explicitly, and keep `shadow` unchanged.
+- Time-series writes: `RasDss._check_write_times` (`_times.py`) runs once in the public
+  `write_timeseries`, before any backend, and refuses times HEC-DSS would store elsewhere
+  (fixed-interval steps; calendar placement by an engine DSS7 dry run; the DSS6 leap-year
+  yearly rule; single values included). Never bypass it in a public writer, never shift
+  caller times to satisfy a writer, and keep its cases in `tests/test_rasdss_write_times.py`
+  tied to the HEC Monolith oracle.
 
 ## Dependency Rules
 
 - `pyjnius` and Java are optional runtime prerequisites and should fail with clear installation guidance when missing.
-- `ras_commander_fast_dss` (distribution `ras-commander-fast-dss`, on PyPI from
-  0.1.0) is optional. `setup.py` requests `ras-commander-fast-dss>=0.1.2,<0.2` in the
-  `dss`, `dss-native` and `all` extras, with a marker limited to the published
-  CPython abi3 wheel platforms (Windows AMD64, Linux x86_64/aarch64; 0.1.2 has no
-  macOS wheels, so Darwin is excluded and macOS builds from the sdist); never make
-  it a core dependency while `java` is the default. `RasDss.repair` wraps the
+- `ras_commander_fast_dss` (distribution `ras-commander-fast-dss`) is a core
+  dependency, with a marker limited to the CPython abi3 wheel platforms (Windows AMD64,
+  Linux x86_64/aarch64, macOS arm64/x86_64; macOS wheels are planned starting with
+  0.1.3, not yet on PyPI). The floor is
+  `>=0.1.2,<0.2` until 0.1.3 is on PyPI, then `>=0.1.3,<0.2`. Elsewhere `auto` selects
+  `java`. The `dss`, `dss-native` and `all` extras repeat the requirement. `RasDss.repair` wraps the
   engine's `repair` (gated on the `repair_copy_out` feature, on every backend).
   The `dss-native` extra also keeps pydsstools for
   `write_precip_grid_arrays` on the `java` backend. `native` without it raises `ImportError`. `shadow` without it

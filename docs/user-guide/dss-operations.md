@@ -2,21 +2,23 @@
 
 RAS Commander reads and writes HEC-DSS boundary and precipitation data.
 
-`RasDss.write_grid_timeseries()` already writes arrays directly to gridded DSS
-through HEC Monolith. Existing Monolith users do not need pydsstools for this
-capability. The native writer below is an optional backend alternative.
+`RasDss.write_grid_timeseries()` writes arrays directly to gridded DSS through
+the selected backend (the native engine by default, or HEC Monolith). Neither
+route needs pydsstools.
 
 For paired data, quality flags, location/vertical-datum metadata, and other
 native DSS record workflows, see [using pydsstools directly](../about/related-libraries.md#pydsstools-use-native-dss-features-directly).
 
 ## Read and write backends
 
-`RasDss.backend` selects how DSS files are read and written: `java` (default,
-HEC Monolith), `native` (optional ras-commander-fast-dss package, no Java) or `shadow`
+`RasDss.backend` selects how DSS files are read and written: `auto` (default:
+`native` when ras-commander-fast-dss is installed and ready, otherwise `java`),
+`java` (HEC Monolith), `native` (ras-commander-fast-dss, no Java) or `shadow`
 (reads return the native result with a logged Java cross-check; writes run on
-Java and are repeated natively on a temporary copy for comparison). Native
-grid reads and native writes are gated on the installed engine
-(`native_grid_qualified`, `native_writes_available`).
+Java and are repeated natively on a temporary copy for comparison). Set
+`RasDss.backend = "java"`, or `RAS_COMMANDER_DSS_BACKEND=java`, to keep the Java
+backend. Under an explicit `native`, grid reads and writes are gated on the
+installed engine (`native_grid_qualified`, `native_writes_available`).
 `RasDss.get_capabilities()` reports the support matrix. See
 [DSS Read and Write Backends](dss-native-backend.md) for selection,
 installation and every difference from the Java path. Notebook
@@ -129,18 +131,21 @@ engine/version as part of the project workflow.
 
 ## Overview
 
-The `RasDss` class reads HEC-DSS time series data using HEC's Monolith Java libraries:
+The `RasDss` class reads and writes HEC-DSS data through the native
+ras-commander-fast-dss engine by default, or through HEC's Monolith Java libraries:
 
 - Supports DSS Version 6 and Version 7 files
-- Auto-downloads required libraries (~17 MB) on first use
 - Lazy loading - no overhead unless DSS methods are called
-- Tested with 84 DSS files totaling 6.64 GB
+- The Java route auto-downloads its libraries (~17 MB) on first use
 
 ## Java bridge requirements
 
+Only the `java` and `shadow` backends need Java. The default backend uses it only
+where the native engine is not installed (for example Windows ARM64).
+
 ```bash
 # Install pyjnius (Java bridge)
-pip install pyjnius
+pip install "ras-commander[dss]"
 
 # Requires Java 8+ (JRE or JDK)
 # Verify: java -version

@@ -9,6 +9,76 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Read before upgrading.** This release is planned to ship with
+`ras-commander-fast-dss` 0.1.3, which is not yet on PyPI and is planned to be the first
+engine release with macOS wheels.
+
+- **Behaviour change: the native DSS engine is the default backend.** `RasDss.backend`
+  now defaults to `"auto"`: `native` when `ras-commander-fast-dss` is installed and
+  advertises the features the default needs, otherwise `java`. The first DSS call logs
+  the choice once at INFO (for example `DSS backend: native (ras-commander-fast-dss
+  0.1.2)`). Under `native`, missing values are `NaN` instead of -3.4028235e38,
+  `start_date`/`end_date` are honored, errors are typed, `get_catalog` on a missing file
+  raises `FileNotFoundError` instead of creating it, and input that the Java path
+  truncated or stored unreadably is refused; every difference is listed in
+  [DSS Read and Write Backends](../user-guide/dss-native-backend.md). **To keep Java,**
+  set `RasDss.backend = "java"` or the environment variable
+  `RAS_COMMANDER_DSS_BACKEND=java`, and install `ras-commander[dss]` (pyjnius) with
+  Java 8+. Explicit `java`, `native` and `shadow` settings behave as before.
+- **`ras-commander-fast-dss>=0.1.2,<0.2` is a core dependency** on CPython for Windows
+  x64, Linux x86_64/aarch64 and macOS arm64/x86_64 (macOS wheels are planned starting
+  with 0.1.3, not yet on PyPI). It
+  requires only NumPy and pandas; the default install does not pin NumPy below 2.
+  pydsstools stays in the opt-in `dss-native` extra.
+- **Java-route DSS6 grid fixes.** `write_grid_timeseries` on `java` refuses
+  `compression="NONE"` for DSS6 with `DssUnsupportedRecordError` (Monolith stored a
+  record whose cells all read as missing), and applies its DSS6 scale/base workaround
+  when writing into an existing DSS6 file without `dss_version` (such writes stored
+  scale 0 and base 100 and lost every cell). Rewrite affected grids from their source;
+  the native route raises `DssFormatError` for them.
+- **Native DSS6 grid writes name the Java scale/base convention.** Under `native`,
+  `compression_base=100` with `compression_scale_factor=0` raises a `ValueError` that
+  explains the Java route's swapped DSS6 convention; the values are never reinterpreted.
+- **Behaviour change: time-series writes refuse times HEC-DSS would move, on every
+  backend.** `write_timeseries` and `write_timeseries_from_dataframe` now check a regular
+  series once, before any write: fixed intervals need a constant step; week, month,
+  semi-month, tri-month and year intervals must follow HEC-DSS's calendar placement
+  (single values included); DSS6 yearly series from a leap year after 2 March are refused
+  for DSS6. HEC Monolith used to store such values at other times and report success.
+  The message names the value, where HEC would store it and what works. See
+  [Time placement](../user-guide/dss-native-backend.md#time-placement).
+- **Behaviour change for Java-only installs: calendar times need the engine.** The time
+  check of `write_timeseries` and `write_timeseries_from_dataframe` fails closed: when the
+  placement of week, month, semi-month, tri-month or year times cannot be qualified (no
+  ras-commander-fast-dss, an engine too old to probe, or a failed probe), the write
+  raises `DssCapabilityError` before the file is touched, naming the cause and the fix
+  (install `ras-commander-fast-dss>=0.1.3`). Pass `allow_unverified_calendar_times=True`
+  to write such times unchecked, with a WARNING. Minute, hour and day intervals and
+  irregular series are unaffected.
+- **The automatic default needs engine 0.1.3.** `auto` selects `native` only when the
+  engine's `__version__` is a final release of at least 0.1.3; with 0.1.2 (no
+  `__version__`) it selects `java` and logs why. Explicit `native` and `shadow` are
+  unaffected.
+- **ras-commander-fast-dss 0.1.2 misdates some DSS6 yearly data** (for example a
+  HEC-written 2020-06-15 reads as 2020-06-14) and refuses to write those times; the
+  native default is planned to ship with 0.1.3, whose release candidate reads and
+  writes them as HEC does. Until then,
+  keep `RasDss.backend = "java"` for DSS6 yearly data.
+- `RasDss.get_capabilities().attrs` adds `backend_source`, `auto_backend` and
+  `default_backend_reason`. Under an explicit backend, what `auto` would select is
+  reported without being logged.
+  `RasDss.shutdown_jvm()` is a silent no-op under `auto` (it still warns under an
+  explicit `native`). Backend messages name both `RasDss.backend` and
+  `RAS_COMMANDER_DSS_BACKEND`.
+- The agent banner of `init_ras_project` names `RasDss.read_timeseries()` (it named a
+  nonexistent `get_timeseries()`).
+- Notebooks 310, 312, 313 and 318 print paths relative to `examples/` (or file names)
+  and were re-executed on the native default; `ras_commander.usgs` logs the geometry HDF
+  file name at INFO and its full path at DEBUG.
+- The native DSS CI job (`native-dss.yml`, CLB self-hosted runners) gains a default
+  leg on Linux and Windows (no backend set, NumPy 2). A GitHub-hosted macOS default leg
+  is a separate dispatch-only workflow, `native-dss-macos.yml` (`include_macos` off by
+  default; maintainer approval per run); it skips until a 0.1.3 macOS wheel is on PyPI.
 - **Corrected notebook 731's DSS export.** Its earlier grids, from HEC-Vortex or the
   native importer's `align="vortex"`, had 7 corner cells missing in every record. They
   were not NOAA NoData: they were corners of an unsnapped rectangular output lattice

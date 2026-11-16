@@ -258,7 +258,8 @@ class UsgsGaugeSpatial:
             raise FileNotFoundError(f"HDF file not found: {hdf_path}")
 
         # Get project bounds in WGS84 (lat/lon)
-        logger.info(f"Retrieving project bounds from: {hdf_path}")
+        logger.info(f"Retrieving project bounds from: {hdf_path.name}")
+        logger.debug(f"Project bounds HDF path: {hdf_path}")
         west, south, east, north = HdfProject.get_project_bounds_latlon(
             hdf_path,
             buffer_percent=buffer_percent,

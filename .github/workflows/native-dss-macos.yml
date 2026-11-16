@@ -1,0 +1,85 @@
+name: Native DSS engine (macOS, manual)
+
+# GitHub-hosted macOS leg of native-dss.yml (the "default" leg: no backend set, plain
+# install). ras-commander-fast-dss plans macOS wheels starting with 0.1.3, which is
+# not yet on PyPI. This workflow
+# has no automatic trigger: it runs only from a manual dispatch with include_macos
+# set to true (off by default), and only after the maintainer approves that specific
+# run. A dispatch with the default input skips the job. Until a 0.1.3 macOS wheel is
+# on PyPI the job records a notice and skips its steps; it never builds the Rust
+# source distribution. Linux and Windows run in native-dss.yml on CLB's self-hosted
+# runners.
+#
+# The job steps mirror native-dss.yml's default leg: keep the two files in sync.
+# They are separate files because the CI-runner policy check proves runners per
+# workflow file, without evaluating job `if`.
+on:
+  workflow_dispatch:
+    inputs:
+      include_macos:
+        description: "Run on GitHub-hosted macOS (macos-15); needs maintainer approval"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  native-dss-macos:
+    name: native-dss (macos-15, default)
+    if: github.event_name == 'workflow_dispatch' && inputs.include_macos
+    runs-on: macos-15
+    env:
+      CI: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check for a macOS ras-commander-fast-dss wheel
+        id: wheel
+        shell: bash
+        run: |
+          if python -m pip download --only-binary :all: --no-deps -d "$RUNNER_TEMP/fastdss" \
+              "ras-commander-fast-dss>=0.1.3,<0.2"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=macOS native DSS leg skipped::no ras-commander-fast-dss>=0.1.3,<0.2 macOS wheel on PyPI yet (first expected with 0.1.3)."
+          fi
+
+      - name: Install the library
+        if: steps.wheel.outputs.available == 'true'
+        shell: bash
+        # A plain install: FAST-DSS comes from the core dependencies, NumPy is unpinned.
+        run: >-
+          python -m pip install --only-binary ras-commander-fast-dss -e .
+          affine pyproj
+          pytest nbformat requests setuptools matplotlib geopandas "shapely>=2.0"
+          xarray rasterio scipy tqdm psutil
+
+      - name: Check NumPy 2
+        if: steps.wheel.outputs.available == 'true'
+        run: python -c "import numpy; print('numpy', numpy.__version__); assert int(numpy.__version__.split('.')[0]) >= 2"
+
+      - name: Check the installed engine
+        if: steps.wheel.outputs.available == 'true'
+        run: python scripts/ci/native_dss_ci_guard.py engine --expect-backend auto
+
+      - name: Run the DSS and wrapper tests
+        if: steps.wheel.outputs.available == 'true'
+        shell: bash
+        run: |
+          files=$(ls tests/test_*dss*.py tests/test_hec_monolith_logging.py \
+            tests/test_precip_mrms*.py tests/test_compute_extra.py \
+            tests/test_rascontrol_cleanup_console_encoding.py | grep -v hecras_acceptance)
+          python -m pytest $files -m "not real_ras" -q -rs -p no:cacheprovider \
+            --basetemp="$RUNNER_TEMP/pytest-dss" --junitxml="$RUNNER_TEMP/native-dss.xml"
+
+      - name: Fail if the native tests did not run
+        if: always() && steps.wheel.outputs.available == 'true'
+        shell: bash
+        run: python scripts/ci/native_dss_ci_guard.py junit "$RUNNER_TEMP/native-dss.xml" --min-passed 600
