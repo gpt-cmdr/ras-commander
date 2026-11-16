@@ -15,6 +15,11 @@ name: Native HDF extension
 # mirrored there: keep the two files in sync.
 on:
   workflow_dispatch:
+    inputs:
+      qualify_codeql:
+        description: "Run all five CodeQL languages on bounded CLB Linux jobs"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'ras_commander/fast_hdf.py'
@@ -40,6 +45,47 @@ permissions:
   contents: read
 
 jobs:
+  bounded-codeql:
+    # Qualification of the complete source scope, without changing the runner
+    # service or the existing default-setup configuration. The latter can see
+    # host RAM instead of its Slurm budget. Explicit job limits avoid that OOM.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.qualify_codeql }}
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, c-cpp, csharp, python, rust]
+    env:
+      CODEQL_RAM: '4096'
+      CODEQL_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize the default query suite
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - name: Analyze every declared language
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          # Keep normal default setup intact. These complete SARIF proofs are
+          # artifacts, not competing code-scanning uploads or replacement checks.
+          upload: never
+          output: codeql-results
+          category: /bounded-qualification/${{ matrix.language }}
+      - name: Retain the complete analysis evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounded-codeql-${{ matrix.language }}
+          path: codeql-results
+          if-no-files-found: warn
+          retention-days: 7
   native:
     name: native (${{ matrix.os }})
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
