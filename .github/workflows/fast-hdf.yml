@@ -75,7 +75,7 @@ jobs:
         with:
           # Keep normal default setup intact. These complete SARIF proofs are
           # artifacts, not competing code-scanning uploads or replacement checks.
-          upload: false
+          upload: never
           output: codeql-results
           category: /bounded-qualification/${{ matrix.language }}
       - name: Retain the complete analysis evidence

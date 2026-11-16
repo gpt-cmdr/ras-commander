@@ -41,13 +41,6 @@ def test_jobs_use_local_runners_or_existing_protected_manual_routes(workflow):
                 r"(?m)^  (push|pull_request|schedule|workflow_run):", text
             )
             continue
-        if workflow.name == "publish-pypi.yml" and name == "publish":
-            assert route == "ubuntu-latest"
-            assert "name: pypi" in job and "needs: validate" in job
-            assert not re.search(
-                r"(?m)^  (push|pull_request|schedule|workflow_run):", text
-            )
-            continue
         if route.startswith("["):
             labels = [value.strip(" \"'") for value in route.strip("[]").split(",")]
             assert "self-hosted" in labels, (workflow.name, name, route)
@@ -80,6 +73,7 @@ def test_pull_request_jobs_do_not_execute_fork_code_locally(workflow):
         # Packaging's build/validate inherit the fork guard via needs: plan.
         if workflow.name == "packaging-dry-run.yml" and name in {"build", "validate"}:
             assert re.search(r"(?m)^    needs:.*plan", job)
+            assert condition is None
             continue
         if workflow.name == "fast-hdf.yml" and name == "bounded-codeql":
             assert (
