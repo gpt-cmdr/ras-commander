@@ -39,12 +39,11 @@ name: Publish PyPI Release
 # would). On a pull request the gate comes from the pull request itself, because the pull
 # request may be the change to the gate.
 #
-# Runners: plan, build and validate run on CLB's self-hosted Linux runners (clb-ci-linux) for
-# every event, with no GitHub-hosted fallback. Nothing runs on any push or pull request: only a
-# published release or a manual dispatch starts this workflow. The only GitHub-hosted job is
-# `publish`, because pypa/gh-action-pypi-publish is a Docker container action and the CLB runners have no Docker.
-# It declares the protected `pypi` environment, so no hosted runner starts until a required
-# reviewer approves the deployment.
+# Runners: every job runs on CLB self-hosted Linux (clb-ci-linux), including publish.
+# No GitHub-hosted Linux runners or fallbacks are permitted. Publishing uses native
+# Twine OIDC and pypi-attestations, so the runner does not need Docker.
+# https://docs.pypi.org/trusted-publishers/using-a-publisher/
+# https://docs.pypi.org/attestations/producing-attestations/
 
 on:
   release:
@@ -248,9 +247,8 @@ jobs:
     name: Publish to PyPI (trusted publishing)
     needs: validate
     if: ${{ vars.PUBLISH_PYPI == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'release') }}
-    # GitHub-hosted (Docker action). The `pypi` environment's required reviewers approve the
-    # deployment before this runner is requested.
-    runs-on: ubuntu-latest
+    # Required reviewers approve deployment before this local runner is requested.
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
     environment:
       name: pypi
       url: https://pypi.org/project/ras-commander/
@@ -267,11 +265,21 @@ jobs:
       - name: Files to publish
         run: sha256sum dist/*
 
-      # No password: the action uses the PyPI trusted publisher for this workflow. The old
-      # PYPI_API_TOKEN repository secret is deliberately not referenced (attestations are
-      # ignored when a token is used); it stays in place until the maintainer revokes it.
-      - name: Publish
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
-          attestations: true
-          print-hash: true
+          python-version: '3.12'
+
+      - name: Install publishing tools (no package code)
+        run: python -m pip install twine==7.0.0 pypi-attestations==0.0.31
+
+      # Ambient GitHub OIDC identity, unchanged workflow/environment binding. No API
+      # token secret, credential file, package checkout, or Docker action is used.
+      - name: Attest validated distributions
+        run: python -m pypi_attestations sign dist/*
+
+      - name: Publish with Trusted Publishing
+        env:
+          TWINE_NON_INTERACTIVE: '1'
+          PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+        run: python -m twine upload --attestations --non-interactive --config-file /dev/null dist/*
