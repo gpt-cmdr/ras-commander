@@ -9,6 +9,23 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### 0.124.0 — 2026-11-16
+
+No default changes. `java` remains the default DSS backend.
+
+- **`HdfMesh.iter_mesh_cell_property_tables` reads cell elevation-volume tables in
+  bounded batches.** It yields `(mesh_name, DataFrame)` pairs of at most `batch_cells`
+  source cells (default 65,536), in original cell and point order, with the legacy
+  getter's columns and dtypes (`Cell ID`, `Elevation`, `Volume`). Values keep their
+  source units and vertical datum. Use it instead of loading a whole mesh's tables
+  when memory is bounded.
+- **Experimental native geometry writers:** replacing and removing reference points
+  (#865), 2D Event Conditions (#855), and compiled boundary-face computation with a
+  recovery writer (#854). See each pull request for scope and tests.
+- **Releases publish from CLB self-hosted Linux runners.** No CI or release job uses a
+  GitHub-hosted Linux runner. PyPI publishing uses trusted publishing (OIDC) with
+  attestations, from a published GitHub release, behind the `pypi` environment's
+  required review.
 - **Corrected notebook 731's DSS export.** Its earlier grids, from HEC-Vortex or the
   native importer's `align="vortex"`, had 7 corner cells missing in every record. They
   were not NOAA NoData: they were corners of an unsnapped rectangular output lattice
