@@ -11,7 +11,8 @@ alone does not identify a development checkout.
 
 ### 0.124.0 — 2026-11-16
 
-No default changes. `java` remains the default DSS backend.
+`java` remains the default DSS backend. Notebook 731's template now defaults to the
+`"native"` route (see below).
 
 - **`HdfMesh.iter_mesh_cell_property_tables` reads cell elevation-volume tables in
   bounded batches.** It yields `(mesh_name, DataFrame)` pairs of at most `batch_cells`
