@@ -38,3 +38,14 @@ class LinuxRunnerPolicyTests(unittest.TestCase):
         self.assertNotIn("pypa/gh-action-pypi-publish", publish)
         self.assertNotIn("secrets.", publish)
         self.assertNotIn("actions/checkout", publish)
+
+    def test_publish_clears_stale_artifacts_before_download(self):
+        text = (ROOT / ".github/workflows/publish-pypi.yml").read_text(encoding="utf-8")
+        publish = text.split("\n  publish:\n", 1)[1]
+        cleanup = publish.index("name: Clear the publish artifact directory")
+        download = publish.index("name: Download the validated distributions")
+        self.assertLess(cleanup, download)
+        self.assertIn("rm -rf -- dist", publish[cleanup:download])
+        # No interpreter is guaranteed before setup-python runs.
+        self.assertNotIn("python", publish[cleanup:download].split("run:", 1)[1])
+        self.assertLess(cleanup, publish.index("uses: actions/setup-python"))
