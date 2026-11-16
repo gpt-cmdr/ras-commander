@@ -123,6 +123,8 @@ jobs:
       - name: Adapter compatibility with the published extension
         if: steps.native.outputs.available == 'true'
         run: python -m pytest tests/test_hdf_plan_geometry_information.py tests/test_hdf_mesh_ghost_cells.py tests/test_fast_hdf.py tests/test_fim_catalog.py -k "legacy_names_and_ghost_filtering or adapter_accepts_only_compatible_native_contracts or bounded_multitime_hdf_read" -q
+      - name: Bounded cell-property batch API on this platform
+        run: python -m pytest tests/test_hdf_mesh_cell_property_batches.py -q -rs
       - name: Check the installed extension
         if: steps.native.outputs.available == 'true'
         shell: bash
