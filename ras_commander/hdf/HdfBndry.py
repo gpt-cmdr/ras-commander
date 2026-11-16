@@ -736,7 +736,16 @@ class HdfBndry:
                         bc_lines_path,
                         hdf_path.name,
                     )
-                    return gpd.GeoDataFrame()
+                    result = gpd.GeoDataFrame(
+                        {"Name": pd.Series(dtype=str)}, geometry=[],
+                        crs=HdfBase.get_projection(hdf_file),
+                    )
+                    result.attrs["boundary_condition_lines"] = {
+                        "status": "not_present_in_hdf",
+                        "dataset_path": bc_lines_path,
+                        "inference": "No authored BC identity or type inferred from absence",
+                    }
+                    return result
                 
                 # Get geometries
                 bc_line_data = hdf_file[bc_lines_path]

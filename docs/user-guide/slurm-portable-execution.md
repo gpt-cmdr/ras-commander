@@ -238,3 +238,33 @@ Slurm never accepted the job.
 
 See the [rendered API reference](../api/remote.md#rasslurm-source-reference)
 for configuration fields and return records.
+
+
+## Legacy rainfall accounting and native geometry warnings
+
+In the supported HEC-RAS 6.6 accounting layout, a legacy 2D `PRECIP-EXCESS`
+boundary can contribute to total reported boundary inflow while the modern
+meteorological precipitation setting is disabled. Comparing that total with
+inline flow hydrographs alone can produce a false inflow mismatch.
+
+`validate_unsteady_results()` qualifies the legacy source declarations and the
+explicit `Precipitation Excess (acre feet)` HDF term before adding that reported
+component once. Inline, unknown or conflicting rain declarations, mixed modern
+and legacy inputs, ambiguous areas, invalid volumes and incompatible units fail
+closed. Modern meteorological-only inputs retain their existing reconciliation
+behavior. No volume-error or inflow tolerance is increased.
+
+The reconciliation exposes `authored_inline_inflow_volume`,
+`reported_legacy_precipitation_volume` and their sum,
+`comparison_inflow_volume`, in acre-feet. The historical `authored_inflow_volume`
+key holds the same comparison sum in this legacy case. It therefore does not
+mean that the rainfall contribution was independently integrated from source
+forcing. `precipitation_independently_validated` remains false; source rainfall,
+time coverage, domain area and units need their own checks.
+
+Native automatic weir raises are retained in
+`compute_diagnostics.native_geometry_adjustments`, with amounts and stations in
+model units and `engineering_review_required = true`. Technical execution and
+volume validation do not approve those geometry changes. Preserve the result
+and original receipt, review source geometry/terrain and engine behavior, and
+retain the engineering hold when revalidating existing output.
