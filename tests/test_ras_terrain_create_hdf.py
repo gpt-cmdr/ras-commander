@@ -137,3 +137,49 @@ def test_create_terrain_hdf_rejects_invalid_gdal_threads(tmp_path, value):
             projection_prj=projection_prj,
             gdal_num_threads=value,
         )
+
+
+@pytest.fixture
+def terrain_failure_inputs(tmp_path, monkeypatch):
+    install = tmp_path / "Program Files" / "HEC-RAS"
+    install.mkdir(parents=True)
+    (install / "RasProcess.exe").write_bytes(b"not executed")
+    gdal = install / "GDAL" / "bin64"
+    gdal.mkdir(parents=True)
+    (gdal / "gdal_translate.exe").write_bytes(b"not executed")
+    raster = tmp_path / "input terrain.tif"
+    raster.write_bytes(b"intercepted process input")
+    projection = tmp_path / "Projection File.prj"
+    projection.write_text("intercepted process input", encoding="utf-8")
+    output = tmp_path / "Terrain" / "Terrain.hdf"
+    monkeypatch.setattr(RasTerrain, "_get_hecras_path", staticmethod(lambda _: install))
+    return raster, output, projection
+
+
+def test_create_terrain_hdf_reports_process_timeout(terrain_failure_inputs, monkeypatch):
+    def timed_out(command, **kwargs):
+        assert kwargs["timeout"] == 3
+        raise subprocess.TimeoutExpired(command, 3)
+
+    monkeypatch.setattr(ras_terrain_module.subprocess, "run", timed_out)
+    raster, output, projection = terrain_failure_inputs
+    with pytest.raises(RuntimeError, match="timed out after 3 seconds"):
+        RasTerrain.create_terrain_hdf([raster], output, projection, timeout_seconds=3)
+    assert not output.exists()
+
+
+def test_create_terrain_hdf_rejects_failed_process_with_readable_output(
+    terrain_failure_inputs, monkeypatch
+):
+    raster, output, projection = terrain_failure_inputs
+
+    def failed_run(command, **kwargs):
+        with h5py.File(output, "w") as hdf:
+            hdf.create_dataset("Terrain/Elevation", data=[1.0])
+        return subprocess.CompletedProcess(command, 17, "Final Processing", "controlled failure")
+
+    monkeypatch.setattr(ras_terrain_module.subprocess, "run", failed_run)
+    with pytest.raises(RuntimeError, match="Return code: 17"):
+        RasTerrain.create_terrain_hdf([raster], output, projection)
+    with h5py.File(output, "r") as hdf:
+        assert hdf["Terrain/Elevation"][0] == 1.0
