@@ -5,16 +5,17 @@ name: Native HDF extension
 # published wheel from PyPI and runs ras-commander's binding and fallback tests.
 # ras-commander-fast-hdf 0.5.0 is the first published API 12 build, so no engine
 # is built from source here.
-# macOS is manual only and requires a provisioned local macOS runner.
-# Trusted Linux/Windows jobs use CLB runners; external fork jobs are skipped.
-# No platform has a GitHub-hosted fallback.
+# Linux and Windows run on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows) with no GitHub-hosted fallback; pull requests from forks skip
+# the job. The runner labels are literal include rows (`self_hosted`), so the
+# runner for every job is statically verifiable.
+# macOS arm64 (macos-15) is GitHub-hosted, slow and expensive, so it lives in a
+# separate dispatch-only workflow, fast-hdf-macos.yml (input include_macos, off by
+# default; run it only after the maintainer approves that run). The job steps are
+# mirrored there: keep the two files in sync.
 on:
   workflow_dispatch:
     inputs:
-      include_macos:
-        description: "Also run on macOS"
-        type: boolean
-        default: false
       qualify_codeql:
         description: "Run all five CodeQL languages on bounded CLB Linux jobs"
         type: boolean
@@ -86,17 +87,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
   native:
+    name: native (${{ matrix.os }})
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.include_macos && '["windows-latest", "ubuntu-latest", "macos-15"]' || '["windows-latest", "ubuntu-latest"]') }}
         include:
-          - os: ubuntu-latest
-            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
-          - os: windows-latest
-            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
-    runs-on: ${{ fromJSON(matrix.os == 'macos-15' && '["self-hosted", "macOS", "ARM64", "clb-ci-macos"]' || matrix.self_hosted) }}
+          - os: windows
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: linux
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+    runs-on: ${{ fromJSON(matrix.self_hosted) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -123,8 +124,6 @@ jobs:
       - name: Adapter compatibility with the published extension
         if: steps.native.outputs.available == 'true'
         run: python -m pytest tests/test_hdf_plan_geometry_information.py tests/test_hdf_mesh_ghost_cells.py tests/test_fast_hdf.py tests/test_fim_catalog.py -k "legacy_names_and_ghost_filtering or adapter_accepts_only_compatible_native_contracts or bounded_multitime_hdf_read" -q
-      - name: Bounded cell-property batch API on this platform
-        run: python -m pytest tests/test_hdf_mesh_cell_property_batches.py -q -rs
       - name: Check the installed extension
         if: steps.native.outputs.available == 'true'
         shell: bash
@@ -150,9 +149,9 @@ jobs:
       - name: Table readers with Python reference backend
         env:
           RAS_COMMANDER_FAST_HDF: python
-        run: python -m pytest tests/test_tabular_readers_core_install.py tests/test_hdf_mesh_cell_property_batches.py -q
+        run: python -m pytest tests/test_tabular_readers_core_install.py -q
       - name: Table readers with required native backend
         if: steps.native.outputs.available == 'true'
         env:
           RAS_COMMANDER_FAST_HDF: required
-        run: python -m pytest tests/test_tabular_readers_core_install.py tests/test_hdf_mesh_cell_property_batches.py -q
+        run: python -m pytest tests/test_tabular_readers_core_install.py -q

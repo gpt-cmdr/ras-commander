@@ -28,7 +28,9 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
+    # CLB self-hosted Linux runner (the same one docs-validate.yml builds on); no
+    # GitHub-hosted fallback.
+    runs-on: ["self-hosted", "Linux", "X64", "clb-ci-linux"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,6 +49,11 @@ jobs:
           key: ${{ runner.os }}-pip-docs-${{ hashFiles('docs/requirements-docs.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-docs-
+
+      # On the self-hosted Linux runner the seeded interpreter's site-packages is
+      # read-only, so pip installs to the user site; put its scripts (mkdocs) on PATH.
+      - name: User-site scripts on PATH
+        run: echo "$(python -m site --user-base)/bin" >> "$GITHUB_PATH"
 
       - name: Install documentation dependencies
         run: |

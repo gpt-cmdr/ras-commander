@@ -10,6 +10,11 @@ name: Native DSS engine
 # shadow (Windows only, see the matrix): adds a JDK, pyjnius and HEC Monolith
 #   (downloaded by ras-commander from HEC's public Nexus and Maven Central before
 #   the tests, cached between runs), so the Java-path comparisons run too.
+#
+# Every job runs on CLB's self-hosted Slurm runners (clb-ci-linux,
+# clb-ci-windows). There is no GitHub-hosted fallback: pull requests from forks
+# skip the job (shown as skipped), and a maintainer runs the checks from a branch
+# in this repository instead.
 
 on:
   pull_request:
@@ -22,26 +27,28 @@ permissions:
 
 jobs:
   native-dss:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ${{ fromJSON(matrix.self_hosted) }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        backend: [native, shadow]
+        # Explicit rows with literal runner labels (no axes, no exclude), so the
+        # runner for every job is statically verifiable.
+        # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
+        # aborts intermittently in DSS6 time-series writes ("Substring out of
+        # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
+        # Shadow runs on Windows; Linux runs the native leg.
         include:
-          - os: ubuntu-latest
-            self_hosted: '["self-hosted", "Linux", "X64", "clb-ci-linux"]'
-          - os: windows-latest
-            self_hosted: '["self-hosted", "Windows", "X64", "clb-ci-windows"]'
-        exclude:
-          # HEC's Linux native library (javaHeclib 7-IU-8, HEC Monolith 3.3.27)
-          # aborts intermittently in DSS6 time-series writes ("Substring out of
-          # bounds" in zsrtsi6.f), which the Java path of the shadow tests uses.
-          # Shadow runs on Windows; Linux runs the native leg.
-          - os: ubuntu-latest
+          - os: linux
+            backend: native
+            self_hosted: '["self-hosted","Linux","X64","clb-ci-linux"]'
+          - os: windows
+            backend: native
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
+          - os: windows
             backend: shadow
+            self_hosted: '["self-hosted","Windows","X64","clb-ci-windows"]'
     env:
       CI: '1'
       PYTHONUTF8: '1'

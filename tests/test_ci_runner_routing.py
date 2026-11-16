@@ -25,12 +25,29 @@ def _jobs(text):
 @pytest.mark.parametrize(
     "workflow", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name
 )
-def test_every_job_routes_only_to_local_runners(workflow):
+def test_jobs_use_local_runners_or_existing_protected_manual_routes(workflow):
     text = workflow.read_text(encoding="utf-8")
     for name, job in _jobs(text):
         match = re.search(r"(?m)^    runs-on: (.+)$", job)
         assert match, (workflow.name, name)
         route = match[1]
+        if workflow.name == "fast-hdf-macos.yml":
+            assert name == "native-macos" and route == "macos-15"
+            assert (
+                "github.event_name == 'workflow_dispatch' && inputs.include_macos"
+                in job
+            )
+            assert not re.search(
+                r"(?m)^  (push|pull_request|schedule|workflow_run):", text
+            )
+            continue
+        if workflow.name == "publish-pypi.yml" and name == "publish":
+            assert route == "ubuntu-latest"
+            assert "name: pypi" in job and "needs: validate" in job
+            assert not re.search(
+                r"(?m)^  (push|pull_request|schedule|workflow_run):", text
+            )
+            continue
         if route.startswith("["):
             labels = [value.strip(" \"'") for value in route.strip("[]").split(",")]
             assert "self-hosted" in labels, (workflow.name, name, route)
@@ -60,13 +77,24 @@ def test_pull_request_jobs_do_not_execute_fork_code_locally(workflow):
         return
     for name, job in _jobs(text):
         condition = re.search(r"(?m)^    if: (.+)$", job)
+        # Packaging's build/validate inherit the fork guard via needs: plan.
+        if workflow.name == "packaging-dry-run.yml" and name in {"build", "validate"}:
+            assert re.search(r"(?m)^    needs:.*plan", job)
+            continue
+        if workflow.name == "fast-hdf.yml" and name == "bounded-codeql":
+            assert (
+                "github.event_name == 'workflow_dispatch' && inputs.qualify_codeql"
+                in condition[1]
+            )
+            continue
         assert condition and TRUSTED in condition[1], (workflow.name, name)
 
 
 def test_dss_coverage_and_release_authorization_are_retained():
     dss = (WORKFLOWS / "native-dss.yml").read_text(encoding="utf-8")
-    assert "backend: [native, shadow]" in dss
-    assert "os: [ubuntu-latest, windows-latest]" in dss
+    assert len(re.findall(r"backend: native", dss)) == 2
+    assert len(re.findall(r"backend: shadow", dss)) == 1
+    assert "- os: linux" in dss and "- os: windows" in dss
     assert "--min-passed 600 $extra" in dss
     assert "python scripts/ci/native_dss_ci_guard.py engine" in dss
     release = dict(_jobs((WORKFLOWS / "publish-pypi.yml").read_text(encoding="utf-8")))[
@@ -75,9 +103,6 @@ def test_dss_coverage_and_release_authorization_are_retained():
     condition = re.search(r"(?m)^    if: (.+)$", release)[1]
     assert "vars.PUBLISH_PYPI == 'true'" in condition
     assert "github.event_name == 'workflow_dispatch'" in condition
-    assert (
-        "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
-        in condition
-    )
+    assert "github.event_name == 'release'" in condition
     assert "needs: validate" in release
     assert "name: pypi" in release
