@@ -49,6 +49,11 @@ installed library. Record the host package version, image digest, and receipts
 together. Use `pull="always"` to check availability of the selected digest, or
 `pull="never"` for a payload already cached in the Docker engine.
 
+`RasDocker.preprocess_plan` runs preparation with Docker networking disabled
+(`--network none`), matching the offline image recipe. Supply model inputs
+through the project folder and dependency mounts. Image pulls still use the
+Docker daemon's network connection.
+
 **Qualification:** The final GHCR pairs ran Muncie plan 03 end to end for every
 published native-engine release. The published SIFs also passed the recorded
 October 15 Slurm requalification. The

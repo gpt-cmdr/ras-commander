@@ -142,6 +142,9 @@ class RasDocker:
     ) -> ContainerResult:
         """Create ``.tmp.hdf``, ``.b##`` and ``.x##`` in the Wine image.
 
+        Preparation runs with Docker networking disabled. Supply all model
+        inputs through the project folder and dependency mounts.
+
         Args:
             project_path: Explicit host ``.prj`` file in a working model copy.
             plan_number: Plan number, such as ``"01"`` or ``1``.
@@ -448,6 +451,7 @@ class RasDocker:
                        "--name", name, "--label", f"{_OWNER_LABEL}={owner}",
                        "--cidfile", str(cid_file), "--user", user,
                        *(["--security-opt", f"apparmor={apparmor_profile}"] if apparmor_profile else []),
+                       *(["--network", "none"] if stage == "prepare" else []),
                        "--cpus", str(num_cores), *mount_args,
                        image, stage, "--project", f"/job/{project.name}", "--plan", plan,
                        "--timeout", str(timeout), "--run-id", run_id,
