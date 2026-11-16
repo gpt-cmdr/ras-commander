@@ -256,6 +256,19 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Clear the publish artifact directory
+        run: |
+          python - <<'PY'
+          import shutil
+          from pathlib import Path
+          dist = Path("dist")
+          if dist.is_symlink():
+              dist.unlink()
+          elif dist.exists():
+              shutil.rmtree(dist)
+          dist.mkdir()
+          PY
+
       - name: Download the validated distributions
         uses: actions/download-artifact@v8
         with:
