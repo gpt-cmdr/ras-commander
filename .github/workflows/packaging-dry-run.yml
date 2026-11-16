@@ -7,7 +7,7 @@ name: Packaging dry run
 # and dispatch branches, which never run here: change both files together. The only difference
 # is plan's INPUT_TAG, which is '' here because this workflow has no dispatch inputs. They are separate files so that this pull-request workflow has no GitHub-hosted job
 # and the runner of every pull-request job is statically verifiable; publish-pypi.yml (release
-# and manual dispatch only) keeps the hosted publish job and the trusted publisher binding.
+# and manual dispatch only) keeps the separate self-hosted publish job and the trusted publisher binding.
 #
 # Targets: `head` (the pull request against its declared version) and `latest-tag` (the newest
 # existing vMAJOR.MINOR.PATCH tag, built and validated exactly as a manual dispatch would). The
