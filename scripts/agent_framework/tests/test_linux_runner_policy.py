@@ -45,5 +45,7 @@ class LinuxRunnerPolicyTests(unittest.TestCase):
         cleanup = publish.index("name: Clear the publish artifact directory")
         download = publish.index("name: Download the validated distributions")
         self.assertLess(cleanup, download)
-        self.assertIn("shutil.rmtree(dist)", publish[cleanup:download])
-        self.assertIn("dist.is_symlink()", publish[cleanup:download])
+        self.assertIn("rm -rf -- dist", publish[cleanup:download])
+        # No interpreter is guaranteed before setup-python runs.
+        self.assertNotIn("python", publish[cleanup:download].split("run:", 1)[1])
+        self.assertLess(cleanup, publish.index("uses: actions/setup-python"))

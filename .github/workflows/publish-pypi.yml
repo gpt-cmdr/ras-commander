@@ -256,18 +256,12 @@ jobs:
       id-token: write
       contents: read
     steps:
+      # Plain shell: no Python is guaranteed before setup-python. rm -rf on a
+      # symlink removes the link, never its target.
       - name: Clear the publish artifact directory
         run: |
-          python - <<'PY'
-          import shutil
-          from pathlib import Path
-          dist = Path("dist")
-          if dist.is_symlink():
-              dist.unlink()
-          elif dist.exists():
-              shutil.rmtree(dist)
-          dist.mkdir()
-          PY
+          rm -rf -- dist
+          mkdir dist
 
       - name: Download the validated distributions
         uses: actions/download-artifact@v8
