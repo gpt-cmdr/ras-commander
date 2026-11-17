@@ -16,7 +16,7 @@ The cognitive infrastructure embodies the **LLM Forward** engineering philosophy
 ```mermaid
 graph TB
     subgraph "Tier 1: Orchestration"
-        O[Main Agent - Opus 4.5]
+        O[Main Agent - Claude Opus 5.5]
     end
 
     subgraph "Tier 2: Domain Specialists"
@@ -46,11 +46,22 @@ graph TB
 
 ### Model Tiers
 
-| Tier | Model | Cost | Use Cases |
+The Claude model names below were checked against the T3 Code model catalog on
+November 17, 2026. The tiers describe suggested workflow roles; the cost column
+is a relative planning guide, not a price quote.
+
+| Tier | Model | Relative Cost | Use Cases |
 |------|-------|------|-----------|
-| **Orchestrator** | Opus 4.5 | High | Complex reasoning, architecture, multi-domain coordination |
-| **Specialists** | Sonnet 4.5 | Medium | Domain expertise, code generation, structured workflows |
-| **Task Agents** | Haiku 4.5 | Low | Pattern matching, log review, quick operations |
+| **Orchestrator** | Claude Opus 5.5 | High | Complex reasoning, architecture, multi-domain coordination |
+| **Specialists** | Claude Sonnet 5.5 | Medium | Domain expertise, code generation, structured workflows |
+| **Task Agents** | Claude Haiku 5.5 | Low | Pattern matching, log review, quick operations |
+
+T3 Code also lists **GPT-6.1 Sol** (`gpt-6.1-sol`), **GPT-6.1 Terra**
+(`gpt-6.1-terra`), **GPT-6 Astra** (`gpt-6-astra`), and **GPT-6 Luna**
+(`gpt-6-luna`) for Codex. Select the model supported by the active provider
+and task; availability and reasoning settings depend on the configured provider.
+The diagram illustrates the Claude tier mapping, not a requirement to use one
+provider for every role.
 
 ## Core Components
 
