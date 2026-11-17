@@ -2,8 +2,8 @@
   "manifest": {
     "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
     "name": "ras-commander",
-    "version": "0.1.1",
-    "description": "Coordinate HEC-RAS, API discovery, and cloud-native GIS workflows through current public packages.",
+    "version": "0.2.0",
+    "description": "Coordinate HEC-RAS capabilities, HMS handoffs, cloud-native maps, consequences, and durable adversarial flood-science research through shared workflows.",
     "author": {
       "name": "gpt-cmdr",
       "url": "https://github.com/gpt-cmdr"
@@ -16,6 +16,16 @@
     "ras-commander",
     "cloud-native-gis",
     "ras-api-discovery",
-    "ras-commander-contributing"
+    "ras-commander-contributing",
+    "ras-boundary-conditions",
+    "ras-meteorological-forcings",
+    "ras-gridded-precipitation",
+    "ras-mapping",
+    "ras-land-surface",
+    "ras-cloud-native-export",
+    "flood-science-research",
+    "ras-terrain",
+    "ras-hms-integration",
+    "ras-consequences"
   ]
 }

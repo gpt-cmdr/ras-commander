@@ -31,6 +31,27 @@ When adding a new component, add it to the appropriate domain group AND the rela
 Canonical routing and release/MCP boundaries live in the shared skills. HMS intake lives in
 the HMS repository's `hms-commander` skill. GIS reads current ras2cng/hms2cng guidance when needed.
 
+### Capability workflows and flood-science research
+
+| Component | Type | Path |
+|---|---|---|
+| `ras-boundary-conditions` | shared skill + Claude adapter | `.claude/skills/ras-boundary-conditions/SKILL.md`; `.claude/agents/ras-boundary-conditions.md` |
+| `ras-meteorological-forcings` | shared skill + Claude adapter | `.claude/skills/ras-meteorological-forcings/SKILL.md`; `.claude/agents/ras-meteorological-forcings.md` |
+| `ras-gridded-precipitation` | shared skill + Claude adapter | `.claude/skills/ras-gridded-precipitation/SKILL.md`; `.claude/agents/ras-gridded-precipitation.md` |
+| `ras-mapping` | shared skill + Claude adapter | `.claude/skills/ras-mapping/SKILL.md`; `.claude/agents/ras-mapping.md` |
+| `ras-land-surface` | shared skill + Claude adapter | `.claude/skills/ras-land-surface/SKILL.md`; `.claude/agents/ras-land-surface.md` |
+| `ras-cloud-native-export` | shared skill + Claude adapter | `.claude/skills/ras-cloud-native-export/SKILL.md`; `.claude/agents/ras-cloud-native-export.md` |
+| `ras-terrain` | shared skill + Claude adapter | `.claude/skills/ras-terrain/SKILL.md`; `.claude/agents/ras-terrain.md` |
+| `ras-hms-integration` | shared skill + Claude adapter | `.claude/skills/ras-hms-integration/SKILL.md`; `.claude/agents/ras-hms-integration.md` |
+| `ras-consequences` | shared skill + Claude adapter | `.claude/skills/ras-consequences/SKILL.md`; `.claude/agents/ras-consequences.md` |
+| `flood-science-research` | shared skill + Claude adapter | `.claude/skills/flood-science-research/SKILL.md`; `.claude/agents/flood-science-research.md` |
+| `hec-planning-reference-scout` | Claude adapter | `.claude/agents/hec-planning-reference-scout.md` |
+| `flood-hydraulics-research` | Claude adapter | `.claude/agents/flood-hydraulics-research.md` |
+| `flood-hydrometeorology-research` | Claude adapter | `.claude/agents/flood-hydrometeorology-research.md` |
+| `flood-inundation-research` | Claude adapter | `.claude/agents/flood-inundation-research.md` |
+
+Relationship map: `ras-commander` → capability workflows; `cloud-native-gis` → RAS export; `flood-science-research` → domain preparation + bounded implementation/experiment workers; research lenses → shared research workflow; all planning → HEC reference scout and `docs/development/hec-planning-references.md`.
+
 ### HEC-RAS Execution
 
 | Component | Type | Path |
@@ -450,12 +471,16 @@ Suspected Commander/MCP defect or feature gap → shared `ras-commander-contribu
 
 **Voice**: All skills, agents, rules, and commands use imperative agent-instructable voice. Write "When the user asks X, use Y" not "This module provides Y."
 
-**Cross-References**: Every file includes a `## Cross-References` section mapping related components in other directories. Use the relationship map above as the source of truth.
+**Cross-References**: Link related workflows where needed; thin adapters may link their canonical shared skill directly without a separate heading. Use the relationship map above for discovery.
 
-**Line Budget**: 200-400 lines per file. Documented exceptions: `code-oracle-codex.md`, `code-oracle-gemini.md`, `win32com-automation-expert.md`, `hecras-code-archaeologist.md`.
+**Progressive disclosure**: Thin adapters and skill entry points should be as short as their task permits; move substantial conditional detail into selected references. There is no minimum line count. Historical large components include `code-oracle-codex.md`, `code-oracle-gemini.md`, `win32com-automation-expert.md`, `hecras-code-archaeologist.md`.
 
 **Updates**: When adding a new component, update this manifest AND add cross-references to related existing components.
 
 ## Portable package and release maintenance
 
 The generated skills-only plugin is defined by `.claude/plugin/package.json` and assembled with `scripts/agent_framework/build_plugin.py`. Canonical sources remain `.claude/skills/`; generated bundles are distributions, not a second instruction corpus. API discovery routes through `ras-api-discovery`; the API expert is a thin Claude adapter.
+
+### Model-revision specification reference
+
+`AGENTS.md` and capability/research workflows → `.claude/references/model-revisions/specification.md` → jointly developed visual specifications, explicit engineer deferral, bounded research approval and ras2cng-assisted reporting. This is one shared reference, not a new agent or parallel policy tree.

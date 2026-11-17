@@ -342,6 +342,8 @@ nav:
   - Development:
     - LLM Forward Development: development/llm-development.md
     - Cognitive Infrastructure: cognitive-infrastructure/index.md
+    - HEC Planning References: development/hec-planning-references.md
+    - Capability Agent Roadmap: development/capability-agent-roadmap.md
     - LLM Agent Guide: development/llm-agents.md
     - Agent Infrastructure: development/agent-infrastructure.md
     - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md

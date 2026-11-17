@@ -183,6 +183,10 @@ that did not occur. Preserve source profiles and unrelated registry state.
 - `.codex/` - Codex-native hook configuration only. Shared Codex instructions still live in `AGENTS.md`; Codex skills use `.agents/`.
 - `scripts/agent_hooks/` - shared cross-harness hook dispatcher used by Claude Code and Codex.
 
+## Cardinal rule: specification-based model revisions
+
+For professional model revisions and production deliverables, work with the engineer or flood scientist to prepare a Markdown, HTML, or PDF specification before implementation, including relevant professional, report-quality figures and maps that have actually been visually reviewed. The engineer may explicitly defer this preferred step; record that choice and proceed within the authorized scope. For research and experimentation, use **proceed with approval and document**: establish the approved experiment envelope, then work autonomously within it and preserve durable evidence. Existing authorization counts; do not repeatedly ask permission for routine work inside that envelope. Follow [the shared specification workflow](.claude/references/model-revisions/specification.md), including ras2cng-assisted reporting where useful. This model-revision rule does not turn ordinary repository maintenance into an engineering-specification task.
+
 ## Working Rules
 
 - Use real HEC-RAS projects, typically through `RasExamples.extract_project()`. Do not default to mocks or synthetic datasets for domain validation.

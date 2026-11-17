@@ -178,8 +178,9 @@ class CanonicalEntrySkillContracts(unittest.TestCase):
     """The packaged entry skill must work without reading supporting files.
 
     Plugin hosts install skills outside the user's working directory, so a
-    required read of a bundled reference file triggers a permission prompt on
-    the first task. Keep the runtime and MCP guidance inline in SKILL.md.
+    blanket required read of a bundled reference can add an unnecessary first-task
+    permission prompt. Keep intake/runtime/MCP guidance inline; allow the shared
+    specification reference as conditional, revision-specific detail.
     """
     REPO = TOOLS.parents[1]
 
@@ -187,11 +188,13 @@ class CanonicalEntrySkillContracts(unittest.TestCase):
         config = json.loads((self.REPO / '.claude/plugin/package.json').read_text())
         return {name: self.REPO / '.claude/skills' / name / 'SKILL.md' for name in config['skills']}
 
-    def test_entry_skill_has_no_local_file_links(self):
+    def test_entry_skill_limits_local_links_to_conditional_shared_specification(self):
         text = self.selected_skills()['ras-commander'].read_text(encoding='utf-8')
         local = [m.group(2) for m in build_plugin.markdown_targets(text)
                  if not build_plugin.link_parts(m.group(2)).scheme and build_plugin.link_parts(m.group(2)).path]
-        self.assertEqual(local, [], 'ras-commander SKILL.md must not require reading bundled files')
+        self.assertEqual(local, ['../../references/model-revisions/specification.md'],
+                         'Only conditional shared specification detail belongs in the entry skill')
+        self.assertTrue((self.selected_skills()['ras-commander'].parent / local[0]).resolve().is_file())
 
     def test_entry_skill_carries_runtime_setup_and_mcp_boundary(self):
         text = self.selected_skills()['ras-commander'].read_text(encoding='utf-8')
@@ -203,9 +206,15 @@ class CanonicalEntrySkillContracts(unittest.TestCase):
     def test_no_selected_skill_points_into_another_skills_references(self):
         for name, path in self.selected_skills().items():
             for match in build_plugin.markdown_targets(path.read_text(encoding='utf-8')):
-                target = build_plugin.link_parts(match.group(2)).path
-                self.assertFalse(target.startswith('../') and '/references/' in target,
-                                 f'{name} links into another skill\'s references: {target}')
+                parts = build_plugin.link_parts(match.group(2))
+                target = parts.path
+                if parts.scheme or not target:
+                    continue
+                resolved = (path.parent / target).resolve()
+                for other_name, other_path in self.selected_skills().items():
+                    if other_name != name:
+                        self.assertFalse(resolved.is_relative_to((other_path.parent / 'references').resolve()),
+                                         f'{name} links into another skill\'s references: {target}')
 
 
 if __name__=='__main__':unittest.main()

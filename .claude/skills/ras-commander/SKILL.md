@@ -9,9 +9,11 @@ security_review: internal
 
 # RAS Commander
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. For detailed model-revision procedures, consult the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Serve as the task entry point for “Just Ask for RAS Commander.” Translate the request into a scoped workflow using the installed public library. This skill is a coordinator, not a new modeling engine or a guarantee that every operation is available.
 
-This skill is self-contained. Everything needed to choose tooling is below; there is no supporting file to read first. Load other skills, such as `ras-api-discovery` or `ras-commander-contributing`, through the host's skill mechanism by name rather than opening their files.
+This skill is self-contained for intake and tooling selection; no supporting file must be read first. The bundled specification reference supplies conditional detail for model revisions, not a prerequisite for every request. Load other skills, such as `ras-api-discovery` or `ras-commander-contributing`, through the host's skill mechanism by name rather than opening their files.
 
 ## Set up the Python runtime
 
@@ -36,10 +38,22 @@ Identify the project, requested result, engine/library versions, and whether the
 | Plan execution | `hecras_plan_execution`, then the appropriate local/remote execution skill |
 | Result interpretation | Results analyst or HDF specialist through public APIs |
 | Geometry/QA | Geometry or QA specialist with explicit input-change scope |
-| GIS/archive/map delivery | Shared `cloud-native-gis` skill |
-| HMS or watershed-to-RAS work | Canonical `hms-commander` skill if available; otherwise identify the missing integration before execution |
+| Boundary/initial conditions and DSS assignment | `ras-boundary-conditions` skill |
+| Meteorological conversion and native DSS/Vortex selection | `ras-meteorological-forcings` skill |
+| Historical/design gridded rainfall and plan attachment | `ras-gridded-precipitation` skill |
+| Hydraulic map generation and fast-map comparison | `ras-mapping` skill |
+| Land cover, roughness, soils and infiltration | `ras-land-surface` skill |
+| Terrain creation, modification and associations | `ras-terrain` skill |
+| HMS outlet hydrographs to RAS boundaries | `ras-hms-integration` skill; canonical hms-commander guidance |
+| Hydraulic hazards to go-consequences | `ras-consequences` skill; selected engine contracts |
+| RAS cloud-native export | `ras-cloud-native-export` skill; canonical ras2cng contracts |
+| Sustained flood-science investigation | `flood-science-research` skill; durable task and bounded implementation/experiment workers |
+| GIS/archive/map delivery across RAS/HMS | Shared `cloud-native-gis` skill |
+| HMS model work beyond the RAS handoff | Canonical `hms-commander` skill if available; otherwise identify the missing integration before execution |
 | Suspected Commander or MCP defect, feature gap, or contribution | `ras-commander-contributing` skill; protect the user's task first |
 | Repository writing review | Requested auditor; do not impose repository rules on user-created work |
+
+Load only the selected workflow, then its task-relevant reference section. Do not preload every specialist, notebook, or HEC manual. Give subagents bounded questions and return concise findings, evidence locators, versions, limitations, and artifact paths; keep full grids, notebooks and logs in files. Research lenses are optional perspectives, not a mandatory delegation hierarchy.
 
 Use native specialist/subagent mechanisms available in the current harness. Claude roles are adapters; Codex should use these shared instructions and available native workers, not assume Claude's Task syntax exists. Direct Python work is appropriate for a small task; delegate domains when useful. MCP calls always require the bounded subagent flow below.
 

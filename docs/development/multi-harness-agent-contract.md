@@ -253,3 +253,36 @@ merge, or publish. Metadata observation is separate from minimum/latest contract
 packaging qualification. See the repository `.claude/plugin/README.md` for assembly,
 refresh, host prerequisites, and GitHub Actions permission limits. Editorial standards
 apply to maintained repository/package instructions, not external user deliverables.
+
+## Capability workflows and sustained research
+
+HEC-RAS boundary conditions, meteorological forcings, gridded precipitation, mapping, land-surface inputs, and cloud-native exports have shared skills under `.claude/skills/ras-*`. Claude role definitions load these skills; Codex discovers the same sources through the approved bridge. Canonical ras2cng and native-backend guidance stays with its owning package.
+
+`flood-science-research` supplies the sustained investigation workflow and durable task template. Hydraulics, hydrometeorology, and inundation research adapters select a scientific lens, then use the shared workflow to delegate bounded implementation and experiment tasks. Coordinator-owned task/state records and worker-owned experiment receipts support resumption across sessions. Creating these instructions does not start a research campaign or grant background execution.
+
+During planning, the HEC reference scout and [planning references](hec-planning-references.md) identify version-specific methodology. Library contracts and actual experiment evidence establish automation coverage and findings; HEC links do not establish approval or backend parity.
+
+### Agent, skill, and reference responsibilities
+
+An agent owns a bounded independent question, artifact, review, or isolated tool context. A shared skill owns reusable workflow decisions and validation. A reference carries conditional method/backend details and notebook evidence. A dataset, backend, model name, or file format alone does not justify another agent. Preserve compatibility entry points as thin routes to one canonical workflow.
+
+The coordinator chooses one task route without loading all domain references. A specialist reads its skill and the selected reference sections, discovers the actual installed API, and returns concise findings plus source/artifact locators. Keep arrays, complete notebooks, and full logs out of coordinator messages. Research lenses are optional perspectives; they do not require an extra coordinator tier.
+
+```mermaid
+flowchart TD
+    I[Intake and authorization] --> R[Choose one workflow]
+    R --> A[Bounded specialist context]
+    A --> S[Selected skill]
+    S --> F[Relevant reference section]
+    F --> E[Evidence and artifacts]
+    E --> C[Concise result to coordinator]
+    C --> V[Independent review when needed]
+```
+
+The flood-science workflow defaults to constructive adversarial review: challenge the baseline, test alternative explanations, preserve objections and negative results, and use the scientist for consequential direction. Broad agency covers the agreed study and resource envelope, including scoped method/performance improvements; it does not imply deployment, publication, or unrestricted compute. Profile and establish numerical/semantic parity before adopting a Rust rewrite.
+
+Terrain, HMS integration and consequences extend operational routing without copying the canonical hms-commander, ras2cng or consequences-engine API contracts. See the [capability roadmap](capability-agent-roadmap.md) for the commit-based gap assessment and proposed follow-on roles.
+
+### Specification-first model revisions
+
+The root contract and directly invoked capability/research skills carry the specification cardinal rule. One canonical reference under `.claude/references/model-revisions/specification.md` defines the professional visual-specification workflow, engineer deferral, research approval envelope, figure register, actual visual review, and ras2cng reporting. Portable packaging follows these local links so direct skill use retains the same rule.

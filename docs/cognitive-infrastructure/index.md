@@ -11,46 +11,74 @@ The cognitive infrastructure embodies the **LLM Forward** engineering philosophy
 3. **Multi-Level Verifiability** - HEC-RAS projects (GUI review) + visual outputs + code audit trails
 4. **Human-in-the-Loop** - Multiple review pathways for professional engineering oversight
 
-## Three-Tier Agent Architecture
+## Cardinal rule: specification-first revisions
+
+For professional model revisions and production deliverables, develop a Markdown, HTML, or PDF specification with the engineer or flood scientist before implementation. Include relevant, report-quality figures and maps that have actually been visually reviewed. The engineer can explicitly defer this preferred step; record that choice. Use ras2cng when it helps produce rich maps, with static views appropriate to Markdown/PDF and checked layer behavior in HTML.
+
+For experimentation and research, **proceed with approval and document**: agree on a bounded research envelope, then act within it and preserve decisions, experiments and visual evidence. Existing approval covers routine work inside that envelope. A proposed production revision returns to specification-first work unless explicitly deferred.
+
+## Routing without context overload
 
 ```mermaid
-graph TB
-    subgraph "Tier 1: Orchestration"
-        O[Main Agent - Opus 4.5]
-    end
-
-    subgraph "Tier 2: Domain Specialists"
-        HDF[hdf-analyst]
-        GEO[geometry-parser]
-        USGS[usgs-integrator]
-        REM[remote-executor]
-        QA[quality-assurance]
-    end
-
-    subgraph "Tier 3: Task Agents"
-        NOA[notebook-output-auditor]
-        NAS[notebook-anomaly-spotter]
-        SLH[slash-command-finder]
-    end
-
-    O --> HDF
-    O --> GEO
-    O --> USGS
-    O --> REM
-    O --> QA
-
-    HDF --> NOA
-    GEO --> NAS
-    QA --> SLH
+flowchart TD
+    U[Engineer or flood scientist] --> C[Commander coordinator]
+    C -->|Model operation| D[One relevant domain specialist]
+    C -->|Sustained investigation| R[Flood Science Researcher]
+    D --> S[Load selected workflow skill]
+    S --> F[Read task-specific reference and notebook context]
+    R --> I[Bounded implementation worker]
+    R --> E[Bounded experiment worker]
+    R --> A[Independent adversarial reviewer]
+    I --> T[Durable task and experiment evidence]
+    E --> T
+    A --> T
+    T --> H[Scientist reviews consequential decisions]
 ```
 
-### Model Tiers
+The coordinator selects responsibilities rather than loading every procedure. Specialists read the relevant skill, then only the references needed for their task. They return bounded findings and artifact paths rather than raw grids, full notebooks, or large logs.
 
-| Tier | Model | Cost | Use Cases |
-|------|-------|------|-----------|
-| **Orchestrator** | Opus 4.5 | High | Complex reasoning, architecture, multi-domain coordination |
-| **Specialists** | Sonnet 4.5 | Medium | Domain expertise, code generation, structured workflows |
-| **Task Agents** | Haiku 4.5 | Low | Pattern matching, log review, quick operations |
+## Capability-focused specialists
+
+Start with the shared RAS Commander coordinator, then select the workflow needed for the requested model operation. Roles describe responsibilities; model selection depends on the active provider and task.
+
+| Workflow | Responsibility | Evidence returned |
+|---|---|---|
+| Boundary conditions | Boundary/initial conditions and DSS assignments | Units, timing, coverage, assignments and readback |
+| Meteorological forcings | Native DSS/Vortex capability selection and conversion | Variable semantics, grid metadata and record checks |
+| Gridded precipitation | Historical/design rainfall preparation and plan attachment | Totals, timing, coverage and consumed-input checks |
+| Mapping | Hydraulic map generation and fast-map comparison | Quantity, terrain, CRS, wet/dry treatment and parity limits |
+| Land surface | Land use/roughness and soils/infiltration | Classification coverage, overrides and preprocessed values |
+| Cloud-native export | ras2cng conversion and delivery | Provenance, quantity semantics and output validation |
+| Terrain | Terrain creation, modifications and geometry association | Elevation/datum checks, changed footprint and dependent regeneration |
+| HMS integration | hms-commander watershed-to-hydrograph handoff | Model identity, boundary matching, units, timing and readback |
+| Consequences | RAS results to go-consequences analysis | Hydraulic/exposure compatibility, event assumptions and loss uncertainty |
+
+Consult the [HEC planning references](../development/hec-planning-references.md) for the applicable engine version and method before choosing settings. Shared skills contain the workflows and notebook references; Claude agents are thin adapters, and Codex uses the same skill sources.
+
+Model names checked in T3 Code on November 17, 2026: Claude **Opus 5.5**, **Sonnet 5.5**, and **Haiku 5.5**; Codex **GPT-6.1 Sol**, **GPT-6.1 Terra**, **GPT-6 Astra**, and **GPT-6 Luna**. Availability and reasoning settings depend on the configured provider; these names do not prescribe a fixed model for each role.
+
+## Long-running flood-science research
+
+The research coordinator supports hydraulic/numerical, hydrometeorological, and inundation-map investigations. Its default **Grill the Flood Scientist** posture challenges assumptions, seeks disconfirming evidence, and uses independent adversarial design and findings reviews. The scientist sets direction and resolves consequential choices; the agent takes initiative within the agreed research and resource envelope. It defines hypotheses and controlled comparisons, delegates bounded implementation and experiment tasks, and maintains durable `TASK.md`, `STATE.md`, `PROGRESS.md`, and experiment receipts. Resume from those records and verified artifacts rather than conversation memory.
+
+The shared [flood-science-research skill](https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/skills/flood-science-research/SKILL.md) includes a task template and notebook references covering calibration, roughness/mesh sensitivity, uncertainty preparation, and event comparisons. Saved notebook outputs have specific limits: a sampling recipe is not a completed ensemble, and a gauge comparison with unmatched boundary histories is not calibration validation. Research findings must identify the tested inputs, observations, versions and unresolved uncertainty.
+
+```mermaid
+flowchart LR
+    Q[Question and falsification criteria] --> P[Design and adversarial review]
+    P --> X[Implementation and experiments]
+    X --> V[Consumed-input and result checks]
+    V --> A[Adversarial findings review]
+    A --> H[HITL interpretation and next direction]
+    H -->|Revise| Q
+    H -->|Accept within scope| D[Durable findings and limitations]
+```
+
+Method improvement can include Rust rewrites when profiling identifies a relevant bottleneck. Preserve the original method as an oracle, establish semantic/numerical parity, and benchmark end-to-end performance before proposing adoption. Speed alone does not establish scientific validity.
+
+## Further capability work
+
+The [commit-based capability roadmap](../development/capability-agent-roadmap.md) assesses recent development and separates proposed roles from implemented workflows. Priorities include geometry/mesh preparation and hydraulic structures; subdomain breakout is initially a focused skill under hydraulic research. Existing execution roles should be reconciled before adding another coordinator. Floodway and sediment workflows can begin as specialized skills.
 
 ## Core Components
 
@@ -100,16 +128,16 @@ graph TB
 
 ### Context Inheritance
 
-When a subagent works in a specific directory, it automatically inherits context:
+Read the applicable shared contracts in the selected worker context; harness loading differs, so do not assume that delegation transfers the full parent conversation:
 
 ```
-Root CLAUDE.md (strategic vision)
+Root AGENTS.md (shared project contract)
     ↓
-ras_commander/CLAUDE.md (library patterns)
+ras_commander/AGENTS.md (library patterns)
     ↓
-ras_commander/hdf/CLAUDE.md (HDF implementation)
+ras_commander/hdf/AGENTS.md (HDF implementation)
     ↓
-Subagent gets full context automatically
+Read applicable local contracts in the selected worker context
 ```
 
 ### Knowledge Persistence
@@ -142,13 +170,12 @@ agent_tasks/.agent/
 
 ### Invoking Agents
 
-```python
-# From orchestrator, spawn specialist
-Task(
-    subagent_type="hdf-analyst",
-    model="sonnet",
-    prompt="Analyze WSE results in project.p01.hdf"
-)
+```text
+Task: inspect the selected plan's boundary forcing coverage
+Allowed reads: named project and DSS paths
+Allowed writes: worker-specific report path
+Return: coverage gaps, units/time basis, versions, evidence locators
+Do not execute or modify the model for this inspection
 ```
 
 ### Using Skills

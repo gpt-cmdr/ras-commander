@@ -9,6 +9,8 @@ security_review: internal
 
 # Cloud Native GIS
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Coordinate cloud-native workflows through the current ras2cng or hms2cng public API/CLI. Use this skill when invoked directly or routed from RAS/HMS Commander. Version discipline and the informational-tool boundary follow the `ras-commander` and `hms-commander` skills: use installed public packages, preserve user pins, and never call project MCP from the main agent.
 
 1. Identify the source model family and requested output. Route HEC-RAS to ras2cng and HEC-HMS to hms2cng. Mixed tasks retain separate source identity and can share a declared output catalog.
@@ -19,3 +21,5 @@ Coordinate cloud-native workflows through the current ras2cng or hms2cng public 
 6. Return artifact paths, catalog/layer identity, versions, source provenance, CRS/datum/units, actual checks performed, and remaining limitations. Delegate a bounded domain task when useful; return summaries rather than large spatial arrays to the coordinator.
 
 Use canonical package tools and opinions on demand. The same concept can have different contracts in ras2cng and hms2cng; do not duplicate their implementation or invent equivalence. Repository writing rules govern contributions, not the user's maps or deliverables.
+
+For RAS-specific export preparation and evidence, load `ras-cloud-native-export` when available. Hydraulic map generation and quantity/parity checks belong to `ras-mapping`; coordinate those before export when maps must be generated.
