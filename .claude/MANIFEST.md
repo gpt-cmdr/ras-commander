@@ -480,3 +480,7 @@ Suspected Commander/MCP defect or feature gap → shared `ras-commander-contribu
 ## Portable package and release maintenance
 
 The generated skills-only plugin is defined by `.claude/plugin/package.json` and assembled with `scripts/agent_framework/build_plugin.py`. Canonical sources remain `.claude/skills/`; generated bundles are distributions, not a second instruction corpus. API discovery routes through `ras-api-discovery`; the API expert is a thin Claude adapter.
+
+### Model-revision specification reference
+
+`AGENTS.md` and capability/research workflows → `.claude/references/model-revisions/specification.md` → jointly developed visual specifications, explicit engineer deferral, bounded research approval and ras2cng-assisted reporting. This is one shared reference, not a new agent or parallel policy tree.

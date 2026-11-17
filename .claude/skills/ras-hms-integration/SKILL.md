@@ -9,6 +9,8 @@ security_review: internal
 
 # HMS-to-RAS integration
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Own the hydrologic-to-hydraulic handoff. Use the installed `hms-commander` package and its canonical guidance for HMS model discovery, editing, execution, and results; use RAS Commander for RAS. Keep their project objects and API layers separate. A coupled forecast is not implicit authorization to run both engines.
 
 Read [handoff evidence](references/handoff-evidence.md) for real notebook scope and package references. During planning, select the HMS and RAS boundary topics in [HEC planning references](https://github.com/gpt-cmdr/ras-commander/blob/main/docs/development/hec-planning-references.md), with manuals matching the engines in use.

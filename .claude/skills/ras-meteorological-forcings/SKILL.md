@@ -9,6 +9,8 @@ security_review: internal
 
 # Meteorological forcings
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Own source acquisition, quantity/time semantics, conversion, and forcing-file validation. Hand off the validated product to `ras-gridded-precipitation` for precipitation plan attachment or `ras-boundary-conditions` for non-gridded hydraulic boundaries. A format the importer can read is not proof HEC-RAS accepts every variable in that format.
 
 ## Planning

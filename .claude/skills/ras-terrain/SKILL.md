@@ -9,6 +9,8 @@ security_review: internal
 
 # RAS terrain
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Own the elevation surface and its project dependencies. Use the installed public `RasTerrain`, `RasTerrainModWriter`, `RasTerrainMod`, and `RasMap` APIs. Route hydraulic result mapping to `ras-mapping`, land-cover/infiltration parameters to `ras-land-surface`, and cloud-native packaging to `ras-cloud-native-export` when available.
 
 1. Identify whether the task creates base terrain, authors modifications, changes geometry associations, samples the effective surface, or exports an existing registered terrain. Record installed Commander and HEC-RAS releases, selected terrain and geometry/plan, source order, horizontal CRS/units, elevation units/datum, resolution, nodata, and intended outputs. Source `main` is not proof of installed capability; inspect current signatures and version gates.

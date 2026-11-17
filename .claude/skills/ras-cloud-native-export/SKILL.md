@@ -9,6 +9,8 @@ security_review: internal
 
 # RAS cloud-native export
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Own RAS-specific cloud-native conversion and delivery; the broader `cloud-native-gis` skill remains the RAS/HMS router. Read canonical installed ras2cng guidance and command help instead of maintaining a copied CLI/API catalog.
 
 1. Record installed ras2cng and ras-commander versions, selected project/geometry/plan, available results, intended formats, and permitted outputs. Inspect before exporting. Source `main` examples can exceed the installed release; preserve pins and report missing capabilities.

@@ -11,6 +11,12 @@ The cognitive infrastructure embodies the **LLM Forward** engineering philosophy
 3. **Multi-Level Verifiability** - HEC-RAS projects (GUI review) + visual outputs + code audit trails
 4. **Human-in-the-Loop** - Multiple review pathways for professional engineering oversight
 
+## Cardinal rule: specification-first revisions
+
+For professional model revisions and production deliverables, develop a Markdown, HTML, or PDF specification with the engineer or flood scientist before implementation. Include relevant, report-quality figures and maps that have actually been visually reviewed. The engineer can explicitly defer this preferred step; record that choice. Use ras2cng when it helps produce rich maps, with static views appropriate to Markdown/PDF and checked layer behavior in HTML.
+
+For experimentation and research, **proceed with approval and document**: agree on a bounded research envelope, then act within it and preserve decisions, experiments and visual evidence. Existing approval covers routine work inside that envelope. A proposed production revision returns to specification-first work unless explicitly deferred.
+
 ## Routing without context overload
 
 ```mermaid

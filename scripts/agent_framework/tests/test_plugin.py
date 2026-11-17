@@ -204,8 +204,14 @@ class CanonicalEntrySkillContracts(unittest.TestCase):
         for name, path in self.selected_skills().items():
             for match in build_plugin.markdown_targets(path.read_text(encoding='utf-8')):
                 target = build_plugin.link_parts(match.group(2)).path
-                self.assertFalse(target.startswith('../') and '/references/' in target,
-                                 f'{name} links into another skill\'s references: {target}')
+                parts = build_plugin.link_parts(match.group(2))
+                if parts.scheme or not target:
+                    continue
+                resolved = (path.parent / target).resolve()
+                for other_name, other_path in self.selected_skills().items():
+                    if other_name != name:
+                        self.assertFalse(resolved.is_relative_to(other_path.parent / 'references'),
+                                         f'{name} links into another skill\'s references: {target}')
 
 
 if __name__=='__main__':unittest.main()

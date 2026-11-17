@@ -33,3 +33,7 @@ Experiment ID and status (planned/running/completed/failed/interrupted); hypothe
 ## Checkpoint and handoff
 
 STATE.md: current accepted baseline, latest accepted experiment, active workers and reconciliation instructions, outstanding issues, exact next command/action, resource use and remaining authorized budget. PROGRESS.md: dated decisions and links to receipts, including rejected findings. Final report: answered questions, evidence, failed tests, limitations, reproducibility instructions, open work and stopped-worker accounting.
+
+## Specification and visual evidence
+
+Operating mode; approved experiment envelope or specification path/format; engineer's explicit deferral if any; revision decisions; figure register with engineering purpose, sources, units/datum/time basis, artifact paths, captions, actual visual-review date/reviewer and resolved findings; ras2cng map/export provenance where used; final-format review and deferred checks. Transition a proposed production revision to a jointly developed visual specification unless explicitly deferred.

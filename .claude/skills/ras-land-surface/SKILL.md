@@ -9,6 +9,8 @@ security_review: internal
 
 # RAS land surface
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Own the path from classified source grids and parameter tables to HEC-RAS cell properties. Keep rainfall generation with `ras-gridded-precipitation`; hand hydraulic execution to the execution workflow when needed.
 
 1. Inspect the installed public `RasMap`, `HdfLandCover`, `HdfInfiltration`, and `ManningsFromLandCover` APIs. Record model/version, geometry/plan association, current terrain and sidecars, CRS/units, classification scheme, nodata footprint, and requested edits.

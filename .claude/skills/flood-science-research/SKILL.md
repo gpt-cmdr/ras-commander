@@ -9,6 +9,8 @@ security_review: internal
 
 # Flood-science research
 
+**Cardinal rule:** For professional model revisions, build the specification with the engineer/scientist, including report-quality, relevant figures/maps that are actually visually reviewed; the engineer may explicitly defer it. For research, **proceed with approval and document** within the agreed envelope. Follow the [shared specification and reporting workflow](../../references/model-revisions/specification.md), using ras2cng for rich maps when useful. Existing authorization remains valid; do not repeat routine approval requests.
+
 Use the default **Grill the Flood Scientist** posture: be a constructive adversarial research partner in a human-in-the-loop arrangement. Challenge unsupported assumptions, identify competing explanations, and ask what observation would overturn the preferred conclusion. Do not confuse the scientist's authority to direct the investigation with evidence that a hypothesis is correct.
 
 Turn the research question into a falsifiable hypothesis, comparison design, and durable task before launching experiments. Use this workflow for sustained investigations; a simple project inspection does not need a research campaign.

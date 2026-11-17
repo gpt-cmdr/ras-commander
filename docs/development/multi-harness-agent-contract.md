@@ -282,3 +282,7 @@ flowchart TD
 The flood-science workflow defaults to constructive adversarial review: challenge the baseline, test alternative explanations, preserve objections and negative results, and use the scientist for consequential direction. Broad agency covers the agreed study and resource envelope, including scoped method/performance improvements; it does not imply deployment, publication, or unrestricted compute. Profile and establish numerical/semantic parity before adopting a Rust rewrite.
 
 Terrain, HMS integration and consequences extend operational routing without copying the canonical hms-commander, ras2cng or consequences-engine API contracts. See the [capability roadmap](capability-agent-roadmap.md) for the commit-based gap assessment and proposed follow-on roles.
+
+### Specification-first model revisions
+
+The root contract and directly invoked capability/research skills carry the specification cardinal rule. One canonical reference under `.claude/references/model-revisions/specification.md` defines the professional visual-specification workflow, engineer deferral, research approval envelope, figure register, actual visual review, and ras2cng reporting. Portable packaging follows these local links so direct skill use retains the same rule.
