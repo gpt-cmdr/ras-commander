@@ -347,6 +347,10 @@ eight source basins. The adapter preserves all of them in one movable delivery
 folder for FIM Commander and writes a relative-path inventory of each
 project's registered plan, geometry, flow, geometry HDF, and source archive.
 
+`AL03150201` (Upper Alabama) is also in the HUC8 crosswalk. Its 833 BLE
+models can be listed and downloaded, but the adapter has no recorded model
+or basin counts for it, so the full-corpus count gates do not apply.
+
 ```python
 from pathlib import Path
 
