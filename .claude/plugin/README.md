@@ -58,3 +58,9 @@ The default `GITHUB_TOKEN` is scoped to this repository and cannot notify the
 other repository. Missing or expired credentials fail the notification job;
 the weekly marketplace check remains available. Rotate the secret before the
 token expires. Do not store a token in source files or logs.
+
+## Capability and research workflows (0.2.0)
+
+The selected distribution now includes boundary conditions, meteorological forcings, gridded precipitation, hydraulic mapping, land-surface inputs, RAS cloud-native export, terrain modifications, HMS integration, consequences, and sustained flood-science research. Domain references summarize relevant example procedures and interpretation limits, with reader-activated repository links for full notebooks and HEC planning references. These links require source access when consulted; packaging does not bundle model datasets or execute notebooks.
+
+The research skill supplies a durable task template and bounded implementation/experiment delegation workflow. Claude repository adapters expose hydraulics, hydrometeorology, and inundation research lenses; the portable skills-only package uses the host's native subagent mechanisms. A host without delegation can report that limitation and retain a reviewable research plan; it must not claim worker execution. No new runtime, project MCP access, background service, or publication permission is installed.

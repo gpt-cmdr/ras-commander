@@ -19,3 +19,5 @@ Coordinate cloud-native workflows through the current ras2cng or hms2cng public 
 6. Return artifact paths, catalog/layer identity, versions, source provenance, CRS/datum/units, actual checks performed, and remaining limitations. Delegate a bounded domain task when useful; return summaries rather than large spatial arrays to the coordinator.
 
 Use canonical package tools and opinions on demand. The same concept can have different contracts in ras2cng and hms2cng; do not duplicate their implementation or invent equivalence. Repository writing rules govern contributions, not the user's maps or deliverables.
+
+For RAS-specific export preparation and evidence, load `ras-cloud-native-export` when available. Hydraulic map generation and quantity/parity checks belong to `ras-mapping`; coordinate those before export when maps must be generated.

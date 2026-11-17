@@ -31,6 +31,27 @@ When adding a new component, add it to the appropriate domain group AND the rela
 Canonical routing and release/MCP boundaries live in the shared skills. HMS intake lives in
 the HMS repository's `hms-commander` skill. GIS reads current ras2cng/hms2cng guidance when needed.
 
+### Capability workflows and flood-science research
+
+| Component | Type | Path |
+|---|---|---|
+| `ras-boundary-conditions` | shared skill + Claude adapter | `.claude/skills/ras-boundary-conditions/SKILL.md`; `.claude/agents/ras-boundary-conditions.md` |
+| `ras-meteorological-forcings` | shared skill + Claude adapter | `.claude/skills/ras-meteorological-forcings/SKILL.md`; `.claude/agents/ras-meteorological-forcings.md` |
+| `ras-gridded-precipitation` | shared skill + Claude adapter | `.claude/skills/ras-gridded-precipitation/SKILL.md`; `.claude/agents/ras-gridded-precipitation.md` |
+| `ras-mapping` | shared skill + Claude adapter | `.claude/skills/ras-mapping/SKILL.md`; `.claude/agents/ras-mapping.md` |
+| `ras-land-surface` | shared skill + Claude adapter | `.claude/skills/ras-land-surface/SKILL.md`; `.claude/agents/ras-land-surface.md` |
+| `ras-cloud-native-export` | shared skill + Claude adapter | `.claude/skills/ras-cloud-native-export/SKILL.md`; `.claude/agents/ras-cloud-native-export.md` |
+| `ras-terrain` | shared skill + Claude adapter | `.claude/skills/ras-terrain/SKILL.md`; `.claude/agents/ras-terrain.md` |
+| `ras-hms-integration` | shared skill + Claude adapter | `.claude/skills/ras-hms-integration/SKILL.md`; `.claude/agents/ras-hms-integration.md` |
+| `ras-consequences` | shared skill + Claude adapter | `.claude/skills/ras-consequences/SKILL.md`; `.claude/agents/ras-consequences.md` |
+| `flood-science-research` | shared skill + Claude adapter | `.claude/skills/flood-science-research/SKILL.md`; `.claude/agents/flood-science-research.md` |
+| `hec-planning-reference-scout` | Claude adapter | `.claude/agents/hec-planning-reference-scout.md` |
+| `flood-hydraulics-research` | Claude adapter | `.claude/agents/flood-hydraulics-research.md` |
+| `flood-hydrometeorology-research` | Claude adapter | `.claude/agents/flood-hydrometeorology-research.md` |
+| `flood-inundation-research` | Claude adapter | `.claude/agents/flood-inundation-research.md` |
+
+Relationship map: `ras-commander` → capability workflows; `cloud-native-gis` → RAS export; `flood-science-research` → domain preparation + bounded implementation/experiment workers; research lenses → shared research workflow; all planning → HEC reference scout and `docs/development/hec-planning-references.md`.
+
 ### HEC-RAS Execution
 
 | Component | Type | Path |
