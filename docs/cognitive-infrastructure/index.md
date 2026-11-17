@@ -55,7 +55,7 @@ Start with the shared RAS Commander coordinator, then select the workflow needed
 
 Consult the [HEC planning references](../development/hec-planning-references.md) for the applicable engine version and method before choosing settings. Shared skills contain the workflows and notebook references; Claude agents are thin adapters, and Codex uses the same skill sources.
 
-Model names checked in T3 Code on November 17, 2026: Claude Opus, Sonnet, and Haiku **5.5**; Codex **GPT-6.1 Sol**, **GPT-6.1 Terra**, **GPT-6 Astra**, and **GPT-6 Luna**. Availability and reasoning settings depend on the configured provider; these names do not prescribe a fixed model for each role.
+Model names checked in T3 Code on November 17, 2026: Claude **Opus 5.5**, **Sonnet 5.5**, and **Haiku 5.5**; Codex **GPT-6.1 Sol**, **GPT-6.1 Terra**, **GPT-6 Astra**, and **GPT-6 Luna**. Availability and reasoning settings depend on the configured provider; these names do not prescribe a fixed model for each role.
 
 ## Long-running flood-science research
 

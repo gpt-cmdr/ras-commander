@@ -3,7 +3,7 @@
     "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
     "name": "ras-commander",
     "version": "0.2.0",
-    "description": "Coordinate HEC-RAS, API discovery, and cloud-native GIS workflows through current public packages.",
+    "description": "Coordinate HEC-RAS capabilities, HMS handoffs, cloud-native maps, consequences, and durable adversarial flood-science research through shared workflows.",
     "author": {
       "name": "gpt-cmdr",
       "url": "https://github.com/gpt-cmdr"

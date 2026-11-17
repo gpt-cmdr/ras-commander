@@ -12,7 +12,7 @@ For experimentation and research, use **proceed with approval and document**: ag
 
 Capture the intended engineering decision; source project and baseline identities; engine/package versions; requested model revisions and rationale; alternatives; affected plans, geometry, boundaries, terrain and classifications; units, CRS, vertical datum and time basis; data provenance and gaps; applicable HEC method references; assumptions and uncertainty; acceptance criteria; comparison design; outputs; authorized operations; and review/decision status. Identify which decisions remain with the engineer or scientist. Record revisions and departures from the agreed specification rather than silently changing it.
 
-Use a figure register: figure ID, purpose and engineering question, source inputs/results, quantity/profile/event, units/datum/CRS/time basis, rendering settings, artifact path, caption, actual visual reviewer/date, findings and disposition. Automated checks complement visual inspection; they cannot stand in for it. If rendering or visual inspection is unavailable, mark the figure unreviewed and the specification incomplete; ask the professional to choose a review path or explicitly defer the step rather than claiming completion.
+Use a figure register: figure ID, purpose and engineering question, source inputs/results, quantity/profile/event, units/datum/CRS/time basis, rendering settings, artifact path, caption, actual visual reviewer/date and role (agent or human), findings and disposition. Record the responsible engineer/scientist's acceptance of the specification and any conditions; agent visual inspection does not itself establish professional acceptance. Existing recorded acceptance remains valid, and explicit deferral still permits proceeding within scope. Automated checks complement visual inspection; they cannot stand in for it. If rendering or visual inspection is unavailable, mark the figure unreviewed and the specification incomplete; ask the professional to choose a review path or explicitly defer the step rather than claiming completion.
 
 ## Choose relevant figures and maps
 
@@ -49,6 +49,7 @@ flowchart TD
     M -->|Research or experiment| R[Approve bounded experiment envelope]
     R --> E[Proceed and document evidence and objections]
     E --> C{Production revision proposed?}
-    C -->|Yes| S
-    X --> O[Compare results and update specification]
+    C -->|Yes| D
+    C -->|No| L[Document research findings and next direction]
+    X --> O[Compare results and update specification or deferred revision record]
 ```

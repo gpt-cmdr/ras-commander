@@ -28,3 +28,5 @@ Read [workflow evidence](references/workflow-evidence.md) for the relevant bound
 - If preprocessing or compute is authorized, use `RasPreprocess`/`RasCmdr` and inspect solver-facing inputs, boundary results and compute messages. Do not invoke `Ras.exe` directly. Report whether evidence stops at saved inputs, preprocessing, or a completed run.
 
 Return the boundary-to-source assignment table, changed artifact paths, before/after checks, engine/library versions, and unresolved hydraulic assumptions. An available pathname or successful write alone is not model-consumption evidence.
+
+For DSS readback, check backend-specific missing markers before coverage, peaks or volumes. Java may retain finite HEC sentinels (-FLT_MAX, approximately -3.4028235e38, and -901/-902); null/finiteness checks alone are insufficient. Mask declared markers in analysis copies, preserve the missing-data mask, and do not treat gaps as zero.

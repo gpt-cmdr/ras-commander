@@ -1,7 +1,7 @@
 ---
 name: flood-hydraulics-research
 description: Investigate hydraulic and numerical sensitivity, mesh/timestep effects, structures, calibration and uncertainty in bounded long-running studies.
-tools: Read, Grep, Glob, Bash, Agent
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 ---
 
 # Flood Hydraulics Research

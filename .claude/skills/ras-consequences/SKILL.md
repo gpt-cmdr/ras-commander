@@ -26,7 +26,7 @@ flowchart LR
 
 ## Plan the analysis
 
-Record event, frequency provenance, alternative/condition, hydraulic result identity and aggregation, exposure vintage and IDs, occupancy mapping, valuation basis/currency year, foundation or first-floor convention, vulnerability functions and uncertainty mode. Select the actual project methodology before computing. Rainfall AEP is not automatically the flood-event AEP. Life-loss, indirect loss and agriculture require their own data and engine qualification; economic depth damage is not evidence for them.
+Record event, frequency provenance, alternative/condition, hydraulic result identity, effective terrain identity used for the solve/map, and aggregation, exposure vintage and IDs, occupancy mapping, valuation basis/currency year, foundation or first-floor convention, vulnerability functions and uncertainty mode. Select the actual project methodology before computing. Rainfall AEP is not automatically the flood-event AEP. Life-loss, indirect loss and agriculture require their own data and engine qualification; economic depth damage is not evidence for them.
 
 For go-consequences depth workflows, provide depth above compatible ground, not WSE mislabeled as depth. Document horizontal CRS, vertical datum, depth units, raster resolution/aggregation, NoData and sampling method. Foundation height is first-floor elevation minus compatible ground elevation; the engine's depth reference and foundation adjustment must agree so the adjustment is not applied twice. Do not assume missing foundations, occupancy or valuations have harmless defaults.
 

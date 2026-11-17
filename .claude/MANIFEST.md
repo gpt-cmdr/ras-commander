@@ -471,9 +471,9 @@ Suspected Commander/MCP defect or feature gap → shared `ras-commander-contribu
 
 **Voice**: All skills, agents, rules, and commands use imperative agent-instructable voice. Write "When the user asks X, use Y" not "This module provides Y."
 
-**Cross-References**: Every file includes a `## Cross-References` section mapping related components in other directories. Use the relationship map above as the source of truth.
+**Cross-References**: Link related workflows where needed; thin adapters may link their canonical shared skill directly without a separate heading. Use the relationship map above for discovery.
 
-**Line Budget**: 200-400 lines per file. Documented exceptions: `code-oracle-codex.md`, `code-oracle-gemini.md`, `win32com-automation-expert.md`, `hecras-code-archaeologist.md`.
+**Progressive disclosure**: Thin adapters and skill entry points should be as short as their task permits; move substantial conditional detail into selected references. There is no minimum line count. Historical large components include `code-oracle-codex.md`, `code-oracle-gemini.md`, `win32com-automation-expert.md`, `hecras-code-archaeologist.md`.
 
 **Updates**: When adding a new component, update this manifest AND add cross-references to related existing components.
 

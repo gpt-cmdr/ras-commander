@@ -19,3 +19,5 @@ The [DSS package contract](https://github.com/gpt-cmdr/ras-commander/blob/main/r
 When Java fails, check missing pyjnius, Java discovery/`JAVA_HOME`, and classpath configuration. Configure the JVM before importing Java classes; a running JVM cannot be reconfigured in the same process, so a notebook/kernel restart can be necessary after a configuration change. These are Java-specific diagnostics, not a reason to recommend Java installation for every exception. Preserve the actual missing-file, record-type, lock or capability error.
 
 DSS V6/V7 and operation support remain backend/record-specific. Return actual file version and selected backend when relevant; do not extrapolate time-series support to every DSS record family. Source conversion, gridded forcing and precipitation attachment use their dedicated shared skills; this reference does not authorize writes or repair.
+
+Java series can retain finite HEC missing markers (-FLT_MAX and -901/-902). Check backend/record normalization and mask sentinels before coverage or statistics; finiteness is insufficient. Preserve missing-data provenance and do not silently fill zero.

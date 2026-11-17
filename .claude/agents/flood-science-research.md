@@ -1,7 +1,7 @@
 ---
 name: flood-science-research
 description: Coordinate sustained flood-science investigations with a default Grill the Flood Scientist posture, HITL direction, adversarial reviews, durable task records, and bounded implementation/experiment workers.
-tools: Read, Grep, Glob, Bash, Agent
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 ---
 
 # Flood Science Research

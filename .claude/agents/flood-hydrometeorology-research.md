@@ -1,7 +1,7 @@
 ---
 name: flood-hydrometeorology-research
 description: Investigate rainfall, external forcing, boundary timing, land cover and infiltration effects with controlled experiments and durable evidence.
-tools: Read, Grep, Glob, Bash, Agent
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 ---
 
 # Flood Hydrometeorology Research

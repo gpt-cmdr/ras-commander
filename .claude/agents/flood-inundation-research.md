@@ -1,7 +1,7 @@
 ---
 name: flood-inundation-research
 description: Investigate inundation-map sensitivity, terrain and mapping choices, spatial comparisons and uncertainty with controlled experiments.
-tools: Read, Grep, Glob, Bash, Agent
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 ---
 
 # Flood Inundation Research
