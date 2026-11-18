@@ -332,6 +332,7 @@ _LAZY_EXPORTS = {
             'HdfPump', 'HdfInfiltration', 'HdfLandCover', 'HdfPlot',
             'HdfResultsPlot', 'HdfFluvialPluvial', 'HdfBenefitAreas',
             'HdfChannelCapacity', 'HdfResultsAnalysis', 'HdfProject',
+            'HdfSlim', 'HdfSlimPolicy', 'HdfSlimError',
         )
     },
 }
@@ -569,6 +570,7 @@ __all__ = [
     'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfLandCover', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
+    'HdfSlim', 'HdfSlimPolicy', 'HdfSlimError',
 
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',

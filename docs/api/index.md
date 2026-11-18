@@ -77,6 +77,8 @@ Classes for reading HDF result files:
 - [`HdfResultsMesh`](hdf.md#hdfresultsmesh) - 2D mesh results
 - [`HdfResultsProducts`](hdf.md#hdfresultsproducts) - Completed-result
   inspection and deterministic hydraulic product contracts
+- [`HdfSlim`](hdf.md#hdfslim) - Lossless slim copies of 2D results (selected
+  series, re-chunked, verified)
 - [`HdfResultsPlan`](hdf.md#hdfresultsplan) - Plan-level results
 - [`HdfResultsXsec`](hdf.md#hdfresultsxsec) - 1D cross-section results
 - [`HdfStruc`](hdf.md#hdfstruc) - Structure data

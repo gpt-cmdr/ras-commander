@@ -25,6 +25,7 @@ Results:
     - HdfResultsMesh: Mesh results (water surface, velocity, timeseries)
     - HdfResultsXsec: Cross-section results
     - HdfResultsBreach: Dam breach results
+    - HdfSlim: Lossless slim copies of 2D results (selected series, re-chunked, verified)
 
 Infrastructure:
     - HdfPipe: Pipe network geometry and results
@@ -78,6 +79,8 @@ _LAZY_EXPORTS = {
     )
 }
 _LAZY_EXPORTS["HdfResultView"] = (".HdfResultView", "HdfResultView")
+for _name in ("HdfSlim", "HdfSlimPolicy", "HdfSlimError"):
+    _LAZY_EXPORTS[_name] = (".HdfSlim", _name)
 _LAZY_EXPORTS["MeshCellPolygonError"] = (".HdfMesh", "MeshCellPolygonError")
 _LAZY_EXPORTS["MeshSeriesAvailabilityError"] = (".HdfResultsMesh", "MeshSeriesAvailabilityError")
 for _name in ("MeshCornerElevations", "CornerElevationSource", "CornerElevationCheck",
@@ -133,6 +136,7 @@ __all__ = [
     'HdfResultsPlan', 'HdfResultsMesh', 'MeshSeriesAvailabilityError', 'HdfResultView', 'HdfResultsQuery',
     'HdfResultsXsec', 'HdfResultsBreach',
     'HdfResultsSediment', 'HdfResultsProducts',
+    'HdfSlim', 'HdfSlimPolicy', 'HdfSlimError',
     # Infrastructure
     'HdfPipe', 'HdfPump', 'HdfInfiltration', 'HdfLandCover',
     # Visualization

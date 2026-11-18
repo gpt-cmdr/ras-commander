@@ -17,3 +17,6 @@ tests/fixtures/reference_points/*.g09 -text -diff
 tests/data/gate_clip_compatibility.g01 -text -diff
 # HEC-RAS 7.0.1 flow optimization plan text; byte-exact (hash recorded in its README).
 tests/fixtures/flow_optimization/Muncie.p02 -text -diff
+# The HDF slim engine is staged byte-for-byte into Linux jobs and its SHA-256 is recorded
+# in every slim manifest (software.implementation_sha256), so keep LF on every checkout.
+ras_commander/hdf/_hdf_slim_engine.py text eol=lf
