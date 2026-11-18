@@ -101,7 +101,7 @@ def test_actual_dss_timestamp_gate(change):
 @pytest.mark.parametrize('fault', ['write', 'to_dss', 'to_inline', 'readback', 'none'])
 def test_actual_transition_control_flow(tmp_path, fault):
     """Run the unmodified cell with controlled I/O, retaining all production gates."""
-    state = {'dss': False, 'values': np.array([1., 2.]), 'cleanup': 0}
+    state = {'dss': False, 'values': np.array([1., 2.]), 'cleanup': 0, 'stages': []}
     location = dict(river='White', reach='Muncie', station='15696.24')
 
     def inline(*args, **kwargs):
@@ -110,27 +110,31 @@ def test_actual_transition_control_flow(tmp_path, fault):
         return pd.DataFrame([{**location, 'values': state['values']}])
 
     def to_dss(**kwargs):
+        state['stages'].append('to_dss')
         state['dss'] = True
         return fault != 'to_dss'
 
     def to_inline(**kwargs):
+        state['stages'].append('to_inline')
         state['cleanup'] += 1
         state['dss'] = False
         state['values'] = kwargs['hydrograph_df']['value'].to_numpy()
         return fault != 'to_inline'
 
     def write(**kwargs):
+        state['stages'].append('write')
         if fault == 'write':
             raise RuntimeError('injected DSS write failure')
 
     def read(*args):
+        state['stages'].append('readback')
         values = [1., 3.] if fault == 'readback' else [1., 2.]
         return pd.DataFrame({'value': values}, index=pd.date_range('1900-01-01', periods=2, freq='h'))
 
     def project(*args):
         row = {'unsteady_number': '01', 'river_reach_name': 'White', 'river_station': 'Muncie',
                'storage_area_name': '15696.24', 'Use DSS': str(state['dss']),
-               'DSS File': '.\\Muncie_Flows.dss', 'DSS Path': '//MUNCIE INFLOW/FLOW/01JAN1900/1HOUR/RUN:BASELINE/'}
+               'DSS File': 'Muncie_Flows.dss', 'DSS Path': '//MUNCIE INFLOW/FLOW/01JAN1900/1HOUR/RUN:BASELINE/'}
         return SimpleNamespace(unsteady_df=pd.DataFrame({'full_path': ['test.u01']}), boundaries_df=pd.DataFrame([row]))
 
     import ras_commander
@@ -151,6 +155,14 @@ def test_actual_transition_control_flow(tmp_path, fault):
                 exec(compile(source(30), '<312 actual transition>', 'exec'), scope)
             assert not scope['dss_roundtrip_ok']
             assert state['cleanup'] > 0
+    expected_stages = {
+        'none': ['to_dss', 'write', 'readback', 'to_inline'],
+        'to_dss': ['to_dss', 'to_inline'],
+        'write': ['to_dss', 'write', 'to_inline'],
+        'readback': ['to_dss', 'write', 'readback', 'to_inline'],
+        'to_inline': ['to_dss', 'write', 'readback', 'to_inline', 'to_inline'],
+    }
+    assert state['stages'] == expected_stages[fault]
 
 @pytest.mark.parametrize('index,ras_name', [(29, 'ras_baseline'), (32, 'ras_roundtrip'), (35, 'ras_qmult')])
 def test_actual_compute_gate_rejects_false(index, ras_name):
