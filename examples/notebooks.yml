@@ -2399,8 +2399,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 16
-  executed_cells: 16
+  code_cells: 17
+  executed_cells: 17
 - id: 400_1d_hdf_data_extraction
   filename: 400_1d_hdf_data_extraction.ipynb
   title: 1D HDF Data Extraction
@@ -3763,6 +3763,7 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_areas
   - RasDss.get_backend
+  - RasDss.get_file_version
   - RasDss.read_grid
   - RasDss.read_timeseries
   - RasDssGrid.calculate
@@ -3791,8 +3792,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 19
-  executed_cells: 19
+  code_cells: 20
+  executed_cells: 20
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck

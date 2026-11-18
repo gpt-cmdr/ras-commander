@@ -100,7 +100,7 @@ def test_actual_dss_timestamp_gate(change):
 
 @pytest.mark.parametrize('fault', ['write', 'to_dss', 'to_inline', 'readback', 'none'])
 def test_actual_transition_control_flow(tmp_path, fault):
-    """Run the unmodified cell with controlled I/O, retaining all production gates."""
+    """Run the transition section with controlled I/O, retaining all production gates."""
     state = {'dss': False, 'values': np.array([1., 2.]), 'cleanup': 0, 'stages': []}
     location = dict(river='White', reach='Muncie', station='15696.24')
 
@@ -148,11 +148,11 @@ def test_actual_transition_control_flow(tmp_path, fault):
                  river=location['river'], reach=location['reach'], station_loc=location['station'])
     with patch.object(ras_commander, 'RasDss', dss):
         if fault == 'none':
-            exec(compile(source(30), '<312 actual transition>', 'exec'), scope)
+            exec(compile(source(30).split('# Actual inline source and native DSS readback;')[0], '<312 actual transition>', 'exec'), scope)
             assert scope['dss_roundtrip_ok']
         else:
             with pytest.raises((AssertionError, RuntimeError)):
-                exec(compile(source(30), '<312 actual transition>', 'exec'), scope)
+                exec(compile(source(30).split('# Actual inline source and native DSS readback;')[0], '<312 actual transition>', 'exec'), scope)
             assert not scope['dss_roundtrip_ok']
             assert state['cleanup'] > 0
     expected_stages = {
