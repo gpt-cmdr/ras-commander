@@ -319,7 +319,10 @@ All keys are optional: `policy` (preset name or policy mapping, default
 `inundation-mapping`), `extra_series`, and `image` plus `image_sha256` to run the
 slim in a separate pinned SIF instead of the solver image. The image that runs
 the slim must provide `python3` with h5py and numpy. The policy is validated at
-render time. The engine file and the resolved policy JSON are staged under
+render time; any valid chunk and deflate settings are allowed and pinned. The
+preset default (16 x 16,384 tiles, shuffle and deflate 4) is the standard layout,
+and downstream readers may require it, so override it only when every consumer of
+the slim files accepts the change. The engine file and the resolved policy JSON are staged under
 `hdf_slim/`, and their SHA-256 values, the policy and the image pin become part
 of the request.
 
