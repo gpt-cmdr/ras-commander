@@ -1995,6 +1995,7 @@ notebooks:
   functions_used:
   - HdfResultsXsec.get_xsec_timeseries
   - RasCmdr.compute_plan
+  - RasDss.get_backend
   - RasDss.get_file_version
   - RasDss.read_timeseries
   - RasDss.write_timeseries
