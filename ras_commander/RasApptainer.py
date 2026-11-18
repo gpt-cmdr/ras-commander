@@ -436,6 +436,12 @@ _SLIM_COMPLETED_KEYS = frozenset({
 _SLIM_FAILED_KEYS = frozenset({
     "output_path", "status", "reason_code", "copy_back_sha256_verified", "image_sha256",
 })
+#: Failure codes the in-job step adds to the HdfSlim engine's own reason codes.
+_SLIM_JOB_REASON_CODES = frozenset({
+    "HDF_SLIM_IMAGE_MISMATCH", "HDF_SLIM_STAGING_FAILED", "HDF_SLIM_ENGINE_MISMATCH",
+    "HDF_SLIM_RUNTIME_UNAVAILABLE", "HDF_SLIM_RECEIPT_CHECK_FAILED", "HDF_SLIM_NO_MANIFEST",
+    "HDF_SLIM_SWAP_FAILED", "HDF_SLIM_COPY_BACK_FAILED",
+})
 
 
 def _validate_slim_receipt(payload: Mapping[str, Any]) -> None:
@@ -473,10 +479,15 @@ def _validate_slim_receipt(payload: Mapping[str, Any]) -> None:
         if outputs.get(manifest["path"]) != {"sha256": manifest["sha256"], "size_bytes": manifest["bytes"]}:
             raise ValueError("Receipt hdf_slim manifest does not match outputs")
     elif slim.get("status") == "failed":
+        from .hdf._hdf_slim_engine import REASON_CODES
+
+        known = (set(REASON_CODES) | _SLIM_JOB_REASON_CODES) - {"HDF_SLIM_VERIFIED"}
         if (not _SLIM_FAILED_KEYS <= set(slim)
                 or not set(slim) <= _SLIM_FAILED_KEYS | {"problems", "exit_code"}
-                or slim["copy_back_sha256_verified"] is not False or reason == "HDF_SLIM_VERIFIED"):
+                or slim["copy_back_sha256_verified"] is not False or reason not in known):
             raise ValueError("Invalid failed receipt hdf_slim")
+        if payload_record is None and payload["status"] == "succeeded":
+            raise ValueError("Failed hdf_slim receipt must publish the full HDF")
         if payload_record is not None and payload_record != {
                 "sha256": full["sha256"], "size_bytes": full["bytes"]}:
             raise ValueError("Failed hdf_slim receipt must publish the full HDF")
@@ -1051,7 +1062,7 @@ exit 1
 # byte), check the manifest against the full hash and the staged policy, swap the slim in on
 # scratch only, copy back with the existing NAS re-hash, and keep scratch (with the full
 # file) unless copy-back verified. Any failure copies the full file back as before.
-_SLIM_BLOCK_PY = r'''import hashlib, json, sys
+_SLIM_BLOCK_PY = r'''import hashlib, json, os, sys
 man_path, slim_path, out_dir, name, full_sha, full_bytes, rc, image_sha, policy_path = sys.argv[1:]
 output_path = "project/" + name
 manifest_path = "project/" + name[:-len(".hdf")] + ".hdf_slim.json"
@@ -1093,7 +1104,9 @@ if not problems:
         problems.append("slim file differs from manifest output")
 if problems and code == "HDF_SLIM_VERIFIED":
     code = "HDF_SLIM_RECEIPT_CHECK_FAILED"
-failed = {"output_path": output_path, "status": "failed", "reason_code": code,
+# Used only if the job cannot publish this verified slim (scratch swap failure).
+failed_code = code if problems else "HDF_SLIM_SWAP_FAILED"
+failed = {"output_path": output_path, "status": "failed", "reason_code": failed_code,
           "problems": problems, "exit_code": int(rc), "copy_back_sha256_verified": False,
           "image_sha256": image_sha}
 dump(".slim-failed.json", failed)
@@ -1107,7 +1120,7 @@ applied = {mesh: sorted(p for p in paths if p.startswith("/" + root + "/" + mesh
            for mesh in m["meshes"]}
 dump(".slim-completed.json", {
     "output_path": output_path, "status": "completed", "reason_code": "HDF_SLIM_VERIFIED",
-    "manifest": {"path": manifest_path, "bytes": len(open(man_path, "rb").read()),
+    "manifest": {"path": manifest_path, "bytes": os.path.getsize(man_path),
                  "sha256": sha(man_path)},
     "bytes": m["output"]["bytes"], "sha256": slim_sha, "policy": m["policy"],
     "applied_keep": applied, "implementation_sha256": m["software"]["implementation_sha256"],
@@ -1148,15 +1161,16 @@ slim_results() {  # Never fails the job: on any problem the full HDF stays and i
   if [ "$SLIM_IMAGE" != "$IMAGE" ]; then
     [ -f "$SLIM_IMAGE" ] && [ "$(sha_of "$SLIM_IMAGE")" = "$SLIM_IMAGE_SHA256" ] || return 0
   fi
-  slim_fail_code HDF_SLIM_ENGINE_MISMATCH
+  slim_fail_code HDF_SLIM_STAGING_FAILED
   cp -p "$JOB_ROOT/hdf_slim/hdf_slim_engine.py" "$JOB_ROOT/hdf_slim/hdf_slim_policy.json" "$c/" || return 0
+  cat > "$c/slim_block.py" <<'SLIMPY' || return 0
+@SLIM_BLOCK_PY@SLIMPY
+  slim_fail_code HDF_SLIM_ENGINE_MISMATCH
   [ "$(sha_of "$c/hdf_slim_engine.py")" = "$SLIM_ENGINE_SHA256" ] || return 0
   [ "$(sha_of "$c/hdf_slim_policy.json")" = "$SLIM_POLICY_SHA256" ] || return 0
   slim_fail_code HDF_SLIM_RUNTIME_UNAVAILABLE
   "$APPTAINER" exec --cleanenv "$SLIM_IMAGE" python3 -c 'import h5py, numpy' >> "$d/slim.log" 2>&1 || return 0
   slim_fail_code HDF_SLIM_RECEIPT_CHECK_FAILED
-  cat > "$c/slim_block.py" <<'SLIMPY'
-@SLIM_BLOCK_PY@SLIMPY
   "$APPTAINER" exec --cleanenv --bind "$WORK:/in:ro" --bind "$d:/out" --bind "$SCRATCH/tmp:/tmp" \
     --bind "$c:/control:ro" "$SLIM_IMAGE" python3 /control/hdf_slim_engine.py \
     "/in/$SLIM_NAME" "/out/$SLIM_NAME" --manifest "/out/$SLIM_MANIFEST" \
@@ -1260,8 +1274,13 @@ def _check_staged_slim(job_directory: Path, request: Mapping[str, Any]) -> None:
         raise RuntimeError("Staged hdf_slim files do not match rendered request")
 
 
-def _slim_collect_problems(receipt: Mapping[str, Any], request: Mapping[str, Any]) -> list[str]:
-    """Bind a receipt's ``full_hdf``/``hdf_slim`` blocks to the rendered request."""
+def _slim_collect_problems(receipt: Mapping[str, Any], request: Mapping[str, Any],
+                           collected: Path | None = None) -> list[str]:
+    """Bind a receipt's ``full_hdf``/``hdf_slim`` blocks to the rendered request.
+
+    With ``collected`` (the downloaded ``out/<jobid>`` folder), a completed slim's
+    manifest file is also read and checked against the receipt.
+    """
     spec = request.get("hdf_slim")
     slimmed = "hdf_slim" in receipt
     if spec is None:
@@ -1280,6 +1299,25 @@ def _slim_collect_problems(receipt: Mapping[str, Any], request: Mapping[str, Any
     if slim["status"] == "completed" and (
             slim["implementation_sha256"] != spec["engine_sha256"] or slim["policy"] != spec["policy"]):
         problems.append("receipt hdf_slim engine or policy does not match the rendered request")
+    if slim["status"] == "completed" and collected is not None:
+        try:
+            manifest = json.loads((collected / slim["manifest"]["path"]).read_text(encoding="utf-8"))
+            source, output = manifest["source"], manifest["output"]
+            consistent = (
+                manifest["schema"] == "ras-commander-hdf-slim/v1"
+                and manifest["status"] == "completed"
+                and manifest["reason_code"] == "HDF_SLIM_VERIFIED"
+                and source == {**receipt["full_hdf"], "sha256_verified": True}
+                and output == {"name": receipt["full_hdf"]["name"], "bytes": slim["bytes"],
+                               "sha256": slim["sha256"]}
+                and manifest["policy"] == slim["policy"]
+                and manifest["software"]["implementation_sha256"] == slim["implementation_sha256"]
+                and manifest["verification"]["problem_count"] == 0
+            )
+        except (OSError, ValueError, KeyError, TypeError):
+            consistent = False
+        if not consistent:
+            problems.append("collected hdf_slim manifest does not match the receipt")
     return problems
 
 
@@ -2383,7 +2421,7 @@ class RasApptainer:
                 problems.append("receipt input hashes do not match the rendered request")
             if receipt["dss_output_rewrite"] != request.get("dss_output_rewrite"):
                 problems.append("receipt DSS output rewrite does not match the rendered request")
-            problems.extend(_slim_collect_problems(receipt, request))
+            problems.extend(_slim_collect_problems(receipt, request, dest))
             if receipt["status"] != "succeeded":
                 problems.append(f"receipt reports {receipt['status']} ({receipt['reason_code']})")
             for name, record in receipt["outputs"].items():

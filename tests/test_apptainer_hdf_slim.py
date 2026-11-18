@@ -168,6 +168,33 @@ def test_validate_receipt_accepts_slim_blocks():
     RA.validate_receipt(_base_receipt({"project/TEST.p08.hdf": {"sha256": "5" * 64, "size_bytes": 1}}))
 
 
+def _failed_receipt(**slim):
+    r = _base_receipt({"project/TEST.p08.hdf": {"sha256": "5" * 64, "size_bytes": 99}})
+    r["full_hdf"] = {"name": "TEST.p08.hdf", "bytes": 99, "sha256": "5" * 64}
+    r["hdf_slim"] = {"output_path": "project/TEST.p08.hdf", "status": "failed",
+                     "reason_code": "HDF_SLIM_SWAP_FAILED", "copy_back_sha256_verified": False,
+                     "image_sha256": "2" * 64, **slim}
+    return r
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda r: r["hdf_slim"].update(reason_code="HDF_SLIM_VERIFIED"),
+    lambda r: r["hdf_slim"].update(reason_code="SOMETHING_ELSE"),
+    lambda r: r["outputs"].pop("project/TEST.p08.hdf"),
+    lambda r: r["outputs"].update({"project/TEST.p08.hdf": {"sha256": "6" * 64, "size_bytes": 99}}),
+])
+def test_validate_receipt_rejects_bad_failed_slim(mutate):
+    RA.validate_receipt(_failed_receipt())
+    r = _failed_receipt()
+    mutate(r)
+    with pytest.raises(ValueError):
+        RA.validate_receipt(r)
+
+
+def test_failure_placeholder_never_carries_verified_code():
+    assert 'failed_code = code if problems else "HDF_SLIM_SWAP_FAILED"' in RA._SLIM_BLOCK_PY
+
+
 @pytest.mark.parametrize("mutate", [
     lambda r: r.pop("full_hdf"),
     lambda r: r.pop("hdf_slim"),
@@ -240,7 +267,8 @@ print("Finished Unsteady Flow Simulation")
 '''
 
 # Stand-in for the image's python3: runs scripts with the host interpreter. FAKE_SLIM_MODE
-# "noruntime" fails the h5py/numpy probe; "badsource" corrupts the manifest the engine wrote.
+# "noruntime" fails the h5py/numpy probe; "badsource" corrupts the manifest the engine wrote;
+# "swapfail" removes the verified slim after the receipt check, so the scratch swap fails.
 _FAKE_PYTHON = r'''import json, os, runpy, sys
 args = sys.argv[1:]
 mode = os.environ.get("FAKE_SLIM_MODE", "ok")
@@ -252,6 +280,8 @@ try:
     runpy.run_path(args[0], run_name="__main__")
 except SystemExit as exc:
     code = exc.code or 0
+if args[0].endswith("slim_block.py") and mode == "swapfail":
+    os.remove(args[2])  # the verified slim vanishes before the scratch swap
 if args[0].endswith("hdf_slim_engine.py") and mode == "badsource":
     man = args[args.index("--manifest") + 1]
     with open(man, encoding="utf-8") as f:
@@ -378,6 +408,12 @@ def test_in_job_slim_replaces_payload_and_records_full_identity(project507, prof
         f"/{SERIES}/Area1/{n}" for n in ("Water Surface", "Face Flow", *PLUVIAL))}
     assert slim["policy"] == record["policy"] == HdfSlim.list_presets()["inundation-mapping"]
     assert slim["implementation_sha256"] == HdfSlim.implementation_sha256()
+    request = json.loads((remote / "job.json").read_text(encoding="utf-8"))["request"]
+    assert RA._slim_collect_problems(receipt, request, out) == []
+    manifest.write_text(manifest.read_text(encoding="utf-8").replace('"deflate_level": 4', '"deflate_level": 5'),
+                        encoding="utf-8")
+    assert RA._slim_collect_problems(receipt, request, out) == [
+        "collected hdf_slim manifest does not match the receipt"]
     assert not (root / "node" / "4242" / "ras").exists()  # scratch removed only after success
 
 
@@ -387,6 +423,7 @@ def test_in_job_slim_replaces_payload_and_records_full_identity(project507, prof
     ({"FAKE_SOLVER": "no-flow"}, "HDF_SLIM_REQUIRED_DATASET_MISSING"),  # no Face Flow or Velocity
     ({"FAKE_SLIM_MODE": "badsource"}, "HDF_SLIM_RECEIPT_CHECK_FAILED"),
     ({"FAKE_SLIM_MODE": "noruntime"}, "HDF_SLIM_RUNTIME_UNAVAILABLE"),
+    ({"FAKE_SLIM_MODE": "swapfail"}, "HDF_SLIM_SWAP_FAILED"),
 ])
 def test_slim_failure_copies_full_file(project507, profile507, tmp_path, env, code):
     _, remote = _site(project507, profile507, tmp_path)

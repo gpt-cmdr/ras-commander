@@ -290,6 +290,118 @@ def test_integer_series_and_edge_chunks(tmp_path):
     assert row["dtype"] == "int16" and row["chunks"] == [8, 7]
 
 
+# ---- layout validation (named series, time axis, empty, links, vlen, space) -------------
+
+
+def test_required_series_on_wrong_time_axis_is_refused(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        g = h[f"{SERIES_ROOT}/Mesh A"]
+        del g["Face Flow"]
+        g.create_dataset("Face Flow", data=np.ones((T - 1, F), "f4"))
+    for call in (lambda: HdfSlim.slim(src, tmp_path / "s.hdf"), lambda: HdfSlim.plan(src)):
+        with pytest.raises(HdfSlimError) as e:
+            call()
+        assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+    assert not list(tmp_path.glob("s.hdf*"))
+
+
+def test_kept_if_present_series_on_wrong_time_axis_is_refused(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        h[f"{SERIES_ROOT}/Mesh A"].create_dataset("Depth", data=np.ones((T + 2, C), "f4"))
+    with pytest.raises(HdfSlimError) as e:
+        HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+
+
+def test_water_surface_must_match_time_table(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        del h["Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"]
+        h.create_dataset("Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time",
+                         data=np.arange(T + 1, dtype="f8"))
+    with pytest.raises(HdfSlimError) as e:
+        HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+
+
+def test_unnamed_table_off_the_time_axis_is_copied_unchanged(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        h[f"{SERIES_ROOT}/Mesh A"].create_dataset("Lookup", data=np.ones((T - 5, 3), "f4"))
+    m = HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert "Lookup" not in _names(m["dropped"]) | _names(m["rechunked"])
+    with h5py.File(tmp_path / "s.hdf") as b:
+        assert b[f"{SERIES_ROOT}/Mesh A/Lookup"].shape == (T - 5, 3)
+
+
+@pytest.mark.parametrize("shape", [(T, 0)])
+def test_empty_kept_series_is_unsupported(src, tmp_path, shape):
+    with h5py.File(src, "r+") as h:
+        h[f"{SERIES_ROOT}/Mesh A"].create_dataset("Depth", shape=shape, dtype="f4")
+    for call in (lambda: HdfSlim.slim(src, tmp_path / "s.hdf"), lambda: HdfSlim.plan(src)):
+        with pytest.raises(HdfSlimError) as e:
+            call()
+        assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+
+
+def test_zero_time_steps_is_unsupported(tmp_path):
+    src = tmp_path / "p.hdf"
+    with h5py.File(src, "w") as h:
+        g = h.create_group(f"{SERIES_ROOT}/Mesh A")
+        g.create_dataset("Water Surface", shape=(0, 4), dtype="f4", maxshape=(None, 4))
+        g.create_dataset("Face Flow", shape=(0, 6), dtype="f4", maxshape=(None, 6))
+    with pytest.raises(HdfSlimError) as e:
+        HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+
+
+def test_hard_links_are_unsupported(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        h["Geometry/Alias"] = h["Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"]
+    with pytest.raises(HdfSlimError) as e:
+        HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+
+
+def test_variable_length_numeric_and_compound_datasets_verify(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        vl = h.create_dataset("Plan Data/Ragged", shape=(3,), dtype=h5py.vlen_dtype("f8"))
+        vl[0], vl[1], vl[2] = np.array([1.0, np.nan]), np.array([]), np.arange(4.0)
+        comp = np.dtype([("Name", h5py.string_dtype()), ("Value", "f8")])
+        h.create_dataset("Plan Data/Table", data=np.array([("a", 1.5), ("b", np.nan)], dtype=comp))
+    m = HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert m["verification"]["problem_count"] == 0
+    with h5py.File(tmp_path / "s.hdf", "r+") as b:
+        b["Plan Data/Ragged"][2] = np.arange(5.0)
+    assert any("Ragged: data differ" in p for p in HdfSlim.verify(src, tmp_path / "s.hdf", m)["problems"])
+
+
+def test_verify_detects_fill_value_and_maxshape_changes(tmp_path):
+    a, b = tmp_path / "a.hdf", tmp_path / "b.hdf"
+    with h5py.File(a, "w") as h:
+        h.create_dataset("x", data=np.ones((2, 3)), maxshape=(None, 3), fillvalue=0.0)
+    with h5py.File(b, "w") as h:
+        h.create_dataset("x", data=np.ones((2, 3)), maxshape=(2, 3), fillvalue=99.0)
+    result = engine.verify(a, b, [])
+    assert result["problems"] == ["/x: fill value or maximum shape differs"]
+
+
+def test_space_check_counts_copied_datasets(src, tmp_path, monkeypatch):
+    report = HdfSlim.plan(src)
+    assert report["required_free_bytes"] == (report["kept_series_raw_bytes"]
+                                             + report["other_stored_bytes"] + (1 << 30))
+    usage = type(engine.shutil.disk_usage(tmp_path))
+    just_kept = report["kept_series_raw_bytes"] + (1 << 30)  # enough for kept series only
+    monkeypatch.setattr(engine.shutil, "disk_usage", lambda p: usage(10 * just_kept, 0, just_kept))
+    with pytest.raises(HdfSlimError) as e:
+        HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert e.value.reason_code == "HDF_SLIM_INSUFFICIENT_SPACE"
+
+
+def test_cli_manifest_write_failure_is_coded(src, tmp_path, capsys):
+    man = tmp_path / "folder-missing" / "m.json"
+    assert engine.main([str(src), str(tmp_path / "s.hdf"), "--manifest", str(man)]) == 1
+    assert "HDF_SLIM_IO_ERROR" in capsys.readouterr().err
+
+
 # ---- policies --------------------------------------------------------------------------
 
 
@@ -327,6 +439,7 @@ def test_presets_round_trip():
         {"required": ["A"], "keep_if_present": ["A"]},
         {"required": ["A"], "extra_series": ["A"]},
         {"required": ["A"], "fallbacks": {"B": "C"}},
+        {"required": ["A"], "fallbacks": {"A": 123}},
         {"required": ["A", "B"], "fallbacks": {"A": "B"}},
         {"required": ["A"], "time_chunk_steps": 0},
         {"required": ["A"], "space_chunk_size": 2.5},
@@ -374,7 +487,8 @@ def test_plan_matches_slim_and_writes_nothing(src, tmp_path):
     assert {r["path"] for r in report["kept"]} == {r["path"] for r in m["rechunked"]}
     assert report["applied_keep"] == {"Mesh A": sorted(r["path"] for r in m["rechunked"])}
     assert report["policy"] == m["policy"]
-    assert report["required_free_bytes"] == report["kept_series_raw_bytes"] + (1 << 30)
+    assert report["required_free_bytes"] == (report["kept_series_raw_bytes"]
+                                             + report["other_stored_bytes"] + (1 << 30))
     assert report["kept_series_raw_bytes"] == sum(r["raw_bytes"] for r in report["kept"])
 
 

@@ -172,7 +172,9 @@ class HdfSlimPolicy:
         if unknown:
             raise HdfSlimError("HDF_SLIM_INVALID_POLICY", f"unknown policy keys {sorted(unknown)}")
         fallbacks = data.get("fallbacks", {})
-        if not isinstance(fallbacks, Mapping):
+        if not isinstance(fallbacks, Mapping) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in fallbacks.items()
+        ):
             raise HdfSlimError("HDF_SLIM_INVALID_POLICY", "fallbacks must map a required series to its substitute")
         name = data.get("name")
         if name is not None and (not isinstance(name, str) or not name.strip()):
@@ -187,7 +189,7 @@ class HdfSlimPolicy:
         policy = cls(
             required=required,
             keep_if_present=_names(data.get("keep_if_present", ()), "keep_if_present"),
-            fallbacks=tuple((str(k), str(v)) for k, v in fallbacks.items()),
+            fallbacks=tuple(fallbacks.items()),
             extra_series=extra,
             time_chunk_steps=_int(data.get("time_chunk_steps", cls.time_chunk_steps), "time_chunk_steps"),
             space_chunk_size=_int(data.get("space_chunk_size", cls.space_chunk_size), "space_chunk_size"),
@@ -300,17 +302,47 @@ def _is_mesh_series_group(name: str) -> bool:
 
 
 def _time_steps(group: h5py.Group) -> int:
-    """Rows of the series time axis for one mesh group (Water Surface, else the Time table)."""
+    """Rows of the series time axis for one mesh group.
+
+    The Base Output ``Time`` table defines the axis; without it, the mesh's
+    ``Water Surface`` rows do. When both exist they must agree.
+    """
     ws = group.get("Water Surface")
-    if isinstance(ws, h5py.Dataset) and ws.ndim == 2:
-        return int(ws.shape[0])
+    ws_rows = int(ws.shape[0]) if isinstance(ws, h5py.Dataset) and ws.ndim == 2 else None
     t = group.file.get(TIME_PATH)
     if isinstance(t, h5py.Dataset) and t.ndim == 1:
+        if ws_rows is not None and ws_rows != t.shape[0]:
+            raise HdfSlimError(
+                "HDF_SLIM_UNSUPPORTED_LAYOUT",
+                f"{group.name}: Water Surface has {ws_rows} rows but the Time table has {t.shape[0]}",
+            )
         return int(t.shape[0])
+    if ws_rows is not None:
+        return ws_rows
     raise HdfSlimError(
         "HDF_SLIM_UNSUPPORTED_LAYOUT",
         f"{group.name}: no Water Surface series or Time table to define the time axis",
     )
+
+
+def _check_series(group: h5py.Group, name: str, nt: int) -> None:
+    """Raise unless ``group[name]`` is a non-empty numeric time-by-entity series on the axis."""
+    obj = group[name]
+    if (
+        not isinstance(obj, h5py.Dataset)
+        or obj.ndim != 2
+        or obj.dtype.kind not in "fiu"
+        or obj.shape[0] != nt
+        or nt < 1
+        or obj.shape[1] < 1
+    ):
+        shape = getattr(obj, "shape", None)
+        dtype = getattr(obj, "dtype", None)
+        raise HdfSlimError(
+            "HDF_SLIM_UNSUPPORTED_LAYOUT",
+            f"{group.name}/{name}: kept series must be numeric, non-empty and time-by-entity "
+            f"with {nt} time steps; got {shape} {dtype}",
+        )
 
 
 def _copy_attrs(src: Any, dst: Any) -> None:
@@ -340,6 +372,8 @@ def _rechunk(src: h5py.Dataset, parent: h5py.Group, name: str, policy: HdfSlimPo
             f"{src.name}: expected a 2D numeric series, got {src.shape} {src.dtype}",
         )
     nt, ne = src.shape
+    if nt < 1 or ne < 1:
+        raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{src.name}: empty series {src.shape}")
     tc, ec = min(policy.time_chunk_steps, nt), min(policy.space_chunk_size, ne)
     dst = parent.create_dataset(
         name,
@@ -396,6 +430,8 @@ def _classify(sg: h5py.Group, policy: HdfSlimPolicy):
         if isinstance(link, (h5py.SoftLink, h5py.ExternalLink)):
             raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{sg.name}/{key}: links unsupported")
         obj = sg[key]
+        if h5py.h5o.get_info(obj.id).rc > 1:
+            raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{sg.name}/{key}: hard-linked objects unsupported")
         series = mesh_series and isinstance(obj, h5py.Dataset) and obj.ndim == 2
         series = series and obj.shape[0] == nt
         if isinstance(obj, h5py.Group):
@@ -468,6 +504,10 @@ def _require_series(src: h5py.File, policy: HdfSlimPolicy) -> list[str]:
                 "HDF_SLIM_REQUIRED_DATASET_MISSING",
                 f"{m}: {k} missing (enable it in the plan outputs)",
             )
+        nt = _time_steps(group)
+        for k in policy.mesh_keep(group):
+            if k in group:
+                _check_series(group, k, nt)
     return meshes
 
 
@@ -479,6 +519,22 @@ def _fallbacks_applied(src: h5py.File, policy: HdfSlimPolicy, meshes: Sequence[s
         if used:
             out[m] = used
     return out
+
+
+def _copied_stored_bytes(src: h5py.File, policy: HdfSlimPolicy) -> int:
+    """Stored bytes of every dataset copied unchanged (everything not dropped or re-chunked)."""
+    total = 0
+
+    def walk(group: h5py.Group) -> None:
+        nonlocal total
+        for _, obj, action in _classify(group, policy):
+            if action == "group":
+                walk(obj)
+            elif action == "copy":
+                total += int(obj.id.get_storage_size())
+
+    walk(src)
+    return total
 
 
 def _retained_raw_bytes(src: h5py.File, policy: HdfSlimPolicy, meshes: Sequence[str]) -> int:
@@ -554,7 +610,7 @@ def plan(source: Path, policy: HdfSlimPolicy | None = None) -> dict:
             "kept_series_source_stored_bytes": sum(r["stored_bytes"] for r in kept),
             "dropped_stored_bytes": sum(r["stored_bytes"] for r in dropped),
             "other_stored_bytes": other,
-            "required_free_bytes": raw + SPACE_RESERVE_BYTES,
+            "required_free_bytes": raw + other + SPACE_RESERVE_BYTES,
         }
 
 
@@ -580,11 +636,40 @@ def _same_attrs(a: Any, b: Any) -> bool:
     return True
 
 
+def _same_value(x: Any, y: Any) -> bool:
+    """Exact equality for one element of an object/vlen/compound dataset (NaN-safe)."""
+    if isinstance(x, tuple) or isinstance(y, tuple):  # compound row
+        return (isinstance(x, tuple) and isinstance(y, tuple) and len(x) == len(y)
+                and all(_same_value(u, v) for u, v in zip(x, y)))
+    if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):  # vlen numeric
+        x, y = np.asarray(x), np.asarray(y)
+        return x.dtype == y.dtype and x.shape == y.shape and x.tobytes() == y.tobytes()
+    if isinstance(x, float) and isinstance(y, float):
+        return np.float64(x).tobytes() == np.float64(y).tobytes()
+    return type(x) is type(y) and x == y
+
+
+def _same_layout(a: h5py.Dataset, b: h5py.Dataset) -> bool:
+    """Fill value and maximum shape, which the copy promises to preserve."""
+    if a.maxshape != b.maxshape:
+        return False
+    fa, fb = a.fillvalue, b.fillvalue
+    if a.dtype.hasobject:
+        return _same_value(fa, fb) or (fa in (None, b"", "") and fb in (None, b"", ""))
+    return np.asarray(fa, dtype=a.dtype).tobytes() == np.asarray(fb, dtype=b.dtype).tobytes()
+
+
 def _same_data(a: h5py.Dataset, b: h5py.Dataset, rows: int) -> bool:
     if a.shape != b.shape or a.dtype != b.dtype:
         return False
     if a.dtype.hasobject:  # variable-length members: compare values, not object pointers
-        return np.asarray(a[()]).tolist() == np.asarray(b[()]).tolist()
+        if a.shape == ():
+            return _same_value(a[()], b[()])
+        for i in range(0, a.shape[0], max(1, rows)):
+            x, y = a[i : i + rows], b[i : i + rows]
+            if not all(_same_value(u, v) for u, v in zip(np.ravel(x).tolist(), np.ravel(y).tolist())):
+                return False
+        return True
     if a.shape == () or a.size == 0:
         return np.array_equal(np.asarray(a[()]).tobytes(), np.asarray(b[()]).tobytes())
     for i in range(0, a.shape[0], rows):
@@ -623,7 +708,9 @@ def verify(source: Path, output: Path, dropped_paths: Sequence[str]) -> dict:
                 problems.append(f"{path}: attributes differ")
             elif isinstance(obj, h5py.Dataset):
                 row_bytes = obj.dtype.itemsize * int(np.prod(obj.shape[1:], dtype=np.int64))
-                if not _same_data(obj, other, max(1, (64 << 20) // max(1, row_bytes))):
+                if not _same_layout(obj, other):
+                    problems.append(f"{path}: fill value or maximum shape differs")
+                elif not _same_data(obj, other, max(1, (64 << 20) // max(1, row_bytes))):
                     problems.append(f"{path}: data differ")
             checked += 1
 
@@ -670,12 +757,13 @@ def slim(
         with _open_source(source) as src:
             meshes = _require_series(src, policy)
             kept_raw = _retained_raw_bytes(src, policy, meshes)
+            copied = _copied_stored_bytes(src, policy)
             applied_fallbacks = _fallbacks_applied(src, policy, meshes)
             free = shutil.disk_usage(output.parent).free
-            if free < kept_raw + SPACE_RESERVE_BYTES:
+            if free < kept_raw + copied + SPACE_RESERVE_BYTES:
                 raise HdfSlimError(
                     "HDF_SLIM_INSUFFICIENT_SPACE",
-                    f"{free} bytes free < {kept_raw} raw kept bytes + 1 GiB",
+                    f"{free} bytes free < {kept_raw} raw kept + {copied} copied bytes + 1 GiB",
                 )
             with concurrent.futures.ThreadPoolExecutor(workers) as pool, h5py.File(
                 tmp, "w", libver="earliest"
@@ -688,6 +776,8 @@ def slim(
             raise HdfSlimError("HDF_SLIM_VERIFY_FAILED", "; ".join(result["problems"][:5]))
         source_sha = sha256_file(source) if hash_source else None
         os.replace(tmp, output)
+        source_bytes, output_bytes = source.stat().st_size, output.stat().st_size
+        output_sha = sha256_file(output)
     except HdfSlimError:
         tmp.unlink(missing_ok=True)
         raise
@@ -697,7 +787,6 @@ def slim(
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    source_bytes, output_bytes = source.stat().st_size, output.stat().st_size
     return {
         "schema": SCHEMA,
         "status": "completed",
@@ -714,7 +803,7 @@ def slim(
             "sha256": source_sha,
             "sha256_verified": bool(hash_source),
         },
-        "output": {"name": output.name, "bytes": output_bytes, "sha256": sha256_file(output)},
+        "output": {"name": output.name, "bytes": output_bytes, "sha256": output_sha},
         "size_ratio": round(output_bytes / source_bytes, 4),
         "policy": policy.to_dict(),
         "meshes": meshes,
@@ -839,7 +928,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest = failure_manifest(failure[0], failure[1], a.source, a.output)
         print(f"error: {failure[0]}: {failure[1]}", file=sys.stderr)
     if a.manifest is not None:
-        write_manifest(a.manifest, manifest)
+        try:
+            write_manifest(a.manifest, manifest)
+        except OSError as exc:
+            print(f"error: HDF_SLIM_IO_ERROR: manifest not written: {exc}", file=sys.stderr)
+            return 1
     if a.dry_run and not failure and a.manifest is None:
         print(json.dumps(manifest, indent=2, sort_keys=True))
     else:
