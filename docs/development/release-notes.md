@@ -9,6 +9,22 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`HdfSlim` writes lossless slim copies of 2D plan result HDFs.** `plan()`
+  reports what a policy keeps and drops, `slim()` writes a copy that keeps only
+  the selected per-mesh time series, re-chunked for fast reads and verified
+  object by object against the source, and `verify()` re-checks an existing copy.
+  Everything outside the 2D series is copied unchanged, so readers and RAS Mapper
+  open the copy like the original. The `inundation-mapping` preset and
+  user-defined policies are supported; a JSON manifest
+  (`ras-commander-hdf-slim/v1`) records the policy, every dataset kept or dropped,
+  and the source and output SHA-256 values. Also available as
+  `python -m ras_commander.hdf.HdfSlim`.
+- **`RasApptainer.render_job(hdf_slim=...)` slims the result HDF on node scratch
+  before copy-back.** Opt-in; with it off, `job.sh` and request hashes are
+  unchanged. Any slim failure publishes the full HDF. Receipts of slimmed jobs
+  carry `full_hdf` and `hdf_slim` blocks, which `validate_receipt` and `collect`
+  check.
+
 ### 0.124.0 — 2026-11-16
 
 `java` remains the default DSS backend. Notebook 731's template now defaults to the
