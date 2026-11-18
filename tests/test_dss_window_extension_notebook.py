@@ -1,8 +1,10 @@
 """Contract tests for the executed gridded-DSS window-extension example."""
 
+import os
 from pathlib import Path
 
 import nbformat
+import pytest
 
 
 NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/728_extend_gridded_dss_forcing_window.ipynb"
@@ -134,3 +136,44 @@ def test_historical_header_cache_verifies_fresh_cached_and_corrupt_downloads(tmp
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: io.BytesIO(b"wrong upstream bytes"))
     with pytest.raises(AssertionError, match="SHA-256 mismatch"):
         fetch("snodas_headers/other.txt.gz", digest)
+
+
+@pytest.mark.parametrize("backend", [None, "native", "java", "shadow"])
+@pytest.mark.parametrize("process", ["parent", "writer"])
+def test_native_qualification_checks_effective_backend_before_writes(
+    tmp_path, monkeypatch, backend, process
+):
+    """Run the actual notebook prefixes against real backend resolution."""
+    import ast
+
+    pytest.importorskip("ras_commander_fast_dss")
+    from ras_commander import RasDss
+
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    setup = next(c.source for c in notebook.cells
+                 if c.cell_type == "code" and "RasDss.backend" in c.source)
+    writer_cell = next(c.source for c in notebook.cells
+                       if c.cell_type == "code" and "writer =" in c.source)
+    writer = next(ast.literal_eval(node.value) for node in ast.parse(writer_cell).body
+                  if isinstance(node, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == "writer" for t in node.targets))
+    # Parent prefix ends before executable discovery; writer prefix before arguments
+    # and its first DSS write. Neither needs a solver or a model for this check.
+    source = setup.split('RAS_VERSION =', 1)[0] if process == "parent" else writer.split('target =', 1)[0]
+    if backend is None:
+        monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    else:
+        monkeypatch.setenv("RAS_COMMANDER_DSS_BACKEND", backend)
+    monkeypatch.setattr(RasDss, "backend", "java")
+    monkeypatch.setenv("RAS_COMMANDER_EXAMPLE_RUN_ROOT", str(tmp_path / "run"))
+    sentinel = tmp_path / "write-sentinel"
+    source += "\nPath(sentinel).write_text('reached write')\n"
+    namespace = dict(repo_root=tmp_path, get_ipython=lambda: None, sentinel=sentinel)
+    if backend in ("java", "shadow"):
+        with pytest.raises(AssertionError, match="Unset RAS_COMMANDER_DSS_BACKEND or set it to native"):
+            exec(compile(source, str(NOTEBOOK), "exec"), namespace)
+        assert not sentinel.exists()
+    else:
+        exec(compile(source, str(NOTEBOOK), "exec"), namespace)
+        assert sentinel.read_text() == "reached write"
+    assert os.environ.get("RAS_COMMANDER_DSS_BACKEND") == backend

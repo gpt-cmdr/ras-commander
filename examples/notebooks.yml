@@ -3626,6 +3626,7 @@ notebooks:
   - HdfResultsPlan.get_volume_accounting
   - RasCmdr.compute_plan
   - RasDss.copy_grid_with_zero_tail
+  - RasDss.get_backend
   - RasDss.get_catalog
   - RasDss.get_file_version
   - RasDss.read_grid
