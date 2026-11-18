@@ -1995,6 +1995,7 @@ notebooks:
   functions_used:
   - HdfResultsXsec.get_xsec_timeseries
   - RasCmdr.compute_plan
+  - RasDss.get_backend
   - RasDss.get_file_version
   - RasDss.read_timeseries
   - RasDss.write_timeseries
@@ -2051,7 +2052,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 56
-  executed_cells: 49
+  executed_cells: 56
 - id: 313_hms_to_ras_boundary_matching
   filename: 313_hms_to_ras_boundary_matching.ipynb
   title: HMS-to-RAS Boundary Condition Matching
@@ -2398,8 +2399,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 15
-  executed_cells: 15
+  code_cells: 17
+  executed_cells: 17
 - id: 400_1d_hdf_data_extraction
   filename: 400_1d_hdf_data_extraction.ipynb
   title: 1D HDF Data Extraction
@@ -3626,6 +3627,7 @@ notebooks:
   - HdfResultsPlan.get_volume_accounting
   - RasCmdr.compute_plan
   - RasDss.copy_grid_with_zero_tail
+  - RasDss.get_backend
   - RasDss.get_catalog
   - RasDss.get_file_version
   - RasDss.read_grid
@@ -3761,6 +3763,7 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_areas
   - RasDss.get_backend
+  - RasDss.get_file_version
   - RasDss.read_grid
   - RasDss.read_timeseries
   - RasDssGrid.calculate
@@ -3789,8 +3792,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 18
-  executed_cells: 18
+  code_cells: 20
+  executed_cells: 20
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck

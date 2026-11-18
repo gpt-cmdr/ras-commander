@@ -1,8 +1,10 @@
 """Contract tests for the executed gridded-DSS window-extension example."""
 
+import os
 from pathlib import Path
 
 import nbformat
+import pytest
 
 
 NOTEBOOK = Path(__file__).resolve().parents[1] / "examples/728_extend_gridded_dss_forcing_window.ipynb"
@@ -91,3 +93,87 @@ def test_dss_window_notebook_is_fully_executed_clean_and_visual():
 
     assert "C:\\Users\\" not in rendered_text
     assert "Z:\\" not in rendered_text
+
+
+def test_historical_header_cache_verifies_fresh_cached_and_corrupt_downloads(tmp_path, monkeypatch):
+    """Execute the notebook fetch helper: cache hits stay offline and corrupt bytes fail."""
+    import ast
+    import hashlib
+    import io
+    import urllib.request
+    import pytest
+
+    path = NOTEBOOK.with_name("732_native_gridded_import_and_grid_tools.ipynb")
+    notebook = nbformat.read(path, as_version=4)
+    helpers = {}
+    for cell in notebook.cells:
+        if cell.cell_type == "code" and ("def fetch(" in cell.source or "def sha256_file(" in cell.source):
+            tree = ast.parse(cell.source)
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef) and node.name in ("fetch", "sha256_file"):
+                    helpers[node.name] = node
+    namespace = dict(Path=Path, sha256=hashlib.sha256, cache=tmp_path,
+                     urllib=__import__("urllib"), FIXTURES="https://example.invalid/")
+    for name in ("sha256_file", "fetch"):
+        exec(compile(ast.Module(body=[helpers[name]], type_ignores=[]), str(path), "exec"), namespace)
+    payload = b"pinned public header bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    requests = []
+    def download(url, timeout):
+        requests.append(url)
+        return io.BytesIO(payload)
+    monkeypatch.setattr(urllib.request, "urlopen", download)
+    fetch = namespace["fetch"]
+    cached = fetch("snodas_headers/header.txt.gz", digest, base_url="https://fixture.invalid/")
+    assert cached.read_bytes() == payload
+    assert requests == ["https://fixture.invalid/snodas_headers/header.txt.gz"]
+    assert fetch("snodas_headers/header.txt.gz", digest) == cached
+    assert len(requests) == 1
+    cached.write_bytes(b"corrupt cache")
+    fetch("snodas_headers/header.txt.gz", digest)
+    assert cached.read_bytes() == payload
+    assert len(requests) == 2
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: io.BytesIO(b"wrong upstream bytes"))
+    with pytest.raises(AssertionError, match="SHA-256 mismatch"):
+        fetch("snodas_headers/other.txt.gz", digest)
+
+
+@pytest.mark.parametrize("backend", [None, "native", "java", "shadow"])
+@pytest.mark.parametrize("process", ["parent", "writer"])
+def test_native_qualification_checks_effective_backend_before_writes(
+    tmp_path, monkeypatch, backend, process
+):
+    """Run the actual notebook prefixes against real backend resolution."""
+    import ast
+
+    pytest.importorskip("ras_commander_fast_dss")
+    from ras_commander import RasDss
+
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    setup = next(c.source for c in notebook.cells
+                 if c.cell_type == "code" and "RasDss.backend" in c.source)
+    writer_cell = next(c.source for c in notebook.cells
+                       if c.cell_type == "code" and "writer =" in c.source)
+    writer = next(ast.literal_eval(node.value) for node in ast.parse(writer_cell).body
+                  if isinstance(node, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == "writer" for t in node.targets))
+    # Parent prefix ends before executable discovery; writer prefix before arguments
+    # and its first DSS write. Neither needs a solver or a model for this check.
+    source = setup.split('RAS_VERSION =', 1)[0] if process == "parent" else writer.split('target =', 1)[0]
+    if backend is None:
+        monkeypatch.delenv("RAS_COMMANDER_DSS_BACKEND", raising=False)
+    else:
+        monkeypatch.setenv("RAS_COMMANDER_DSS_BACKEND", backend)
+    monkeypatch.setattr(RasDss, "backend", "java")
+    monkeypatch.setenv("RAS_COMMANDER_EXAMPLE_RUN_ROOT", str(tmp_path / "run"))
+    sentinel = tmp_path / "write-sentinel"
+    source += "\nPath(sentinel).write_text('reached write')\n"
+    namespace = dict(repo_root=tmp_path, get_ipython=lambda: None, sentinel=sentinel)
+    if backend in ("java", "shadow"):
+        with pytest.raises(AssertionError, match="Unset RAS_COMMANDER_DSS_BACKEND or set it to native"):
+            exec(compile(source, str(NOTEBOOK), "exec"), namespace)
+        assert not sentinel.exists()
+    else:
+        exec(compile(source, str(NOTEBOOK), "exec"), namespace)
+        assert sentinel.read_text() == "reached write"
+    assert os.environ.get("RAS_COMMANDER_DSS_BACKEND") == backend
