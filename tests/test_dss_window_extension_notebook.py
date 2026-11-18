@@ -91,3 +91,46 @@ def test_dss_window_notebook_is_fully_executed_clean_and_visual():
 
     assert "C:\\Users\\" not in rendered_text
     assert "Z:\\" not in rendered_text
+
+
+def test_historical_header_cache_verifies_fresh_cached_and_corrupt_downloads(tmp_path, monkeypatch):
+    """Execute the notebook fetch helper: cache hits stay offline and corrupt bytes fail."""
+    import ast
+    import hashlib
+    import io
+    import urllib.request
+    import pytest
+
+    path = NOTEBOOK.with_name("732_native_gridded_import_and_grid_tools.ipynb")
+    notebook = nbformat.read(path, as_version=4)
+    helpers = {}
+    for cell in notebook.cells:
+        if cell.cell_type == "code" and ("def fetch(" in cell.source or "def sha256_file(" in cell.source):
+            tree = ast.parse(cell.source)
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef) and node.name in ("fetch", "sha256_file"):
+                    helpers[node.name] = node
+    namespace = dict(Path=Path, sha256=hashlib.sha256, cache=tmp_path,
+                     urllib=__import__("urllib"), FIXTURES="https://example.invalid/")
+    for name in ("sha256_file", "fetch"):
+        exec(compile(ast.Module(body=[helpers[name]], type_ignores=[]), str(path), "exec"), namespace)
+    payload = b"pinned public header bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    requests = []
+    def download(url, timeout):
+        requests.append(url)
+        return io.BytesIO(payload)
+    monkeypatch.setattr(urllib.request, "urlopen", download)
+    fetch = namespace["fetch"]
+    cached = fetch("snodas_headers/header.txt.gz", digest, base_url="https://fixture.invalid/")
+    assert cached.read_bytes() == payload
+    assert requests == ["https://fixture.invalid/snodas_headers/header.txt.gz"]
+    assert fetch("snodas_headers/header.txt.gz", digest) == cached
+    assert len(requests) == 1
+    cached.write_bytes(b"corrupt cache")
+    fetch("snodas_headers/header.txt.gz", digest)
+    assert cached.read_bytes() == payload
+    assert len(requests) == 2
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: io.BytesIO(b"wrong upstream bytes"))
+    with pytest.raises(AssertionError, match="SHA-256 mismatch"):
+        fetch("snodas_headers/other.txt.gz", digest)
