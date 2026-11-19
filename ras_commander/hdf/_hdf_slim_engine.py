@@ -22,6 +22,14 @@ The source is never modified. The output is written as ``<output>.partial`` besi
 destination, verified object by object (shape, dtype, attributes, exact bytes) and only then
 renamed. On any failure no output and no partial file remain.
 
+HEC-RAS writes hard links (cross-section property tables, summary output groups shared by
+output blocks, boundary-condition tables shared by a mesh and its output block). They are
+preserved: each object is copied once and its other paths are linked to the copy, so the
+output has the same link identity as the source, and every link path is verified. A hard
+link is refused only at a policy-controlled path: ``SERIES_ROOT`` or a group above it, a
+mesh group, or a dataset directly in a mesh group (the series the policy keeps or drops).
+Soft and external links are refused everywhere.
+
 Command line (also ``python -m ras_commander.hdf.HdfSlim``)::
 
     python _hdf_slim_engine.py SOURCE.hdf OUTPUT.hdf --manifest OUTPUT.hdf_slim.json
@@ -267,6 +275,7 @@ class SlimRecord:
     dropped: list[dict] = field(default_factory=list)
     rechunked: list[dict] = field(default_factory=list)
     copied: int = 0
+    hard_links: list[dict] = field(default_factory=list)
 
 
 def _stamp() -> str:
@@ -430,8 +439,6 @@ def _classify(sg: h5py.Group, policy: HdfSlimPolicy):
         if isinstance(link, (h5py.SoftLink, h5py.ExternalLink)):
             raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{sg.name}/{key}: links unsupported")
         obj = sg[key]
-        if h5py.h5o.get_info(obj.id).rc > 1:
-            raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{sg.name}/{key}: hard-linked objects unsupported")
         series = mesh_series and isinstance(obj, h5py.Dataset) and obj.ndim == 2
         series = series and obj.shape[0] == nt
         if isinstance(obj, h5py.Group):
@@ -444,31 +451,133 @@ def _classify(sg: h5py.Group, policy: HdfSlimPolicy):
             yield key, obj, "copy"
 
 
-def _copy_tree(src: h5py.File, dst: h5py.File, policy: HdfSlimPolicy, pool, rec: SlimRecord) -> None:
-    _copy_attrs(src, dst)
+_HADDR_UNDEF = (1 << 64) - 1
 
-    def walk(sg: h5py.Group, dg: h5py.Group) -> None:
+
+def _addr(obj: Any) -> int:
+    """Object address in its file: the identity hard links share. Fails closed if undefined."""
+    addr = h5py.h5o.get_info(obj.id).addr
+    if addr in (0, _HADDR_UNDEF):
+        raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{obj.name}: object address unavailable")
+    return addr
+
+
+def _policy_controlled(path: str, is_dataset: bool) -> bool:
+    """True when ``path`` is one the slim policy acts on, so it must not be a hard link.
+
+    That is the root, ``SERIES_ROOT`` or a group above it, a direct child of ``SERIES_ROOT``
+    (a mesh group), or a dataset directly in a mesh group (the series the policy keeps,
+    re-chunks or drops). Mesh subgroups such as ``Boundary Conditions`` are copied unchanged
+    and are not policy-controlled.
+    """
+    p = path.strip("/")
+    if not p or p == SERIES_ROOT or SERIES_ROOT.startswith(p + "/"):
+        return True
+    parent = p.rpartition("/")[0]
+    return parent == SERIES_ROOT or (is_dataset and parent.rpartition("/")[0] == SERIES_ROOT)
+
+
+def _link_paths(f: h5py.File) -> tuple[dict[str, int], list[str]]:
+    """Every hard-link path in ``f`` (walk order) -> object address, and soft/external link paths.
+
+    Unlike ``visititems``, which visits each object once, this lists every path, so an object
+    reached through several hard links appears under each of them. Each group is descended once.
+    """
+    paths: dict[str, int] = {}
+    other: list[str] = []
+    seen = {_addr(f)}
+
+    def walk(g: h5py.Group, prefix: str) -> None:
+        for key in g:
+            path = f"{prefix}/{key}"
+            if isinstance(g.get(key, getlink=True), (h5py.SoftLink, h5py.ExternalLink)):
+                other.append(path)
+                continue
+            obj = g[key]
+            addr = paths[path] = _addr(obj)
+            if isinstance(obj, h5py.Group) and addr not in seen:
+                seen.add(addr)
+                walk(obj, path)
+
+    walk(f, "")
+    return paths, other
+
+
+def _hard_links(src: h5py.File) -> dict[int, list[str]]:
+    """Address -> paths of every object reached by more than one hard link.
+
+    Raises ``HDF_SLIM_UNSUPPORTED_LAYOUT`` for a soft or external link, and for a hard link
+    with a policy-controlled path (see ``_policy_controlled``): there a dropped or re-chunked
+    series could be reached, or copied unchanged, through a path the policy does not see.
+    """
+    paths, other = _link_paths(src)
+    if other:
+        raise HdfSlimError("HDF_SLIM_UNSUPPORTED_LAYOUT", f"{other[0]}: links unsupported")
+    by_addr: dict[int, list[str]] = {_addr(src): ["/"]}
+    for path, addr in paths.items():
+        by_addr.setdefault(addr, []).append(path)
+    linked = {a: ps for a, ps in by_addr.items() if len(ps) > 1}
+    for ps in linked.values():
+        is_dataset = isinstance(src[ps[0]], h5py.Dataset)
+        bad = next((x for x in ps if _policy_controlled(x, is_dataset)), None)
+        if bad is not None:
+            raise HdfSlimError(
+                "HDF_SLIM_UNSUPPORTED_LAYOUT",
+                f"{bad}: hard link at a policy-controlled 2D series path unsupported ({len(ps)} paths)",
+            )
+    return linked
+
+
+def _walk(src: h5py.File, policy: HdfSlimPolicy, linked: Mapping[int, list[str]]):
+    """Yield (parent_path, key, obj, action, target) over ``src`` in walk order.
+
+    ``target`` is the first path of an object already yielded through another hard link; such
+    an alias has action ``link`` and is not descended. ``parent_path`` is "" for the root.
+    """
+    first: dict[int, str] = {_addr(src): "/"} if _addr(src) in linked else {}
+
+    def walk(sg: h5py.Group, prefix: str):
         for key, obj, action in _classify(sg, policy):
+            path = f"{prefix}/{key}"
+            if linked:
+                addr = _addr(obj)
+                if addr in linked:
+                    if addr in first:
+                        yield prefix, key, obj, "link", first[addr]
+                        continue
+                    first[addr] = path
+            yield prefix, key, obj, action, None
             if action == "group":
-                ng = dg.create_group(key)
-                _copy_attrs(obj, ng)
-                walk(obj, ng)
-            elif action == "drop":
-                rec.dropped.append(
-                    {
-                        "path": obj.name,
-                        "shape": list(obj.shape),
-                        "dtype": str(obj.dtype),
-                        "stored_bytes": int(obj.id.get_storage_size()),
-                    }
-                )
-            elif action == "rechunk":
-                rec.rechunked.append(_rechunk(obj, dg, key, policy, pool))
-            else:
-                sg.copy(obj, dg, name=key)  # same dtype, layout, filters and attributes
-                rec.copied += 1
+                yield from walk(obj, path)
 
-    walk(src, dst)
+    yield from walk(src, "")
+
+
+def _copy_tree(
+    src: h5py.File, dst: h5py.File, policy: HdfSlimPolicy, pool, rec: SlimRecord, linked: Mapping[int, list[str]]
+) -> None:
+    _copy_attrs(src, dst)
+    for prefix, key, obj, action, target in _walk(src, policy, linked):
+        dg = dst[prefix] if prefix else dst
+        if action == "link":
+            dg[key] = dst[target]  # a hard link to the object already copied
+            rec.hard_links.append({"path": f"{prefix}/{key}", "target": target})
+        elif action == "group":
+            _copy_attrs(obj, dg.create_group(key))
+        elif action == "drop":
+            rec.dropped.append(
+                {
+                    "path": obj.name,
+                    "shape": list(obj.shape),
+                    "dtype": str(obj.dtype),
+                    "stored_bytes": int(obj.id.get_storage_size()),
+                }
+            )
+        elif action == "rechunk":
+            rec.rechunked.append(_rechunk(obj, dg, key, policy, pool))
+        else:
+            src.copy(obj, dg, name=key)  # same dtype, layout, filters and attributes
+            rec.copied += 1
 
 
 def _require_series(src: h5py.File, policy: HdfSlimPolicy) -> list[str]:
@@ -521,20 +630,11 @@ def _fallbacks_applied(src: h5py.File, policy: HdfSlimPolicy, meshes: Sequence[s
     return out
 
 
-def _copied_stored_bytes(src: h5py.File, policy: HdfSlimPolicy) -> int:
-    """Stored bytes of every dataset copied unchanged (everything not dropped or re-chunked)."""
-    total = 0
-
-    def walk(group: h5py.Group) -> None:
-        nonlocal total
-        for _, obj, action in _classify(group, policy):
-            if action == "group":
-                walk(obj)
-            elif action == "copy":
-                total += int(obj.id.get_storage_size())
-
-    walk(src)
-    return total
+def _copied_stored_bytes(src: h5py.File, policy: HdfSlimPolicy, linked: Mapping[int, list[str]]) -> int:
+    """Stored bytes of every dataset copied unchanged (not dropped or re-chunked), once per object."""
+    return sum(
+        int(obj.id.get_storage_size()) for _, _, obj, action, _ in _walk(src, policy, linked) if action == "copy"
+    )
 
 
 def _retained_raw_bytes(src: h5py.File, policy: HdfSlimPolicy, meshes: Sequence[str]) -> int:
@@ -567,32 +667,31 @@ def plan(source: Path, policy: HdfSlimPolicy | None = None) -> dict:
     if not source.is_file():
         raise HdfSlimError("HDF_SLIM_INPUT_INVALID", f"source not found: {source.name}")
     with _open_source(source) as src:
+        linked = _hard_links(src)
         meshes = _require_series(src, policy)
         kept: list[dict] = []
         dropped: list[dict] = []
+        hard_links: list[dict] = []
         other = 0
-
-        def walk(sg: h5py.Group) -> None:
-            nonlocal other
-            for _, obj, action in _classify(sg, policy):
-                if action == "group":
-                    walk(obj)
-                    continue
-                row = {"path": obj.name, "shape": list(obj.shape), "dtype": str(obj.dtype),
-                           "stored_bytes": int(obj.id.get_storage_size())}
-                if action == "drop":
-                    dropped.append(row)
-                elif action == "rechunk":
-                    if obj.ndim != 2 or obj.dtype.kind not in "fiu":
-                        raise HdfSlimError(
-                            "HDF_SLIM_UNSUPPORTED_LAYOUT",
-                            f"{obj.name}: expected a 2D numeric series, got {obj.shape} {obj.dtype}",
-                        )
-                    kept.append(dict(row, raw_bytes=int(obj.nbytes)))
-                else:
-                    other += row["stored_bytes"]
-
-        walk(src)
+        for prefix, key, obj, action, target in _walk(src, policy, linked):
+            if action == "link":
+                hard_links.append({"path": f"{prefix}/{key}", "target": target})
+                continue
+            if action == "group":
+                continue
+            row = {"path": obj.name, "shape": list(obj.shape), "dtype": str(obj.dtype),
+                   "stored_bytes": int(obj.id.get_storage_size())}
+            if action == "drop":
+                dropped.append(row)
+            elif action == "rechunk":
+                if obj.ndim != 2 or obj.dtype.kind not in "fiu":
+                    raise HdfSlimError(
+                        "HDF_SLIM_UNSUPPORTED_LAYOUT",
+                        f"{obj.name}: expected a 2D numeric series, got {obj.shape} {obj.dtype}",
+                    )
+                kept.append(dict(row, raw_bytes=int(obj.nbytes)))
+            else:
+                other += row["stored_bytes"]
         raw = _retained_raw_bytes(src, policy, meshes)
         return {
             "schema": PLAN_SCHEMA,
@@ -606,6 +705,7 @@ def plan(source: Path, policy: HdfSlimPolicy | None = None) -> dict:
             },
             "kept": kept,
             "dropped": dropped,
+            "hard_links": hard_links,
             "kept_series_raw_bytes": raw,
             "kept_series_source_stored_bytes": sum(r["stored_bytes"] for r in kept),
             "dropped_stored_bytes": sum(r["stored_bytes"] for r in dropped),
@@ -680,28 +780,55 @@ def _same_data(a: h5py.Dataset, b: h5py.Dataset, rows: int) -> bool:
 
 
 def verify(source: Path, output: Path, dropped_paths: Sequence[str]) -> dict:
-    """Check every non-dropped source object exists in ``output`` with equal attributes and bytes.
+    """Check every non-dropped source path exists in ``output`` with equal attributes and bytes.
 
-    Also checks that dropped datasets are absent and that ``output`` has no extra objects.
-    Read-only. Returns ``{objects_checked, problems (first 50), problem_count}``.
+    Every hard link to an object is checked, not only one path per object: paths that share
+    one object in the source must share one object in the output and vice versa, and each
+    object's contents are compared once. The members of a linked group are checked under its
+    first path; its other paths resolve to the same group. Dropped datasets must be absent under
+    every path that reaches them, ``output`` must have no extra paths, and neither file may have
+    soft or external links. Read-only. Returns ``{objects_checked, problems (first 50),
+    problem_count}``; ``objects_checked`` counts the paths that passed the presence and link
+    checks.
     """
     dropped = set(dropped_paths)
     checked, problems = 0, []
     with h5py.File(source, "r") as s, h5py.File(output, "r") as o:
         if not _same_attrs(s, o):
             problems.append("/: attributes differ")
-
-        def visit(name, obj):
-            nonlocal checked
-            path = "/" + name
+        sp, s_links = _link_paths(s)
+        op, o_links = _link_paths(o)
+        problems += [f"{x}: soft or external link in source" for x in s_links]
+        problems += [f"{x}: soft or external link in output" for x in o_links]
+        s_root, o_root = _addr(s), _addr(o)
+        first: dict[int, str] = {s_root: "/"}  # source address -> first path
+        mapped: dict[int, int] = {s_root: o_root}  # source address -> output address
+        owner: dict[int, int] = {o_root: s_root}  # output address -> source address
+        dropped_addrs = {addr for path, addr in sp.items() if path in dropped}
+        for path, addr in sp.items():
             if path in dropped:
-                if path in o:
+                if path in op:
                     problems.append(f"{path}: dropped dataset present")
-                return
-            if path not in o:
+                continue
+            if addr in dropped_addrs:  # the same object under another path: it must go too
+                if path in op:
+                    problems.append(f"{path}: hard link to a dropped dataset present")
+                continue
+            if path not in op:
                 problems.append(f"{path}: missing")
-                return
-            other = o[path]
+                continue
+            if owner.setdefault(op[path], addr) != addr:
+                problems.append(f"{path}: hard link not in source")
+                continue
+            if addr in mapped:
+                if mapped[addr] != op[path]:
+                    problems.append(f"{path}: hard link to {first[addr]} not preserved")
+                else:
+                    checked += 1
+                continue
+            checked += 1
+            first[addr], mapped[addr] = path, op[path]
+            obj, other = s[path], o[path]
             if isinstance(obj, h5py.Group) != isinstance(other, h5py.Group):
                 problems.append(f"{path}: object type differs")
             elif not _same_attrs(obj, other):
@@ -712,12 +839,7 @@ def verify(source: Path, output: Path, dropped_paths: Sequence[str]) -> dict:
                     problems.append(f"{path}: fill value or maximum shape differs")
                 elif not _same_data(obj, other, max(1, (64 << 20) // max(1, row_bytes))):
                     problems.append(f"{path}: data differ")
-            checked += 1
-
-        s.visititems(visit)
-        extra: list[str] = []
-        o.visit(lambda n: extra.append(n) if ("/" + n) not in s else None)
-        problems += [f"/{n}: not in source" for n in extra]
+        problems += [f"{x}: not in source" for x in op if x not in sp]
     return {"objects_checked": checked, "problems": problems[:50], "problem_count": len(problems)}
 
 
@@ -755,9 +877,10 @@ def slim(
     rec = SlimRecord()
     try:
         with _open_source(source) as src:
+            linked = _hard_links(src)
             meshes = _require_series(src, policy)
             kept_raw = _retained_raw_bytes(src, policy, meshes)
-            copied = _copied_stored_bytes(src, policy)
+            copied = _copied_stored_bytes(src, policy, linked)
             applied_fallbacks = _fallbacks_applied(src, policy, meshes)
             free = shutil.disk_usage(output.parent).free
             if free < kept_raw + copied + SPACE_RESERVE_BYTES:
@@ -768,7 +891,7 @@ def slim(
             with concurrent.futures.ThreadPoolExecutor(workers) as pool, h5py.File(
                 tmp, "w", libver="earliest"
             ) as dst:
-                _copy_tree(src, dst, policy, pool, rec)
+                _copy_tree(src, dst, policy, pool, rec, linked)
         write_s = time.monotonic() - clock
         result = verify(source, tmp, [d["path"] for d in rec.dropped])
         verify_s = time.monotonic() - clock - write_s
@@ -811,6 +934,7 @@ def slim(
         "dropped": rec.dropped,
         "rechunked": rec.rechunked,
         "copied_datasets": rec.copied,
+        "hard_links": rec.hard_links,
         "verification": dict(method=VERIFICATION_METHOD, **result),
         "software": {
             "python": platform.python_version(),

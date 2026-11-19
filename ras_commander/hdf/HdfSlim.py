@@ -246,9 +246,10 @@ class HdfSlim:
     ) -> dict[str, Any]:
         """Re-verify an existing slim copy against its source and manifest. Read-only.
 
-        Repeats the object-by-object comparison (every non-dropped source object present
-        with equal shape, dtype, attributes and bytes; dropped datasets absent; nothing
-        extra) and checks the output's SHA-256 and size against the manifest.
+        Repeats the object-by-object comparison (every non-dropped source path present
+        with equal shape, dtype, attributes and bytes; hard links shared exactly as in the
+        source; dropped datasets absent; nothing extra) and checks the output's SHA-256
+        and size against the manifest.
 
         Args:
             hdf_path: Source plan result HDF path, or plan number (pass ``ras_object=``

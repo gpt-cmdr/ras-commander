@@ -14,7 +14,9 @@ alone does not identify a development checkout.
   the selected per-mesh time series, re-chunked for fast reads and verified
   object by object against the source, and `verify()` re-checks an existing copy.
   Everything outside the 2D series is copied unchanged, so readers and RAS Mapper
-  open the copy like the original. The `inundation-mapping` preset and
+  open the copy like the original; hard links outside the series are kept as
+  hard links, listed in the manifest's `hard_links`, and verification counts
+  every link path in `objects_checked`. The `inundation-mapping` preset and
   user-defined policies are supported; a JSON manifest
   (`ras-commander-hdf-slim/v1`) records the policy, every dataset kept or dropped,
   and the source and output SHA-256 values. Also available as

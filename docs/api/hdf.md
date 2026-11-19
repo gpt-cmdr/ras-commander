@@ -665,6 +665,18 @@ copied unchanged. Kept series are bit-identical to the source and stored in
 tiles of 16 time steps by 16,384 cells or faces with the HDF5 shuffle and
 deflate level 4 filters (configurable per policy).
 
+HEC-RAS writes hard links, for example property tables shared by
+`Geometry/Cross Sections` and `Geometry/GeomPreprocess`, one `Summary Output`
+group shared by several output blocks, and boundary-condition tables shared by
+a mesh's `Boundary Conditions` subgroup and the output block. These are kept as
+hard links: each object is copied once and its other paths link to the copy,
+and every path is verified. The manifest lists them under `hard_links`: each
+later `path` with its `target`, the first path to the same object in walk order
+(HDF5 link iteration order). A hard link is refused with
+`HDF_SLIM_UNSUPPORTED_LAYOUT` only at a path the policy acts on: the 2D series
+root or a group above it, a mesh group, or a dataset directly in a mesh group.
+Soft and external links are refused everywhere.
+
 The default `inundation-mapping` preset keeps, for every 2D flow area,
 `Water Surface` and `Face Flow` (or `Face Velocity` for a mesh without
 `Face Flow`), plus `Depth`, `Cell Cumulative Precipitation Depth` and
@@ -692,8 +704,8 @@ mapped to a substitute kept when the required one is absent), `extra_series`
 `deflate_level`. A manifest's `policy` object can be passed back unchanged.
 
 The source is opened read-only. The copy is written as `<output>.partial`,
-every non-dropped source object is compared with it (shape, dtype, attributes
-and exact bytes), and only then is it renamed. On any failure neither file
+every non-dropped source path is compared with it (shape, dtype, attributes,
+exact bytes and hard-link identity), and only then is it renamed. On any failure neither file
 remains, and `HdfSlimError.reason_code` gives a stable `HDF_SLIM_*` code. The
 manifest (schema `ras-commander-hdf-slim/v1`) records the policy, every dropped
 and re-chunked dataset with its chunks and filters, the source and output

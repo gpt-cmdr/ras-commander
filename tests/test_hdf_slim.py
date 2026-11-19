@@ -353,12 +353,229 @@ def test_zero_time_steps_is_unsupported(tmp_path):
     assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
 
 
-def test_hard_links_are_unsupported(src, tmp_path):
+PROPERTY_TABLES = "Geometry/Cross Sections/Property Tables"
+
+
+def _addr(h, path):
+    return h5py.h5o.get_info(h[path].id).addr
+
+
+BLOCKS = "Results/Unsteady/Output/Output Blocks"
+MESH_BC = f"{SERIES_ROOT}/Mesh A/Boundary Conditions"
+BLOCK_BC = f"{BLOCKS}/Base Output/Unsteady Time Series/Boundary Conditions"
+
+
+def _link_property_tables(src):
+    """The hard links a real HEC-RAS 2D result carries (UPGU3 canary layout), plus a dataset alias.
+
+    Property tables shared by Cross Sections and GeomPreprocess, one Summary Output group shared
+    by three output blocks, and each mesh boundary-condition table shared with the block-level
+    Boundary Conditions group.
+    """
     with h5py.File(src, "r+") as h:
-        h["Geometry/Alias"] = h["Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"]
+        g = h.create_group(PROPERTY_TABLES)
+        g.attrs["Count"] = np.int32(2)
+        g.create_dataset("XS 1", data=np.arange(12, dtype="f4").reshape(3, 4), chunks=(1, 4), compression="gzip")
+        g.create_dataset("XS 2", data=np.arange(8, dtype="f8"))
+        h["Geometry/GeomPreprocess/Property Tables"] = g
+        h["Geometry/Cells Alias"] = h["Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"]
+        summary = h[f"{BLOCKS}/Base Output/Summary Output"]
+        h[f"{BLOCKS}/DSS Hydrograph Output/Summary Output"] = summary
+        h[f"{BLOCKS}/DSS Adaptive Hydrograph Output/Summary Output"] = summary
+        bc = h[MESH_BC]
+        bc.create_dataset("BC_1", data=np.arange(T * 2, dtype="f4").reshape(T, 2))
+        bc.create_dataset("BC_1 - Stage per Face", data=np.ones((T, 12), "f4"))
+        for name in ("BC_1", "BC_1 - Flow per Face", "BC_1 - Stage per Face"):
+            h[f"{BLOCK_BC}/{name}"] = bc[name]
+
+
+def test_hard_links_outside_the_series_are_preserved(src, tmp_path):
+    _link_property_tables(src)
+    out = tmp_path / "s.hdf"
+    planned = HdfSlim.plan(src)
+    m = HdfSlim.slim(src, out)
+    links = {
+        "/Geometry/GeomPreprocess/Property Tables": "/Geometry/Cross Sections/Property Tables",
+        "/Geometry/Cells Alias": "/Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation",
+        f"/{BLOCKS}/DSS Hydrograph Output/Summary Output": f"/{BLOCKS}/Base Output/Summary Output",
+        f"/{BLOCKS}/DSS Adaptive Hydrograph Output/Summary Output": f"/{BLOCKS}/Base Output/Summary Output",
+        **{f"/{BLOCK_BC}/{n}": f"/{MESH_BC}/{n}" for n in ("BC_1", "BC_1 - Flow per Face", "BC_1 - Stage per Face")},
+    }
+    assert {r["path"]: r["target"] for r in m["hard_links"]} == links
+    assert planned["hard_links"] == m["hard_links"]
+    assert m["verification"]["problem_count"] == 0
+    with h5py.File(out, "r") as h:
+        for alias, target in links.items():
+            assert _addr(h, alias) == _addr(h, target)
+        assert h5py.h5o.get_info(h[f"{BLOCKS}/Base Output/Summary Output"].id).rc == 3
+        assert h5py.h5o.get_info(h[f"{MESH_BC}/BC_1"].id).rc == 2
+        mws = f"{BLOCKS}/DSS Hydrograph Output/Summary Output/2D Flow Areas/Mesh A/Maximum Water Surface"
+        assert h[mws].shape == (2, C)
+        np.testing.assert_array_equal(h[f"{PROPERTY_TABLES}/XS 1"][()], np.arange(12).reshape(3, 4))
+        assert h[f"{PROPERTY_TABLES}/XS 1"].compression == "gzip"
+
+
+def test_hard_linked_objects_are_copied_once(src, tmp_path):
+    plain = HdfSlim.slim(src, tmp_path / "plain.hdf")
+    plain_other = HdfSlim.plan(src)["other_stored_bytes"]
+    with h5py.File(src, "r+") as h:
+        h["Geometry/Cells Alias"] = h["Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"]
+    assert HdfSlim.plan(src)["other_stored_bytes"] == plain_other
+    m = HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert m["copied_datasets"] == plain["copied_datasets"]
+    assert m["output"]["bytes"] < plain["output"]["bytes"] + 4096
+
+
+def test_hard_link_cycle_outside_the_series_is_preserved(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        h["Geometry/2D Flow Areas/Mesh A/Up"] = h["Geometry/2D Flow Areas"]
+    m = HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert m["hard_links"] == [{"path": "/Geometry/2D Flow Areas/Mesh A/Up", "target": "/Geometry/2D Flow Areas"}]
+    assert m["verification"]["problem_count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("alias", "target"),
+    [
+        (f"{SERIES_ROOT}/Mesh A/Alias", f"{SERIES_ROOT}/Mesh A/Water Surface"),  # inside a mesh group
+        ("Geometry/WS Alias", f"{SERIES_ROOT}/Mesh A/Water Surface"),  # a kept series, from outside
+        ("Geometry/Dropped Alias", f"{SERIES_ROOT}/Mesh A/Face Velocity"),  # a dropped series
+        ("Geometry/Mesh Alias", f"{SERIES_ROOT}/Mesh A"),  # a mesh series group
+        ("Geometry/Output Alias", "Results/Unsteady/Output"),  # an ancestor of the series root
+        ("Geometry/Root Alias", SERIES_ROOT),  # the series root itself
+        ("Geometry/File Root", "/"),  # the file root (a cycle)
+        (f"{SERIES_ROOT}/Mesh A/Small Alias", f"{SERIES_ROOT}/Mesh A/Small Table"),  # any mesh dataset
+        (f"{SERIES_ROOT}/Mesh A/Elevation", "Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"),
+    ],
+)
+def test_hard_links_touching_the_series_tree_are_refused(src, tmp_path, alias, target):
+    with h5py.File(src, "r+") as h:
+        h[alias] = h[target]
+    for call in (lambda: HdfSlim.plan(src), lambda: HdfSlim.slim(src, tmp_path / "s.hdf")):
+        with pytest.raises(HdfSlimError) as e:
+            call()
+        assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+        assert "hard link at a policy-controlled 2D series path" in str(e.value)
+    assert not list(tmp_path.glob("s.hdf*"))
+
+
+def _rewrite(src, dst, edit):
+    """Copy ``src`` to ``dst`` object by object (h5py copy splits nothing), then apply ``edit``."""
+    import shutil
+
+    shutil.copyfile(src, dst)
+    with h5py.File(dst, "r+") as h:
+        edit(h)
+
+
+def test_verify_refuses_a_split_hard_link(src, tmp_path):
+    _link_property_tables(src)
+    out = tmp_path / "s.hdf"
+    m = HdfSlim.slim(src, out)
+    dropped = [d["path"] for d in m["dropped"]]
+    alias = "Geometry/GeomPreprocess/Property Tables"
+
+    def split(h):
+        del h[alias]
+        h.copy(h[PROPERTY_TABLES], h["Geometry/GeomPreprocess"], name="Property Tables")
+
+    bad = tmp_path / "split.hdf"
+    _rewrite(out, bad, split)
+    result = engine.verify(src, bad, dropped)
+    assert any("hard link to /Geometry/Cross Sections/Property Tables not preserved" in x for x in result["problems"])
+
+
+def test_verify_refuses_a_hard_link_not_in_source(src, tmp_path):
+    out = tmp_path / "s.hdf"
+    m = HdfSlim.slim(src, out)
+    dropped = [d["path"] for d in m["dropped"]]
+    with h5py.File(src, "r+") as h:
+        h.copy(h["Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"], h["Geometry"], name="Copy")
+
+    def link(h):
+        h["Geometry/Copy"] = h["Geometry/2D Flow Areas/Mesh A/Cells Minimum Elevation"]
+
+    bad = tmp_path / "linked.hdf"
+    _rewrite(out, bad, link)
+    result = engine.verify(src, bad, dropped)
+    assert result["problems"] == ["/Geometry/Copy: hard link not in source"]
+
+
+def test_verify_refuses_a_dropped_series_kept_under_an_alias(src, tmp_path):
+    out = tmp_path / "s.hdf"
+    m = HdfSlim.slim(src, out)
+    dropped = [d["path"] for d in m["dropped"]]
+    velocity = f"{SERIES_ROOT}/Mesh A/Face Velocity"
+    assert f"/{velocity}" in dropped
+    with h5py.File(src, "r+") as h:
+        h["Geometry/Velocity Alias"] = h[velocity]
+
+    def keep(h):
+        with h5py.File(src, "r") as s:
+            s.copy(s[velocity], h["Geometry"], name="Velocity Alias")
+
+    rogue = tmp_path / "rogue.hdf"
+    _rewrite(out, rogue, keep)
+    assert engine.verify(src, rogue, dropped)["problems"] == [
+        "/Geometry/Velocity Alias: hard link to a dropped dataset present"
+    ]
+
+
+def test_undefined_object_address_fails_closed(src, tmp_path, monkeypatch):
+    class Info:
+        addr, rc = (1 << 64) - 1, 1
+
+    monkeypatch.setattr(engine.h5py.h5o, "get_info", lambda _id: Info())
     with pytest.raises(HdfSlimError) as e:
         HdfSlim.slim(src, tmp_path / "s.hdf")
     assert e.value.reason_code == "HDF_SLIM_UNSUPPORTED_LAYOUT"
+    assert not list(tmp_path.glob("s.hdf*"))
+
+
+def test_link_target_is_the_first_path_in_walk_order(src, tmp_path):
+    with h5py.File(src, "r+") as h:
+        h["Geometry/Z Original"] = np.arange(3)
+        h["Geometry/A Alias"] = h["Geometry/Z Original"]
+        h["Geometry/M Alias"] = h["Geometry/Z Original"]
+    m = HdfSlim.slim(src, tmp_path / "s.hdf")
+    assert m["hard_links"] == [
+        {"path": "/Geometry/M Alias", "target": "/Geometry/A Alias"},
+        {"path": "/Geometry/Z Original", "target": "/Geometry/A Alias"},
+    ]
+    with h5py.File(tmp_path / "s.hdf", "r") as h:
+        assert h5py.h5o.get_info(h["Geometry/A Alias"].id).rc == 3
+
+
+def test_verify_checks_every_link_path(src, tmp_path):
+    _link_property_tables(src)
+    out = tmp_path / "s.hdf"
+    m = HdfSlim.slim(src, out)
+    dropped = [d["path"] for d in m["dropped"]]
+    with h5py.File(src, "r") as h:
+        n_paths = sum(1 for _ in _all_paths(h))
+    assert m["verification"]["objects_checked"] == n_paths - len(dropped)
+
+    def drop_alias(h):
+        del h["Geometry/Cells Alias"]
+
+    bad = tmp_path / "noalias.hdf"
+    _rewrite(out, bad, drop_alias)
+    assert engine.verify(src, bad, dropped)["problems"] == ["/Geometry/Cells Alias: missing"]
+
+
+def _all_paths(h, prefix=""):
+    seen = set()
+
+    def walk(g, prefix):
+        for k in g:
+            obj = g[k]
+            yield f"{prefix}/{k}"
+            addr = h5py.h5o.get_info(obj.id).addr
+            if isinstance(obj, h5py.Group) and addr not in seen:
+                seen.add(addr)
+                yield from walk(obj, f"{prefix}/{k}")
+
+    yield from walk(h, prefix)
 
 
 def test_variable_length_numeric_and_compound_datasets_verify(src, tmp_path):
