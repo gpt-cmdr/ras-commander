@@ -14,6 +14,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Project extent / footprint: `HdfProject`
 - Results readers: `HdfResultsPlan`, `HdfResultsMesh`, `HdfResultView`, `HdfResultsXsec`, `HdfResultsBreach`, `HdfResultsSediment`
 - Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
+- Result storage: `HdfSlim` (lossless slim copies; self-contained engine in
+  `_hdf_slim_engine.py`, staged byte-for-byte into Linux jobs, so it imports only the
+  standard library, h5py and numpy)
 - Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
 
 - `HdfFluvialPluvial.generate_fluvial_pluvial_polygons()` converts native polygon

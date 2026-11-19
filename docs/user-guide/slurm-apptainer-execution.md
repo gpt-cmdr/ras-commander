@@ -301,6 +301,46 @@ re-hashes every output. `success` is true only when the scheduler state is `COMP
 says `succeeded`, all hashes match, `/Results/Unsteady` is populated, and the final simulation time
 matches the planned end time. Failed jobs are collected too so their logs and receipt are retained.
 
+### In-job result HDF slimming
+
+`render_job(..., hdf_slim={...})` writes a lossless slim copy of the result plan
+HDF on node scratch before copy-back (see [`HdfSlim`](../api/hdf.md#hdfslim)),
+so only the slim file reaches shared storage. It is off by default; with
+`hdf_slim=None` the rendered `job.sh` and request hashes are unchanged.
+
+```python
+job = RasApptainer.render_job(
+    project_folder, "Model", "03", profile, "jobs/model-p03",
+    hdf_slim={"policy": "inundation-mapping", "extra_series": ["Face Cumulative Volume"]},
+)
+```
+
+All keys are optional: `policy` (preset name or policy mapping, default
+`inundation-mapping`), `extra_series`, and `image` plus `image_sha256` to run the
+slim in a separate pinned SIF instead of the solver image. The image that runs
+the slim must provide `python3` with h5py and numpy. The policy is validated at
+render time; any valid chunk and deflate settings are allowed and pinned. The
+preset default (16 x 16,384 tiles, shuffle and deflate 4) is the standard layout,
+and downstream readers may require it, so override it only when every consumer of
+the slim files accepts the change. The engine file and the resolved policy JSON are staged under
+`hdf_slim/`, and their SHA-256 values, the policy and the image pin become part
+of the request.
+
+Inside the job the order is: hash the full HDF on scratch, slim and verify it,
+check the manifest against that hash and the staged policy, swap the slim copy
+in on scratch only, copy back with the normal re-hash, and remove scratch only
+after a verified copy-back. Any failure, including an image without the
+required Python packages (`HDF_SLIM_RUNTIME_UNAVAILABLE`), publishes the full
+HDF exactly as without slimming; the job itself still succeeds.
+
+The receipt gains two top-level blocks: `full_hdf` (`name`, `bytes`, `sha256`
+of the solver's file) and `hdf_slim` (`output_path`, `status`, `reason_code`,
+`copy_back_sha256_verified`, `image_sha256` and, when `completed`, the manifest
+`{path, bytes, sha256}` for `project/<project>.p<plan>.hdf_slim.json`, the slim
+`bytes` and `sha256`, `policy`, per-mesh `applied_keep` and
+`implementation_sha256`). `collect` validates both blocks and binds them to the
+rendered request's engine, policy and image.
+
 ### Safety properties
 
 - The request SHA-256 binds the project, plan, staged input manifest, input hashes, normalized

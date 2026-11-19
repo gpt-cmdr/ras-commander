@@ -639,6 +639,92 @@ Synthetic HDFs created by focused tests are labeled test artifacts. Real-file
 integration uses pre-existing producer HDFs read-only and does not run HEC-RAS
 or generate model output; it generates only temporary derivative packages.
 
+### HdfSlim
+
+Lossless slim copies of finished 2D unsteady plan result HDFs. A slim copy keeps
+only the per-mesh time series that a policy names, re-chunks them for fast
+spatial and temporal reads, and copies everything else unchanged with the same
+dataset paths, so HDF readers and RAS Mapper open it like the original.
+
+- `plan(hdf_path, policy=None, extra_series=None)` - Read-only dry run: which
+  series would be kept and dropped per mesh, their stored sizes, and the scratch
+  space a slim needs
+- `slim(hdf_path, output_hdf, policy=None, extra_series=None, *,
+  manifest_path=None, workers=None, hash_source=True)` - Write the verified slim
+  copy and return its manifest
+- `verify(hdf_path, output_hdf, manifest)` - Re-check an existing slim copy
+  against its source and manifest
+- `get_policy(policy=None, extra_series=None, **overrides)` and
+  `list_presets()` - Resolve, validate and inspect policies
+
+Only the series under
+`Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/2D Flow Areas/<mesh>`
+are subject to the policy. Geometry, plan and event data, summary maxima,
+boundary-condition line series, other output blocks and all attributes are
+copied unchanged. Kept series are bit-identical to the source and stored in
+tiles of 16 time steps by 16,384 cells or faces with the HDF5 shuffle and
+deflate level 4 filters (configurable per policy).
+
+HEC-RAS writes hard links, for example property tables shared by
+`Geometry/Cross Sections` and `Geometry/GeomPreprocess`, one `Summary Output`
+group shared by several output blocks, and boundary-condition tables shared by
+a mesh's `Boundary Conditions` subgroup and the output block. These are kept as
+hard links: each object is copied once and its other paths link to the copy,
+and every path is verified. The manifest lists them under `hard_links`: each
+later `path` with its `target`, the first path to the same object in walk order
+(HDF5 link iteration order). A hard link is refused with
+`HDF_SLIM_UNSUPPORTED_LAYOUT` only at a path the policy acts on: the 2D series
+root or a group above it, a mesh group, or a dataset directly in a mesh group.
+Soft and external links are refused everywhere.
+
+The default `inundation-mapping` preset keeps, for every 2D flow area,
+`Water Surface` and `Face Flow` (or `Face Velocity` for a mesh without
+`Face Flow`), plus `Depth`, `Cell Cumulative Precipitation Depth` and
+`Cell Cumulative Excess Depth` whenever they are present. A user-defined policy
+is a mapping:
+
+```python
+from ras_commander import HdfSlim
+
+report = HdfSlim.plan("project.p03.hdf")  # nothing is written
+manifest = HdfSlim.slim(
+    "project.p03.hdf",
+    "slim/project.p03.hdf",
+    manifest_path="slim/project.p03.hdf_slim.json",
+)
+
+# Keep Water Surface and, where present, Cell Courant; drop every other series.
+custom = {"required": ["Water Surface"], "keep_if_present": ["Cell Courant"]}
+HdfSlim.slim("project.p03.hdf", "slim/project.p03.ws.hdf", custom)
+```
+
+Policy keys are `required`, `keep_if_present`, `fallbacks` (a required series
+mapped to a substitute kept when the required one is absent), `extra_series`
+(additional required series), `time_chunk_steps`, `space_chunk_size` and
+`deflate_level`. A manifest's `policy` object can be passed back unchanged.
+
+The source is opened read-only. The copy is written as `<output>.partial`,
+every non-dropped source path is compared with it (shape, dtype, attributes,
+exact bytes and hard-link identity), and only then is it renamed. On any failure neither file
+remains, and `HdfSlimError.reason_code` gives a stable `HDF_SLIM_*` code. The
+manifest (schema `ras-commander-hdf-slim/v1`) records the policy, every dropped
+and re-chunked dataset with its chunks and filters, the source and output
+names, sizes and SHA-256 values (never host paths), the verification result,
+and the software versions, including `implementation_sha256` of the engine file.
+
+The same operation is available from the command line:
+
+```bash
+python -m ras_commander.hdf.HdfSlim project.p03.hdf slim/project.p03.hdf \
+    --manifest slim/project.p03.hdf_slim.json
+python -m ras_commander.hdf.HdfSlim project.p03.hdf --dry-run
+```
+
+Exit codes are 0 for a completed slim, 1 for a failed one and 2 for bad
+arguments, policy or input; a manifest is written in every case. Values, units,
+CRS and vertical datum are never converted. A slim copy is a storage
+optimization, not hydraulic review of the results.
+
 ## Plan Results
 
 ### HdfResultsPlan
@@ -1582,6 +1668,23 @@ prerequisites and return contracts take precedence over abbreviated summaries.
       members:
         - export
         - inspect_result
+
+### HdfSlim source reference
+
+::: ras_commander.hdf.HdfSlim.HdfSlim
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_policy
+        - list_presets
+        - plan
+        - slim
+        - verify
+        - write_manifest
+        - engine_path
+        - implementation_sha256
 
 ### HdfPipe source reference
 
