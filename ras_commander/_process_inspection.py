@@ -490,10 +490,12 @@ def _unsupported_plan_engine_error(
     )
 
 
-def _exact_event_writer_signature(process: RasProcessRecord, tmp_hdf_path: Path) -> bool:
+def _exact_event_writer_signature(
+    process: RasProcessRecord, tmp_hdf_path: Path, project_path: Path,
+) -> bool:
     """Recognize only the observed fixed-position RasProcess event writers."""
     command = process.command_line
-    if process.name.casefold() != "rasprocess.exe" or len(command) not in (3, 4, 5):
+    if process.name.casefold() != "rasprocess.exe" or len(command) not in (3, 4, 5, 6):
         return False
     executable = normalize_windows_path_token(command[0], process.working_directory)
     if ntpath.basename(executable) != "rasprocess.exe":
@@ -506,9 +508,20 @@ def _exact_event_writer_signature(process: RasProcessRecord, tmp_hdf_path: Path)
         "CompletePreProcess", "CompleteEventConditions",
     )):
         return False
-    if not _command_has_exact_path(command[2:3], tmp_hdf_path, process.working_directory):
+    if _command_has_exact_path(command[2:3], tmp_hdf_path, process.working_directory):
+        tail = command[3:]
+    elif (
+        _command_has_exact_marker(command[1:2], "CompletePreProcess")
+        and _command_has_exact_path(
+            command[2:3], project_path.with_suffix('.rasmap'), process.working_directory,
+        )
+        and _command_has_exact_path(command[3:4], tmp_hdf_path, process.working_directory)
+    ):
+        # HEC-RAS 7.0.1 includes the Mapper path before the selected plan HDF.
+        # Both paths must bind exactly; neither a basename nor a shared cwd does.
+        tail = command[4:]
+    else:
         return False
-    tail = command[3:]
     return (
         not tail
         or len(tail) == 1 and _command_has_exact_marker(tail, "Units=US Customary")
@@ -538,7 +551,7 @@ def match_plan_processes(
     identity_errors = []
     for process in inventory.processes:
         name = process.name.casefold()
-        if _exact_event_writer_signature(process, tmp_hdf_path):
+        if _exact_event_writer_signature(process, tmp_hdf_path, project_path):
             matches.append(process)
             continue
         if name not in _PLAN_MATCHABLE_PROCESS_NAMES:
