@@ -273,3 +273,135 @@ def test_installed_engine_advertises_coupled_storage_contracts():
     pool, composition = _coupled._require_storage_engine(caps)
     assert composition.flags.get("native_parity_qualified") is False
     assert pool.method_id == "storage-area-level-pool/1"
+
+
+OVERLAPPING_PERIMETER = ((290., 90.), (320., 90.), (320., 120.), (290., 120.))
+
+
+def _precedence_capabilities():
+    caps = _capabilities()
+    caps.methods[_coupled.STORAGE_PRECEDENCE_ENGINE_KEY] = SimpleNamespace(
+        method_id=_coupled.STORAGE_PRECEDENCE_METHOD_ID,
+        request_schemas=(_coupled.STORAGE_COMPOSITION_SCHEMA,), flags={})
+    return caps
+
+
+def _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=3):
+    """Fake engine: the precedence composition cedes `ceded` storage pixels to 2D.
+
+    The fake 2D component owns every pixel and the storage component labels three,
+    so a correct engine cedes all three.
+    """
+    calls = _storage_engine(monkeypatch, tmp_path, engine, caps, composed_storage_pixels=3 - ceded)
+    storage_run = _engine.run_engine
+
+    def run(args, what, timeout=None):
+        result = storage_run(args, what, timeout)
+        request, out = json.loads(Path(args[2]).read_text()), Path(args[3])
+        if args[1] == "coupled-diagnostic" and request.get("storage", {}).get("two_d_precedence"):
+            report = json.loads((out / "report.json").read_text())
+            report["method"]["method_id"] = _coupled.STORAGE_PRECEDENCE_METHOD_ID
+            report["counts"]["storage_ceded_to_two_d_pixels"] = ceded
+            report["counts"]["dry_storage_suppressed_wet_xs"] = min(1, 3 - ceded)
+            (out / "report.json").write_text(json.dumps(report))
+        return result
+
+    monkeypatch.setattr(_engine, "run_engine", run)
+    return calls
+
+
+def test_storage_overlap_default_refusal_is_unchanged(files, tmp_path, monkeypatch):
+    _storage_environment(files, tmp_path, monkeypatch, caps=_precedence_capabilities(),
+                         perimeter=OVERLAPPING_PERIMETER)
+    with pytest.raises(FimUnsupportedError, match="physically overlaps 2D flow area 'mesh'"):
+        RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                     storage_overlap="refuse")
+    with pytest.raises(ValueError, match="storage_overlap must be one of"):
+        RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                     storage_overlap="storage_first")
+    assert not (tmp_path / "prep").exists()
+
+
+def test_two_d_precedence_inventories_overlap_and_binds_engine_contract(files, tmp_path, monkeypatch):
+    engine, caps = _storage_environment(files, tmp_path, monkeypatch, caps=_precedence_capabilities(),
+                                        perimeter=OVERLAPPING_PERIMETER)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                           storage_overlap="two_d_precedence", max_working_mib=64)
+    storage = prepared.validate()["storage"]
+    assert storage["overlap_policy"] == "two_d_precedence"
+    assert storage["composition"]["method_id"] == _coupled.STORAGE_PRECEDENCE_METHOD_ID
+    (overlap,) = storage["two_d_overlaps"]
+    assert (overlap["storage_area"], overlap["two_d_area"]) == ("Pond", "mesh")
+    assert overlap["intersection_area"] == pytest.approx(400.0)
+    assert overlap["pixel_centres"] > 0
+
+    calls = _precedence_engine(monkeypatch, tmp_path, engine, caps)
+    manifest = prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
+                                     max_working_mib=64)
+    assert manifest.status.tolist() == ["complete"]
+    assert manifest.attrs["qualified"] is False
+    assert manifest.attrs["method_id"] == _coupled.STORAGE_PRECEDENCE_METHOD_ID
+    composed = [request for command, request in calls if command == "coupled-diagnostic"]
+    assert composed and all(r["storage"]["two_d_precedence"] is True for r in composed)
+
+
+def test_two_d_precedence_counts_must_reconcile(files, tmp_path, monkeypatch):
+    from ras_commander.fim import FimMappingError
+    engine, caps = _storage_environment(files, tmp_path, monkeypatch, caps=_precedence_capabilities(),
+                                        perimeter=OVERLAPPING_PERIMETER)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                           storage_overlap="two_d_precedence", max_working_mib=64)
+    _precedence_engine(monkeypatch, tmp_path, engine, caps)
+    _storage_engine_counts = _engine.run_engine
+
+    def undercount(args, what, timeout=None):
+        result = _storage_engine_counts(args, what, timeout)
+        out = Path(args[3])
+        if args[1] == "coupled-diagnostic":
+            report = json.loads((out / "report.json").read_text())
+            report["counts"]["storage_ceded_to_two_d_pixels"] = 1   # owned 0 + ceded 1 != 3
+            (out / "report.json").write_text(json.dumps(report))
+        return result
+
+    monkeypatch.setattr(_engine, "run_engine", undercount)
+    with pytest.raises(FimMappingError, match="ceded-pixel count differs|coverage counts differ"):
+        prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
+                              max_working_mib=64)
+    assert not list((tmp_path / "maps").glob("*.tif*"))
+
+
+def test_two_d_precedence_ceded_count_must_equal_ownership_intersection(files, tmp_path, monkeypatch):
+    """A sum-consistent but wrong split (owned 2 + ceded 1 == 3) is refused: all 3 are 2D-owned."""
+    from ras_commander.fim import FimMappingError
+    engine, caps = _storage_environment(files, tmp_path, monkeypatch, caps=_precedence_capabilities(),
+                                        perimeter=OVERLAPPING_PERIMETER)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                           storage_overlap="two_d_precedence", max_working_mib=64)
+    _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=1)
+    with pytest.raises(FimMappingError, match="ownership intersection"):
+        prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
+                              max_working_mib=64)
+    assert not list((tmp_path / "maps").glob("*.tif*"))
+
+
+def test_two_d_precedence_requires_advertised_engine_contract(files, tmp_path, monkeypatch):
+    engine, caps = _storage_environment(files, tmp_path, monkeypatch, perimeter=OVERLAPPING_PERIMETER)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                           storage_overlap="two_d_precedence", max_working_mib=64)
+    _storage_engine(monkeypatch, tmp_path, engine, caps)
+    with pytest.raises(FimUnsupportedError, match="coupled_storage_two_d_precedence_diagnostic"):
+        prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
+                              max_working_mib=64)
+
+
+def test_two_d_precedence_receipt_policy_tampering_refuses(files, tmp_path, monkeypatch):
+    _storage_environment(files, tmp_path, monkeypatch, caps=_precedence_capabilities(),
+                         perimeter=OVERLAPPING_PERIMETER)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                           storage_overlap="two_d_precedence")
+    path = prepared.folder / "coupled_preparation.json"
+    receipt = json.loads(path.read_text())
+    receipt["storage"]["overlap_policy"] = "refuse"   # claim the default guard ran
+    path.write_text(json.dumps(receipt))
+    with pytest.raises(FimUnsupportedError, match="changed"):
+        prepared.validate()
