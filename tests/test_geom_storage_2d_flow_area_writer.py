@@ -558,3 +558,49 @@ def test_replace_breaklines_rejects_duplicate_names_before_write(tmp_path):
         )
 
     assert geom_file.read_bytes() == original
+
+
+def test_set_2d_flow_area_settings_locked_round_trip(tmp_path):
+    """`2D Locked=-1` follows `2D Composite LC=` (HEC-RAS 7.x order) and can be removed."""
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=2D Locked Test\n",
+            "Program Version=7.00\n",
+            "Storage Area=Locked 2D,10.0000000,10.0000000\n",
+            "Storage Area Surface Line= 5\n",
+            *_format_xy_rows(
+                [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)],
+                values_per_line=2,
+            ),
+            "Storage Area Type= 0\n",
+            "Storage Area Area=\n",
+            "Storage Area Min Elev=\n",
+            "Storage Area Is2D=-1\n",
+            "Storage Area Point Generation Data=,,100,100\n",
+            "Storage Area 2D Points= 2\n",
+            *_format_xy_rows([(2.0, 2.0), (8.0, 8.0)], values_per_line=4),
+            "Storage Area 2D PointsPerimeterTime=01Jan2026 00:00:00\n",
+            "Storage Area Mannings=0.04\n",
+            "2D Cell Volume Filter Tolerance=0.01\n",
+            "2D Composite LC=-1\n",
+            "\n",
+            "River Reach=TestRiver    ,TestReach\n",
+        ],
+    )
+    before = GeomStorage.get_2d_flow_area_settings(geom_file)
+    assert bool(before.iloc[0]["locked"]) is False
+
+    GeomStorage.set_2d_flow_area_settings(geom_file, "Locked 2D", locked=True, create_backup=False)
+    text = geom_file.read_text(encoding="utf-8")
+    assert "2D Composite LC=-1\n2D Locked=-1\n" in text
+    assert "Storage Area 2D Points= 2" in text
+    row = GeomStorage.get_2d_flow_area_settings(geom_file).iloc[0]
+    assert bool(row["locked"]) is True
+    assert bool(row["composite_classification"]) is True
+
+    GeomStorage.set_2d_flow_area_settings(geom_file, "Locked 2D", locked=False, create_backup=False)
+    text = geom_file.read_text(encoding="utf-8")
+    assert "2D Locked=" not in text
+    assert "2D Composite LC=-1" in text
+    assert bool(GeomStorage.get_2d_flow_area_settings(geom_file).iloc[0]["locked"]) is False
