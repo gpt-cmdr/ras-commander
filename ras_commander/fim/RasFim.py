@@ -291,7 +291,7 @@ class RasFim:
         profiles: Optional[Union[Dict[str, Union[str, int]], Sequence[Union[str, int]]]] = None,
         allow_unqualified: bool = False, max_working_mib: int = 1024,
         engine_path: Optional[PathLike] = None, threads: int = 1,
-        grid_contract: Optional[str] = None,
+        grid_contract: Optional[str] = None, storage_overlap: str = "refuse",
     ) -> "FimPreparedCoupledModel":
         """Prepare receipt-bound global mixed XS/2D inputs for diagnostic mapping.
 
@@ -303,12 +303,23 @@ class RasFim:
         ``grid_contract="rasmapper-stored-tile-grid/1"`` explicitly selects
         native stored tile sampling and derived delivery framing while retaining
         the original terrain identity. None retains source-grid delivery.
+
+        ``storage_overlap`` controls storage areas that physically overlap a
+        2D flow area. ``"refuse"`` (default) raises before staging.
+        ``"two_d_precedence"`` applies RAS Mapper's ownership order (2D cells,
+        wet or dry, are assigned before storage areas; source-verified in
+        HEC-RAS 6.6, 7.0 and 7.0.1), records each overlap's storage area, 2D
+        area, intersection area and pixel-centre count in the receipt, and
+        requires an engine advertising
+        ``coupled_storage_two_d_precedence_diagnostic``. Results stay
+        unqualified; overlap pixel parity with native stored maps is not
+        established by this option.
         """
         from ._coupled import prepare_coupled_model
         return prepare_coupled_model(hdf_path, terrain_path, output_folder,
                                    profiles=profiles, allow_unqualified=allow_unqualified,
                                    max_working_mib=max_working_mib, engine_path=engine_path, threads=threads,
-                                   grid_contract=grid_contract)
+                                   grid_contract=grid_contract, storage_overlap=storage_overlap)
 
     @staticmethod
     @log_call
