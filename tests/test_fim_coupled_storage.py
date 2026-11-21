@@ -286,8 +286,12 @@ def _precedence_capabilities():
     return caps
 
 
-def _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=1):
-    """Fake engine: the precedence composition cedes `ceded` storage pixels to 2D."""
+def _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=3):
+    """Fake engine: the precedence composition cedes `ceded` storage pixels to 2D.
+
+    The fake 2D component owns every pixel and the storage component labels three,
+    so a correct engine cedes all three.
+    """
     calls = _storage_engine(monkeypatch, tmp_path, engine, caps, composed_storage_pixels=3 - ceded)
     storage_run = _engine.run_engine
 
@@ -298,6 +302,7 @@ def _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=1):
             report = json.loads((out / "report.json").read_text())
             report["method"]["method_id"] = _coupled.STORAGE_PRECEDENCE_METHOD_ID
             report["counts"]["storage_ceded_to_two_d_pixels"] = ceded
+            report["counts"]["dry_storage_suppressed_wet_xs"] = min(1, 3 - ceded)
             (out / "report.json").write_text(json.dumps(report))
         return result
 
@@ -346,7 +351,7 @@ def test_two_d_precedence_counts_must_reconcile(files, tmp_path, monkeypatch):
                                         perimeter=OVERLAPPING_PERIMETER)
     prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
                                            storage_overlap="two_d_precedence", max_working_mib=64)
-    _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=2)
+    _precedence_engine(monkeypatch, tmp_path, engine, caps)
     _storage_engine_counts = _engine.run_engine
 
     def undercount(args, what, timeout=None):
@@ -354,12 +359,26 @@ def test_two_d_precedence_counts_must_reconcile(files, tmp_path, monkeypatch):
         out = Path(args[3])
         if args[1] == "coupled-diagnostic":
             report = json.loads((out / "report.json").read_text())
-            report["counts"]["storage_ceded_to_two_d_pixels"] = 1   # owned 1 + ceded 1 != 3
+            report["counts"]["storage_ceded_to_two_d_pixels"] = 1   # owned 0 + ceded 1 != 3
             (out / "report.json").write_text(json.dumps(report))
         return result
 
     monkeypatch.setattr(_engine, "run_engine", undercount)
-    with pytest.raises(FimMappingError, match="storage composition coverage counts differ"):
+    with pytest.raises(FimMappingError, match="ceded-pixel count differs|coverage counts differ"):
+        prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
+                              max_working_mib=64)
+    assert not list((tmp_path / "maps").glob("*.tif*"))
+
+
+def test_two_d_precedence_ceded_count_must_equal_ownership_intersection(files, tmp_path, monkeypatch):
+    """A sum-consistent but wrong split (owned 2 + ceded 1 == 3) is refused: all 3 are 2D-owned."""
+    from ras_commander.fim import FimMappingError
+    engine, caps = _storage_environment(files, tmp_path, monkeypatch, caps=_precedence_capabilities(),
+                                        perimeter=OVERLAPPING_PERIMETER)
+    prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True,
+                                           storage_overlap="two_d_precedence", max_working_mib=64)
+    _precedence_engine(monkeypatch, tmp_path, engine, caps, ceded=1)
+    with pytest.raises(FimMappingError, match="ownership intersection"):
         prepared.map_profiles(tmp_path / "maps", bbox=(0, 0, 50, 50), allow_unqualified=True,
                               max_working_mib=64)
     assert not list((tmp_path / "maps").glob("*.tif*"))

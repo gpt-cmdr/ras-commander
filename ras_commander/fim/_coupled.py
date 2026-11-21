@@ -1331,6 +1331,14 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                     raise FimEngineError("coupled storage composition ceded-pixel count is invalid")
                 if storage and not precedence and "storage_ceded_to_two_d_pixels" in counts:
                     raise FimEngineError("coupled storage composition reported an unrequested precedence")
+                if storage and precedence:
+                    # Independently recount the ceded pixels: every pixel labelled by both the 2D
+                    # and the storage component, wet or dry, belongs to 2D.
+                    both = np.count_nonzero((np.fromfile(two_out / "owners.bin", dtype="<u4") != 0)
+                                            & (np.fromfile(pool_out / "owners.bin", dtype="<u4") != 0))
+                    if ceded != both:
+                        raise FimEngineError("coupled storage composition ceded-pixel count differs "
+                                             "from the component ownership intersection")
                 if storage and (
                         counts.get("storage_owned_pixels", 0) + ceded != pool_report["storage_owned_pixels"] or
                         isinstance(counts.get("dry_storage_suppressed_wet_xs"), bool) or
