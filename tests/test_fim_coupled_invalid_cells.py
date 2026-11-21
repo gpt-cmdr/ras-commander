@@ -71,3 +71,32 @@ def test_only_single_polygon_policies_are_offered(policy):
     with pytest.raises(ValueError, match="invalid_cells must be None or one of"):
         _coupled.prepare_coupled_model("missing.p01.hdf", "missing.tif", "out", allow_unqualified=True,
                                        invalid_cells=policy)
+
+
+# Real repair through the shared helper (no mocks of load_cells), on the synthetic
+# self-crossing meshes of test_fim_invalid_cells.
+@pytest.mark.parametrize("policy, action", [("repair", "repaired"), ("hull", "convex_hull")])
+def test_real_self_crossing_cell_is_rebuilt_as_one_polygon_per_cell(tmp_path, policy, action):
+    pytest.importorskip("ras_commander_fast_hdf")
+    from test_fim_invalid_cells import MAIN_LOBE_AREA, _write_bowtie_mesh
+
+    hdf = _write_bowtie_mesh(tmp_path / "bowtie.hdf")
+    with pytest.raises(MeshCellPolygonError):
+        _coupled._coupled_cells(hdf, 1, None)
+    cells, record = _coupled._coupled_cells(hdf, 1, policy)
+    assert cells["cell_id"].tolist() == [0, 1, 2]  # one ownership row per physical cell
+    assert cells.geometry.is_valid.all()
+    rebuilt = {c["cell_id"]: c for c in record["cells"]}
+    assert rebuilt[0]["action"] == action and rebuilt[0]["pieces"] == 1
+    if policy == "repair":
+        assert rebuilt[0]["fallback_area"] == pytest.approx(MAIN_LOBE_AREA)
+    assert rebuilt[2]["action"] == "overlap_trimmed" and rebuilt[2]["pieces"] == 1
+
+
+def test_real_repair_that_splits_a_neighbour_is_refused(tmp_path):
+    pytest.importorskip("ras_commander_fast_hdf")
+    from test_fim_invalid_cells import _write_cells
+
+    hdf = _write_cells(tmp_path / "split.hdf", [box(4, -1, 6, 11), box(0, 0, 10, 10)])
+    with pytest.raises(FimUnsupportedError, match="one polygon per physical cell"):
+        _coupled._coupled_cells(hdf, 1, "repair")
