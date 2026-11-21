@@ -1474,12 +1474,19 @@ def _set_classification_parameters_native(
             mismatches.append(update["Name"])
             continue
         for column in parameter_columns:
-            if not np.isclose(
-                float(saved_row[column]),
-                float(update[column]),
-                rtol=1.0e-6,
-                atol=1.0e-7,
-            ):
+            expected = float(update[column])
+            is_null = getattr(saved_row, "IsNull", None)
+            if callable(is_null) and bool(is_null(column)):
+                # RASMapper reloads an unset (-9999) parameter as DBNull.
+                matches = expected == -9999.0
+            else:
+                matches = np.isclose(
+                    float(saved_row[column]),
+                    expected,
+                    rtol=1.0e-6,
+                    atol=1.0e-7,
+                )
+            if not matches:
                 mismatches.append(f"{update['Name']}:{column}")
     if mismatches:
         raise RuntimeError(
@@ -1512,10 +1519,14 @@ def _set_classification_parameters_native(
 
     records: list[dict[str, Any]] = []
     for row in saved_table.Rows:
-        record = {
-            str(saved_table.Columns[index].ColumnName): row[index]
-            for index in range(saved_table.Columns.Count)
-        }
+        record = {}
+        for index in range(saved_table.Columns.Count):
+            name = str(saved_table.Columns[index].ColumnName)
+            value = row[index]
+            is_null = getattr(row, "IsNull", None)
+            if name not in {"Name", "ID"} and callable(is_null) and bool(is_null(index)):
+                value = -9999.0
+            record[name] = value
         records.append(record)
     return pd.DataFrame.from_records(records)
 
