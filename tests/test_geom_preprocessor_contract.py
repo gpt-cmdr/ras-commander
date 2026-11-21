@@ -239,7 +239,7 @@ def test_coherent_translation_is_not_current_authored_mesh(tmp_path, dataset):
 
 
 @pytest.mark.synthetic_hdf_layout
-def test_centers_require_exact_native_precision_but_ghosts_are_not_seeds(tmp_path):
+def test_centers_require_native_precision_but_ghosts_are_not_seeds(tmp_path):
     text, path, expected = fixture(tmp_path)
     with h5py.File(path, "r+") as hdf:
         obj = hdf[f"{AREA}/Synthetic/Cells Center Coordinate"]
@@ -248,6 +248,11 @@ def test_centers_require_exact_native_precision_but_ghosts_are_not_seeds(tmp_pat
     with h5py.File(path, "r+") as hdf:
         obj = hdf[f"{AREA}/Synthetic/Cells Center Coordinate"]
         obj[0, 0] = np.nextafter(obj[0, 0], np.inf)
+    # One ULP is native HEC-RAS rounding (see the Weise_2D regression below).
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+    with h5py.File(path, "r+") as hdf:
+        obj = hdf[f"{AREA}/Synthetic/Cells Center Coordinate"]
+        obj[0, 0] = obj[0, 0] + 3 * np.spacing(1.0)
     assert any(
         "interior centers" in v
         for v in validate(text, path, expected, time.time() - 1)[1]
@@ -477,6 +482,36 @@ def test_local_binding_preserves_world_ulp_limit(tmp_path, offset, ulps, target)
     assert bool(issues) is (target == "seed" or ulps > 8)
     if target == "seed":
         assert any("interior centers differ" in issue for issue in issues)
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("scale", [16.45, 2_060_000.0])
+@pytest.mark.parametrize("ulps,ok", [(1, True), (2, True), (3, False)])
+def test_interior_centers_allow_native_one_ulp_rounding(tmp_path, scale, ulps, ok):
+    """HEC-RAS writes centers within 1 ULP (at area magnitude) of Cell Points.
+
+    Regression: the public Weise_2D example (SI flume, x up to 16.45 m) has
+    1,977 centers 1 ULP of 16.45 away from their seeds in its HEC-RAS 6.6 file
+    and in a HEC-RAS 7.0.1 regeneration; exact equality rejected valid output.
+    """
+    from ras_commander.geom._preprocess_contract import _mesh_binding_issues
+
+    _, path, expected = fixture(tmp_path)
+    ring = np.array([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]) * scale
+    seeds = expected["seed_points"]["Synthetic"] * scale
+    step = np.spacing(max(1.0, float(np.max(np.abs(seeds)))))
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        centers = area["Cells Center Coordinate"][()] * scale
+        centers[: len(seeds)] = seeds
+        centers[0] = seeds[0] + [ulps * step, -ulps * step]
+        area["Cells Center Coordinate"][...] = centers
+        area["FacePoints Coordinate"][...] = area["FacePoints Coordinate"][()] * scale
+        if "Faces Perimeter Values" in area and area["Faces Perimeter Values"].size:
+            area["Faces Perimeter Values"][...] = area["Faces Perimeter Values"][()] * scale
+        issues = _mesh_binding_issues(area, seeds, ring)
+    centre_issue = any("interior centers differ" in issue for issue in issues)
+    assert centre_issue is (not ok), issues
 
 
 @pytest.mark.synthetic_hdf_layout
