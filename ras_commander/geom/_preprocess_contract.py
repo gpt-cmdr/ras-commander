@@ -563,6 +563,23 @@ def invalidate_products(hdf_path: Path) -> list[str]:
     return removed
 
 
+def _empty_face_perimeter(area: h5py.Group) -> bool:
+    """Return whether native output stores no face intermediate points.
+
+    HEC-RAS 7.0.1 writes ``Faces Perimeter Values`` as an empty ``(0, 0)``
+    dataset when no face has intermediate points, for example a rectangular
+    perimeter whose corners all become facepoints. Accept that empty layout,
+    or ``(0, 2)``, only when every packed ``Faces Perimeter Info`` count is zero.
+    """
+    values = area.get("Faces Perimeter Values")
+    info = area.get("Faces Perimeter Info")
+    if not isinstance(values, h5py.Dataset) or not isinstance(info, h5py.Dataset):
+        return False
+    if values.shape not in ((0, 0), (0, 2)) or info.ndim != 2 or info.shape[1] != 2:
+        return False
+    return info.dtype.kind in "iu" and not np.any(read_typed(info)[:, 1])
+
+
 def _topology_issues(area: h5py.Group) -> list[str]:
     """Check HEC-RAS 5/6 packed incidence, padding and reciprocal connectivity.
 
@@ -720,7 +737,11 @@ def _topology_issues(area: h5py.Group) -> list[str]:
             issues.append("Faces NormalUnitVector and Length: face-coordinate mismatch")
 
     info = read("Faces Perimeter Info", nf, 2, integer=True)
-    values = read("Faces Perimeter Values", columns=2)
+    values = (
+        np.empty((0, 2))
+        if _empty_face_perimeter(area)
+        else read("Faces Perimeter Values", columns=2)
+    )
     if info is not None and values is not None:
         counts = info[:, 1]
         if (
@@ -836,6 +857,8 @@ def _mesh_binding_issues(
         return issues + [
             "Faces Perimeter Values: unsupported native coordinate precision"
         ]
+    if _empty_face_perimeter(area):
+        values = values.reshape(0, 2)
     values = values - origin
     if not np.all(shapely.covers(domain, shapely.points(values))):
         issues.append("Faces Perimeter Values: points outside authored perimeter")
@@ -1097,6 +1120,10 @@ def validate(
                 ("FacePoints Face and Orientation Values", None, 2),
                 ("FacePoints Is Perimeter", len(points), None),
             ):
+                if topology == "Faces Perimeter Values" and _empty_face_perimeter(
+                    hdf[path]
+                ):
+                    continue
                 require(f"{path}/{topology}", rows, columns)
             topology_issues = _topology_issues(hdf[path])
             missing.extend(f"{path}/{issue}" for issue in topology_issues)

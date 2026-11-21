@@ -494,6 +494,37 @@ def test_exterior_native_intermediate_vertex_fails_complete_contract(tmp_path):
     assert not evidence["products_complete"]
 
 
+def replace_face_perimeter_values(path, shape, counts=(0, 0)):
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        del area["Faces Perimeter Values"]
+        area.create_dataset("Faces Perimeter Values", data=np.empty(shape))
+        area["Faces Perimeter Info"][...] = [[0, counts[0]], [counts[0], counts[1]]]
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_native_7x_empty_face_perimeter_values_without_intermediates(tmp_path):
+    # HEC-RAS 7.0.1 writes (0, 0) when no face has intermediate points.
+    text, path, expected = fixture(tmp_path)
+    replace_face_perimeter_values(path, (0, 0))
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert (changed, missing) == ([], [])
+    assert evidence["products_complete"]
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize(
+    "shape,counts",
+    [((0, 0), (0, 1)), ((0, 2), (1, 0)), ((0,), (0, 0)), ((0, 3), (0, 0)), ((1, 0), (0, 0))],
+)
+def test_malformed_face_perimeter_values_still_fail(tmp_path, shape, counts):
+    text, path, expected = fixture(tmp_path)
+    replace_face_perimeter_values(path, shape, counts)
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert not changed and any("Faces Perimeter" in issue for issue in missing)
+    assert not evidence["products_complete"]
+
+
 def manning_region(text, path, outside=True):
     origin = 2.0 if outside else 0.1
     coordinates = np.array(
