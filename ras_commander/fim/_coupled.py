@@ -342,7 +342,52 @@ def _alignment(hdf, profiles):
         return result
 
 
-def _stage_mesh(hdf, folder, selected, budget, threads):
+# Coupled ownership needs exactly one polygon per physical cell, so only the
+# invalid-cell policies that keep that shape are offered. None keeps the
+# historical strict refusal.
+COUPLED_INVALID_CELL_POLICIES = ("repair", "hull")
+
+
+def _coupled_invalid_cells(value):
+    if value is not None and value not in COUPLED_INVALID_CELL_POLICIES:
+        raise ValueError(f"invalid_cells must be None or one of {COUPLED_INVALID_CELL_POLICIES}, got {value!r}")
+    return value
+
+
+def _coupled_cells(hdf, threads, invalid_cells):
+    """Strict native cell polygons, or the shared invalid-cell policy when strict assembly refuses.
+
+    Valid meshes always keep the strict polygons. With a policy, only cells that
+    strict assembly refuses are rebuilt (``_invalid_cells.load_cells``) and every
+    rebuilt or consumed cell is recorded. Results that would split a cell into
+    several ownership pieces or leave a cell without area are refused: the
+    coupled ownership transport carries one polygon per physical cell.
+    """
+    from .. import HdfMesh
+    from ..fast_hdf import backend_scope
+
+    def strict():
+        with backend_scope("rust"):
+            return HdfMesh.get_mesh_cell_polygons(hdf, strict=True, engine="native", threads=threads)
+    if invalid_cells is None:
+        return strict(), None
+    from . import _invalid_cells
+    cells, records = _invalid_cells.load_plan_cells(hdf, policy=invalid_cells, threads=threads,
+                                                    strict_loader=strict)
+    _invalid_cells.require_cells(cells, records, invalid_cells, method="coupled mapping")
+    if not records:
+        return cells, {"policy": invalid_cells, "cells": []}
+    if any(r.get("pieces", 1) != 1 or not r.get("fallback_area") for r in records):
+        listed = ", ".join(f"{r['mesh']} cell {r['cell_id']} ({r['action']}, {r.get('pieces')} pieces)"
+                           for r in records[:10])
+        raise FimUnsupportedError(
+            f"invalid_cells={invalid_cells!r} would split or empty physical cells ({listed}); "
+            "coupled ownership requires one polygon per physical cell")
+    description = _invalid_cells.describe(records, invalid_cells, None)
+    return cells, json.loads(json.dumps(description, default=float))
+
+
+def _stage_mesh(hdf, folder, selected, budget, threads, invalid_cells=None):
     from ._sloping_inputs import _write_binary_mesh_payloads
     from ._sloping import _stage_profiles
     from ._horizontal_engine import _write_geometry
@@ -369,8 +414,7 @@ def _stage_mesh(hdf, folder, selected, budget, threads):
         include_max="Max" in selected.values(), max_staged_bytes=budget//3)
     units, _, _ = _stage_profiles(hdf, folder, meshes, maxima, selected,
                                   max_staged_bytes=budget//4)
-    with backend_scope("rust"):
-        cells = HdfMesh.get_mesh_cell_polygons(hdf, strict=True, engine="native", threads=threads)
+    cells, invalid_record = _coupled_cells(hdf, threads, invalid_cells)
     if cells.empty or not cells.geometry.is_valid.all() or cells.geometry.is_empty.any():
         raise FimUnsupportedError("coupled physical ownership requires complete valid polygons")
     lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(meshes)}
@@ -381,9 +425,12 @@ def _stage_mesh(hdf, folder, selected, budget, threads):
     if len(set(map(tuple, addresses))) != len(addresses):
         raise FimUnsupportedError("duplicate physical cell identities")
     _write_geometry(folder / "cells.wkb", cells.geometry.to_numpy())
-    return {"mesh_files": files, "meshes": meshes, "profiles": units,
-            "geometry_file": "cells.wkb", "owner_cells": addresses,
-            "physical_cell_count": len(addresses)}
+    staged = {"mesh_files": files, "meshes": meshes, "profiles": units,
+              "geometry_file": "cells.wkb", "owner_cells": addresses,
+              "physical_cell_count": len(addresses)}
+    if invalid_record is not None:
+        staged["invalid_cells"] = invalid_record
+    return staged
 
 
 def _validate_coupled_receipt(prepared, receipt):
@@ -402,6 +449,9 @@ def _validate_coupled_receipt(prepared, receipt):
             raise ValueError("timestamp alignment changed")
         if receipt["engine_sha256"] != digest(receipt["engine_path"]):
             raise ValueError("prepared engine changed")
+        policy = (mesh.get("invalid_cells") or {}).get("policy")
+        if "invalid_cells" in mesh and policy not in COUPLED_INVALID_CELL_POLICIES:
+            raise ValueError("invalid-cell policy record")
         if mesh["physical_cell_count"] != len(mesh["owner_cells"]) or not mesh["owner_cells"]:
             raise ValueError("physical ownership cardinality")
         for address in mesh["owner_cells"]:
@@ -589,7 +639,8 @@ class FimPreparedCoupledModel:
 
 def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=None,
                         allow_unqualified=False, max_working_mib=1024, engine_path=None, threads=1,
-                        grid_contract=None, storage_overlap="refuse"):
+                        grid_contract=None, storage_overlap="refuse", invalid_cells=None):
+    invalid_cells = _coupled_invalid_cells(invalid_cells)
     import rasterio
     from pyproj.exceptions import CRSError
     from ..hdf.HdfBase import HdfBase
@@ -751,7 +802,8 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         mesh_folder = folder / "two_d"
         mesh_folder.mkdir()
         created_paths.append(mesh_folder)
-        mesh = _stage_mesh(hdf, mesh_folder, dict(zip(profile_ids, profiles)), budget, threads)
+        mesh = _stage_mesh(hdf, mesh_folder, dict(zip(profile_ids, profiles)), budget, threads,
+                           **({"invalid_cells": invalid_cells} if invalid_cells is not None else {}))
         for key in ("geometry_file",):
             mesh[key] = "two_d/" + mesh[key]
         mesh["mesh_files"] = ["two_d/" + f for f in mesh["mesh_files"]]

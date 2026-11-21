@@ -292,6 +292,7 @@ class RasFim:
         allow_unqualified: bool = False, max_working_mib: int = 1024,
         engine_path: Optional[PathLike] = None, threads: int = 1,
         grid_contract: Optional[str] = None, storage_overlap: str = "refuse",
+        invalid_cells: Optional[str] = None,
     ) -> "FimPreparedCoupledModel":
         """Prepare receipt-bound global mixed XS/2D inputs for diagnostic mapping.
 
@@ -314,12 +315,22 @@ class RasFim:
         ``coupled_storage_two_d_precedence_diagnostic``. Results stay
         unqualified; overlap pixel parity with native stored maps is not
         established by this option.
+
+        ``invalid_cells`` handles physical 2D cells whose face polylines make an
+        invalid ring (for example a perimeter face crossing another face of the
+        same cell). ``None`` (default) keeps the strict refusal. ``"repair"`` or
+        ``"hull"`` apply the shared invalid-cell ownership policy of
+        :meth:`map_sloping_profiles` only to cells strict assembly refuses, and
+        record each one in the receipt (``mesh.invalid_cells``). Results that
+        would split a cell or leave it without area are refused. Hydraulic
+        topology is unchanged; only pixel ownership of the recorded cells moves.
         """
         from ._coupled import prepare_coupled_model
         return prepare_coupled_model(hdf_path, terrain_path, output_folder,
                                    profiles=profiles, allow_unqualified=allow_unqualified,
                                    max_working_mib=max_working_mib, engine_path=engine_path, threads=threads,
-                                   grid_contract=grid_contract, storage_overlap=storage_overlap)
+                                   grid_contract=grid_contract, storage_overlap=storage_overlap,
+                                   invalid_cells=invalid_cells)
 
     @staticmethod
     @log_call
