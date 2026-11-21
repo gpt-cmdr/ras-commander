@@ -55,6 +55,33 @@ a short library acknowledgment is appreciated:
 This acknowledgment is voluntary and does not imply endorsement by the RAS
 Commander project or its contributors.
 
+## Presentation badges
+
+Use these compact footer badges in presentations to acknowledge RAS Commander.
+Each badge includes the `Ras.exe` terminal mark and the tagline
+“LLM Forward HEC-RAS Automation.” Choose **Powered By** or **Made With**, with
+lettering for light or dark slides.
+
+![Powered By and Made With compact footer badges, each shown on light and dark slides](assets/badges/compact-ras-exe-preview.png)
+
+[Download all four badges as SVG and PNG (ZIP)](assets/badges/compact-ras-exe-badges.zip)
+
+| Badge | Slide background | Vector download | PNG download |
+| --- | --- | --- | --- |
+| Powered By | Light | [SVG](assets/badges/powered-by-ras-commander-light.svg) | [PNG](assets/badges/powered-by-ras-commander-light.png) |
+| Powered By | Dark | [SVG](assets/badges/powered-by-ras-commander-dark.svg) | [PNG](assets/badges/powered-by-ras-commander-dark.png) |
+| Made With | Light | [SVG](assets/badges/made-with-ras-commander-light.svg) | [PNG](assets/badges/made-with-ras-commander-light.png) |
+| Made With | Dark | [SVG](assets/badges/made-with-ras-commander-dark.svg) | [PNG](assets/badges/made-with-ras-commander-dark.png) |
+
+In PowerPoint, select **Insert → Pictures** and choose an SVG for crisp scaling.
+SVG lettering is outlined, so it does not require installed fonts. The PNGs
+are transparent alternatives; the preview backgrounds are not part of the
+individual badges. Keep the proportions when resizing and choose a size that
+leaves the tagline readable.
+
+Badge use is voluntary. It acknowledges software use and does not imply
+endorsement by RAS Commander, HEC, or USACE.
+
 ## Contribute Upstream
 
 Reusable fixes, documentation, examples, and new capabilities are welcome.
