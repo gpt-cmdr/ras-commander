@@ -768,12 +768,41 @@ def _perimeter_serialization_matches(native: np.ndarray, authored: np.ndarray) -
     )
 
 
+# HEC-RAS-written interior cell centers can differ from the native
+# ``Cell Points`` they were generated from by one float64 ULP at the area's
+# coordinate magnitude. Observed in the public Weise_2D example (SI flume,
+# coordinates 0-16.45 m): 1,977 of 2,702 centers in the HEC-RAS 6.6 file and
+# 1,963 in a HEC-RAS 7.0.1 regeneration, max |difference| 3.55e-15 m. Larger
+# differences still fail, so a moved or substituted seed is still detected.
+_CENTER_BINDING_ULPS = 2
+
+
+def _centers_bind_seeds(centers: np.ndarray, seeds: np.ndarray) -> bool:
+    """True when interior centers equal native seeds up to the ULP allowance.
+
+    The allowance is absolute, measured at the largest coordinate magnitude of
+    the seeds (at least 1.0 CRS unit), not per element: a 1-ULP rounding of a
+    16 m coordinate is many ULPs of a 0.025 m one.
+    """
+    if centers.shape != seeds.shape:
+        return False
+    if np.array_equal(centers, seeds):
+        return True
+    if not (np.all(np.isfinite(centers)) and np.all(np.isfinite(seeds))):
+        return False
+    magnitude = max(1.0, float(np.max(np.abs(seeds))) if seeds.size else 1.0)
+    tolerance = _CENTER_BINDING_ULPS * np.spacing(magnitude)
+    return bool(np.max(np.abs(centers - seeds)) <= tolerance)
+
+
 def _mesh_binding_issues(
     area: h5py.Group, seeds: np.ndarray, ring: np.ndarray
 ) -> list[str]:
     """Bind native float64 coordinates to current text in its CRS and units.
 
-    Interior rows match current native computation points exactly. The caller
+    Interior rows match current native computation points within
+    ``_CENTER_BINDING_ULPS`` float64 ULPs at the area's coordinate magnitude
+    (see ``_centers_bind_seeds``). The caller
     validates that regenerated seed mirror against current text at one float64
     ULP for native decimal parsing; no incoming parent mirror is used.
     Remaining rows are native
@@ -791,7 +820,7 @@ def _mesh_binding_issues(
     points = read_typed(area["FacePoints Coordinate"])
     if any(v.dtype.kind != "f" or v.dtype.itemsize != 8 for v in (centers, points)):
         return ["mesh coordinates: unsupported native coordinate precision"]
-    if not np.array_equal(centers[: len(seeds)], seeds):
+    if not _centers_bind_seeds(centers[: len(seeds)], seeds):
         issues.append(
             "Cells Center Coordinate: interior centers differ from authored computation points"
         )
