@@ -3922,8 +3922,8 @@ class GeomMesh:
         ras_object=None,
         recompile_via_rasexe: bool = False,
         strict_refinement_containment: bool = False,
-        allow_boundary_connections: bool = False,
         require_complete_products: bool = False,
+        allow_boundary_connections: bool = False,
     ) -> DomainContainmentResult:
         """Audit mesh features before point generation.
 
@@ -5968,10 +5968,10 @@ class GeomMesh:
         _require_current_hdf: bool = True,
         refinement_region_constraints: bool = False,
         strict_refinement_containment: bool = False,
-        allow_boundary_connections: bool = False,
         robustness_screening: bool = False,
         require_complete_products: bool = False,
         grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
+        allow_boundary_connections: bool = False,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -6782,9 +6782,9 @@ class GeomMesh:
         recompile_via_rasexe: bool = False,
         refinement_region_constraints: bool = False,
         strict_refinement_containment: bool = False,
-        allow_boundary_connections: bool = False,
         robustness_screening: bool = False,
         require_complete_products: bool = False,
+        allow_boundary_connections: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 

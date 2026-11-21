@@ -1287,6 +1287,13 @@ class TestDomainContainmentAudit:
             "perimeter-lateral": "outside_one_cell_inward_buffer",
         }
 
+    def test_boundary_connection_option_does_not_shift_positional_arguments(self):
+        import inspect
+
+        for fn in (GeomMesh.audit_domain_containment, GeomMesh.generate, GeomMesh.generate_all):
+            names = list(inspect.signature(fn).parameters)
+            assert names[-1] == "allow_boundary_connections", fn.__name__
+
     def test_boundary_condition_lines_do_not_fail_mesh_feature_gate(self, tmp_path):
         geom_text, _hdf_path = _write_containment_fixture(
             tmp_path,
