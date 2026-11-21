@@ -1247,6 +1247,46 @@ class TestDomainContainmentAudit:
         assert evidence["ok"] is False
         assert all(not hasattr(value, "geom_type") for value in evidence.values())
 
+    def test_breaklines_of_other_areas_are_not_audited(self, tmp_path):
+        # Breaklines are geometry-wide; one disjoint from this perimeter belongs
+        # to another 2D area (multi-area HEC example geometries).
+        geom_text, _hdf_path = _write_containment_fixture(
+            tmp_path,
+            breaklines=[
+                ("inside", [(200.0, 200.0), (800.0, 800.0)]),
+                ("other-area", [(2000.0, 2000.0), (2500.0, 2600.0)]),
+            ],
+        )
+
+        result = GeomMesh.audit_domain_containment(geom_text, mesh_name="MainArea")
+
+        assert result.ok, result.violations
+        assert result.checked_counts["breakline"] == 1
+
+    def test_boundary_connections_are_opt_in(self, tmp_path):
+        structures = [
+            ("perimeter-connection", [(0.0, 200.0), (0.0, 800.0)], "Connection", "MainArea", ""),
+            ("far-connection", [(1500.0, 200.0), (1500.0, 800.0)], "Connection", "MainArea", ""),
+            ("perimeter-lateral", [(1000.0, 200.0), (1000.0, 800.0)], "Lateral", "MainArea", ""),
+        ]
+        geom_text, _hdf_path = _write_containment_fixture(tmp_path, structures=structures)
+
+        default = GeomMesh.audit_domain_containment(geom_text, mesh_name="MainArea")
+        assert {v.feature_name for v in default.violations} == {
+            "perimeter-connection",
+            "far-connection",
+            "perimeter-lateral",
+        }
+
+        allowed = GeomMesh.audit_domain_containment(
+            geom_text, mesh_name="MainArea", allow_boundary_connections=True
+        )
+        reasons = {v.feature_name: v.reason for v in allowed.violations}
+        assert reasons == {
+            "far-connection": "outside_one_cell_boundary_band",
+            "perimeter-lateral": "outside_one_cell_inward_buffer",
+        }
+
     def test_boundary_condition_lines_do_not_fail_mesh_feature_gate(self, tmp_path):
         geom_text, _hdf_path = _write_containment_fixture(
             tmp_path,
