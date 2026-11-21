@@ -2881,6 +2881,7 @@ def _audit_domain_containment_hdf(
     mesh_name: str,
     base_cell_spacing: float,
     strict_refinement_containment: bool = False,
+    allow_boundary_connections: bool = False,
 ) -> DomainContainmentResult:
     """Audit mesh-owned features against a one-cell inward domain buffer."""
     import h5py
@@ -2893,6 +2894,7 @@ def _audit_domain_containment_hdf(
     if perimeter.is_empty or not perimeter.is_valid or perimeter.area <= 0:
         raise RuntimeError(f"2D flow area {mesh_name!r} has an invalid HDF perimeter")
     admissible = perimeter.buffer(-spacing)
+    boundary_band = perimeter.buffer(spacing)
     if admissible.is_empty or not admissible.is_valid or admissible.area <= 0:
         raise RuntimeError(
             f"Inward buffer of {spacing:g} project units empties or invalidates "
@@ -2901,12 +2903,19 @@ def _audit_domain_containment_hdf(
 
     collections: list[tuple[str, list[dict[str, Any]]]] = []
     with h5py.File(str(hdf_path), "r") as hdf:
-        collections.append(
-            (
-                "breakline",
-                _hdf_polyline_features(hdf, "Geometry/2D Flow Area Break Lines"),
-            )
-        )
+        # Breaklines form one geometry-wide collection with no area column.
+        # A breakline disjoint from this perimeter belongs to another 2D area
+        # and is not a feature of this mesh; unreadable rows still fail closed.
+        breaklines = [
+            feature
+            for feature in _hdf_polyline_features(hdf, "Geometry/2D Flow Area Break Lines")
+            if feature["geometry"] is None
+            or feature["parse_error"]
+            or feature["geometry"].is_empty
+            or not feature["geometry"].is_valid
+            or feature["geometry"].intersects(perimeter)
+        ]
+        collections.append(("breakline", breaklines))
         collections.append(
             (
                 "refinement_region",
@@ -2941,6 +2950,15 @@ def _audit_domain_containment_hdf(
             if geometry is not None and not reason:
                 if geometry.is_empty or not geometry.is_valid:
                     reason = "invalid_or_empty_geometry"
+                elif (
+                    allow_boundary_connections
+                    and feature_type == "structure"
+                    and "connection" in str(feature["structure_type"]).lower()
+                ):
+                    # SA/2D connections are authored on the perimeter. When
+                    # allowed, they need only lie within one cell of the area.
+                    if not boundary_band.covers(geometry):
+                        reason = "outside_one_cell_boundary_band"
                 elif (
                     (feature_type != "refinement_region" or strict_refinement_containment)
                     and not admissible.covers(geometry)
@@ -3905,6 +3923,7 @@ class GeomMesh:
         recompile_via_rasexe: bool = False,
         strict_refinement_containment: bool = False,
         require_complete_products: bool = False,
+        allow_boundary_connections: bool = False,
     ) -> DomainContainmentResult:
         """Audit mesh features before point generation.
 
@@ -3922,6 +3941,12 @@ class GeomMesh:
         ``generate()`` removes native points outside the 2D area. Set
         ``strict_refinement_containment=True`` to apply the earlier one-cell
         inward margin to regions as well.
+
+        Breaklines are a geometry-wide collection; only those that intersect
+        the selected perimeter are audited, so another 2D area's breaklines do
+        not fail this area. ``allow_boundary_connections=True`` admits SA/2D
+        connection centerlines authored on the perimeter: they must then lie
+        within one base cell of the 2D area instead of one cell inside it.
 
         This read-only check is cross-platform and does not load RasMapperLib.
         A missing, stale, malformed, or ambiguous geometry HDF fails closed.
@@ -3979,6 +4004,7 @@ class GeomMesh:
             mesh_name,
             cell_size,
             strict_refinement_containment=strict_refinement_containment,
+            allow_boundary_connections=allow_boundary_connections,
         )
 
     @staticmethod
@@ -5945,6 +5971,7 @@ class GeomMesh:
         robustness_screening: bool = False,
         require_complete_products: bool = False,
         grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
+        allow_boundary_connections: bool = False,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -6020,6 +6047,10 @@ class GeomMesh:
             strict_refinement_containment: If True, retain the earlier one-cell
                 inward margin for regions. False permits valid region extents
                 across or outside the perimeter, as RAS Mapper does.
+            allow_boundary_connections: If True, SA/2D connection centerlines
+                authored on the perimeter pass the containment gate when they
+                lie within one base cell of the 2D area (default False keeps
+                the one-cell inward margin).
             robustness_screening: Opt-in ras-commander optimization (default False).
                 Screen requested/accepted ratios, 0.05 and 0.1 with saved-point,
                 region-edge and unconstrained variants. Retain region seeds and
@@ -6161,6 +6192,7 @@ class GeomMesh:
                 or list(_read_mesh_metadata_from_hdf(hdf_path))[mesh_index],
                 float(cell_size),
                 strict_refinement_containment=strict_refinement_containment,
+                allow_boundary_connections=allow_boundary_connections,
             )
             result.domain_containment = domain_containment
             result.mesh_name = domain_containment.mesh_name
@@ -6344,6 +6376,7 @@ class GeomMesh:
                 containment = _audit_domain_containment_hdf(
                     hdf_path, mesh_name, float(cell_size),
                     strict_refinement_containment=strict_refinement_containment,
+                    allow_boundary_connections=allow_boundary_connections,
                 )
                 result.domain_containment = containment
                 if not containment:
@@ -6751,6 +6784,7 @@ class GeomMesh:
         strict_refinement_containment: bool = False,
         robustness_screening: bool = False,
         require_complete_products: bool = False,
+        allow_boundary_connections: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -6780,6 +6814,8 @@ class GeomMesh:
                 constraints (RAS Mapper compatibility); defaults to False.
             strict_refinement_containment: Apply the old inward region margin;
                 defaults to False.
+            allow_boundary_connections: Forward the boundary-connection
+                allowance described by generate(); defaults to False.
             robustness_screening: Forward the opt-in screening described by
                 generate(). Currently requires a single 2D flow area.
 
@@ -6819,6 +6855,7 @@ class GeomMesh:
                 recompile_via_rasexe=recompile_via_rasexe,
                 refinement_region_constraints=refinement_region_constraints,
                 strict_refinement_containment=strict_refinement_containment,
+                allow_boundary_connections=allow_boundary_connections,
                 robustness_screening=robustness_screening,
                 _require_current_hdf=False,
                 require_complete_products=require_complete_products,
