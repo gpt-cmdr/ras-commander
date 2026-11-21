@@ -32,6 +32,14 @@ _PREPARATION_SEAL = object()
 # Fast-Map release whose coupled schema /2 contract composes prepared storage
 # products with physical 2D coverage; earlier engines are refused.
 STORAGE_ENGINE_MINIMUM = (0, 18, 0)
+# Storage/2D overlap policies. "refuse" keeps the historical guard. The opt-in
+# "two_d_precedence" applies RAS Mapper's pixel ownership order: 2D cells are
+# assigned first and storage areas take only pixels that are still unassigned
+# (RASGeometryMapPoints ComputeForRaster/ComputeForPoints, source-verified in
+# HEC-RAS 6.6, 7.0 and 7.0.1). It is a stated rule, not native pixel parity.
+STORAGE_OVERLAP_POLICIES = ("refuse", "two_d_precedence")
+STORAGE_PRECEDENCE_METHOD_ID = "one-d-two-d-storage-two-d-precedence-diagnostic/1"
+STORAGE_PRECEDENCE_ENGINE_KEY = "coupled_storage_two_d_precedence_diagnostic"
 
 
 def _contracts(grid_contract=None):
@@ -105,10 +113,30 @@ def _storage_names(scope):
     return tuple(getattr(scope, "storage_area_names", ()) or ())
 
 
-def _storage_contract():
+def _storage_contract(overlap_policy="refuse"):
+    method = (STORAGE_PRECEDENCE_METHOD_ID if overlap_policy == "two_d_precedence"
+              else STORAGE_COMPOSITION_METHOD_ID)
     return {"storage": {"method_id": STORAGE_METHOD_ID, "request_schema": STORAGE_SCHEMA},
-            "composition": {"method_id": STORAGE_COMPOSITION_METHOD_ID,
+            "composition": {"method_id": method,
                             "request_schema": STORAGE_COMPOSITION_SCHEMA}}
+
+
+def _overlap_policy(value):
+    if value not in STORAGE_OVERLAP_POLICIES:
+        raise ValueError(f"storage_overlap must be one of {STORAGE_OVERLAP_POLICIES}, got {value!r}")
+    return value
+
+
+def _require_precedence_engine(capabilities):
+    """Require the engine's opt-in 2D-precedence storage composition contract."""
+    support = (getattr(capabilities, "methods", {}) or {}).get(STORAGE_PRECEDENCE_ENGINE_KEY)
+    if (support is None or support.method_id != STORAGE_PRECEDENCE_METHOD_ID
+            or STORAGE_COMPOSITION_SCHEMA not in support.request_schemas):
+        raise FimUnsupportedError(
+            "storage_overlap='two_d_precedence' requires engine contract "
+            f"{STORAGE_PRECEDENCE_ENGINE_KEY} ({STORAGE_PRECEDENCE_METHOD_ID}, "
+            f"{STORAGE_COMPOSITION_SCHEMA}); this ras-commander-fast-map does not advertise it")
+    return support
 
 
 def _engine_version(capabilities):
@@ -146,15 +174,20 @@ def _require_storage_engine(capabilities, grid_contract=None):
     return methods["storage"], methods["coupled_storage_diagnostic"]
 
 
-def _storage_overlap(hdf, storage, grid, budget):
-    """Refuse storage areas whose pixels would also be physical 2D coverage.
+def _storage_overlap(hdf, storage, grid, budget, policy="refuse"):
+    """Inventory storage pixels that would also be physical 2D coverage.
 
-    Fast-Map's coupled storage schema /2 rejects any pixel owned by both a
-    storage area and a 2D cell. This check applies the same pixel-centre rule
-    to each storage polygon's intersection with the 2D flow area perimeters
-    on the full terrain lattice, so the refusal names the areas before any
-    staging. Shared edges have no area and are admitted.
+    Fast-Map's default coupled storage schema /2 rejects any pixel owned by
+    both a storage area and a 2D cell. This check applies the same
+    pixel-centre rule to each storage polygon's intersection with the 2D flow
+    area perimeters on the full terrain lattice. With ``policy="refuse"`` the
+    first overlap raises before any staging and names the areas. With
+    ``policy="two_d_precedence"`` every overlap is returned (storage name,
+    2D area, intersection area and pixel-centre count) for the receipt; the
+    engine then assigns those pixels to the 2D cells. Shared edges have no
+    area and are admitted.
     """
+    inventory = []
     import shapely
     from affine import Affine
     from rasterio import features
@@ -191,10 +224,17 @@ def _storage_overlap(hdf, storage, grid, budget):
                                            gt[3] + row0 * gt[5], 0.0, gt[5]),
                 fill=0, default_value=1, dtype="uint8")
             if inside.any():
-                raise FimUnsupportedError(
-                    f"storage area {name!r} physically overlaps 2D flow area {mesh_name!r}; "
-                    "physical storage/2D overlap is refused by the coupled storage composition "
-                    "until qualified")
+                if policy != "two_d_precedence":
+                    raise FimUnsupportedError(
+                        f"storage area {name!r} physically overlaps 2D flow area {mesh_name!r}; "
+                        "physical storage/2D overlap is refused by the coupled storage composition "
+                        "until qualified (storage_overlap='two_d_precedence' applies the RAS "
+                        "Mapper 2D-first ownership order instead)")
+                inventory.append({"storage_area": str(name), "two_d_area": str(mesh_name),
+                                  "intersection_area": float(overlap.area),
+                                  "pixel_centres": int(np.count_nonzero(inside)),
+                                  "bounds": [float(v) for v in overlap.bounds]})
+    return inventory
 def _coupled_crs_any(engine_path) -> bool:
     """Whether the engine's coupled, 1D and 2D sloping methods all advertise
     ``crs_any`` (a CRS without an EPSG code, carried as GeoKeys)."""
@@ -302,7 +342,52 @@ def _alignment(hdf, profiles):
         return result
 
 
-def _stage_mesh(hdf, folder, selected, budget, threads):
+# Coupled ownership needs exactly one polygon per physical cell, so only the
+# invalid-cell policies that keep that shape are offered. None keeps the
+# historical strict refusal.
+COUPLED_INVALID_CELL_POLICIES = ("repair", "hull")
+
+
+def _coupled_invalid_cells(value):
+    if value is not None and value not in COUPLED_INVALID_CELL_POLICIES:
+        raise ValueError(f"invalid_cells must be None or one of {COUPLED_INVALID_CELL_POLICIES}, got {value!r}")
+    return value
+
+
+def _coupled_cells(hdf, threads, invalid_cells):
+    """Strict native cell polygons, or the shared invalid-cell policy when strict assembly refuses.
+
+    Valid meshes always keep the strict polygons. With a policy, only cells that
+    strict assembly refuses are rebuilt (``_invalid_cells.load_cells``) and every
+    rebuilt or consumed cell is recorded. Results that would split a cell into
+    several ownership pieces or leave a cell without area are refused: the
+    coupled ownership transport carries one polygon per physical cell.
+    """
+    from .. import HdfMesh
+    from ..fast_hdf import backend_scope
+
+    def strict():
+        with backend_scope("rust"):
+            return HdfMesh.get_mesh_cell_polygons(hdf, strict=True, engine="native", threads=threads)
+    if invalid_cells is None:
+        return strict(), None
+    from . import _invalid_cells
+    cells, records = _invalid_cells.load_plan_cells(hdf, policy=invalid_cells, threads=threads,
+                                                    strict_loader=strict)
+    _invalid_cells.require_cells(cells, records, invalid_cells, method="coupled mapping")
+    if not records:
+        return cells, {"policy": invalid_cells, "cells": []}
+    if any(r.get("pieces", 1) != 1 or not r.get("fallback_area") for r in records):
+        listed = ", ".join(f"{r['mesh']} cell {r['cell_id']} ({r['action']}, {r.get('pieces')} pieces)"
+                           for r in records[:10])
+        raise FimUnsupportedError(
+            f"invalid_cells={invalid_cells!r} would split or empty physical cells ({listed}); "
+            "coupled ownership requires one polygon per physical cell")
+    description = _invalid_cells.describe(records, invalid_cells, None)
+    return cells, json.loads(json.dumps(description, default=float))
+
+
+def _stage_mesh(hdf, folder, selected, budget, threads, invalid_cells=None):
     from ._sloping_inputs import _write_binary_mesh_payloads
     from ._sloping import _stage_profiles
     from ._horizontal_engine import _write_geometry
@@ -329,8 +414,7 @@ def _stage_mesh(hdf, folder, selected, budget, threads):
         include_max="Max" in selected.values(), max_staged_bytes=budget//3)
     units, _, _ = _stage_profiles(hdf, folder, meshes, maxima, selected,
                                   max_staged_bytes=budget//4)
-    with backend_scope("rust"):
-        cells = HdfMesh.get_mesh_cell_polygons(hdf, strict=True, engine="native", threads=threads)
+    cells, invalid_record = _coupled_cells(hdf, threads, invalid_cells)
     if cells.empty or not cells.geometry.is_valid.all() or cells.geometry.is_empty.any():
         raise FimUnsupportedError("coupled physical ownership requires complete valid polygons")
     lookup = {mesh["mesh_name"]: i for i, mesh in enumerate(meshes)}
@@ -341,9 +425,12 @@ def _stage_mesh(hdf, folder, selected, budget, threads):
     if len(set(map(tuple, addresses))) != len(addresses):
         raise FimUnsupportedError("duplicate physical cell identities")
     _write_geometry(folder / "cells.wkb", cells.geometry.to_numpy())
-    return {"mesh_files": files, "meshes": meshes, "profiles": units,
-            "geometry_file": "cells.wkb", "owner_cells": addresses,
-            "physical_cell_count": len(addresses)}
+    staged = {"mesh_files": files, "meshes": meshes, "profiles": units,
+              "geometry_file": "cells.wkb", "owner_cells": addresses,
+              "physical_cell_count": len(addresses)}
+    if invalid_record is not None:
+        staged["invalid_cells"] = invalid_record
+    return staged
 
 
 def _validate_coupled_receipt(prepared, receipt):
@@ -362,6 +449,9 @@ def _validate_coupled_receipt(prepared, receipt):
             raise ValueError("timestamp alignment changed")
         if receipt["engine_sha256"] != digest(receipt["engine_path"]):
             raise ValueError("prepared engine changed")
+        policy = (mesh.get("invalid_cells") or {}).get("policy")
+        if "invalid_cells" in mesh and policy not in COUPLED_INVALID_CELL_POLICIES:
+            raise ValueError("invalid-cell policy record")
         if mesh["physical_cell_count"] != len(mesh["owner_cells"]) or not mesh["owner_cells"]:
             raise ValueError("physical ownership cardinality")
         for address in mesh["owner_cells"]:
@@ -469,7 +559,10 @@ class FimPreparedCoupledModel:
                         or not isinstance(storage["levels"], list) or len(storage["levels"]) != len(levels)
                         or storage["method_id"] != STORAGE_METHOD_ID
                         or storage["request_schema"] != STORAGE_SCHEMA
-                        or storage.get("composition") != _storage_contract()["composition"]):
+                        or storage.get("overlap_policy", "refuse") not in STORAGE_OVERLAP_POLICIES
+                        or (storage.get("overlap_policy", "refuse") == "refuse") != ("two_d_overlaps" not in storage)
+                        or storage.get("composition")
+                        != _storage_contract(storage.get("overlap_policy", "refuse"))["composition"]):
                     raise ValueError("storage receipt identity/cardinality")
                 required.extend([storage["polygons"], *storage["levels"]])
                 if any(Path(path).stat().st_size != count*4 for path in storage["levels"]):
@@ -546,7 +639,8 @@ class FimPreparedCoupledModel:
 
 def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=None,
                         allow_unqualified=False, max_working_mib=1024, engine_path=None, threads=1,
-                        grid_contract=None):
+                        grid_contract=None, storage_overlap="refuse", invalid_cells=None):
+    invalid_cells = _coupled_invalid_cells(invalid_cells)
     import rasterio
     from pyproj.exceptions import CRSError
     from ..hdf.HdfBase import HdfBase
@@ -633,7 +727,7 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
                                          geometry_policy=_storage_areas.NATIVE_EVEN_ODD)
             if storage is None or sorted(storage.names) != sorted(_storage_names(scope)):
                 raise FimUnsupportedError("storage-area geometry does not match the model scope")
-            _storage_overlap(hdf, storage, grid, budget)
+            overlaps = _storage_overlap(hdf, storage, grid, budget, _overlap_policy(storage_overlap))
             storage_values = _storage_areas.profile_values(
                 hdf, storage, dict(zip(profile_ids, profiles)), max_bytes=budget//4)
             logger.debug("Coupled preparation stages %d storage areas", len(storage))
@@ -668,8 +762,10 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
             storage_receipt = {"names": list(storage.names), "count": len(storage),
                                "polygons": str(storage_file), "levels": pool_levels,
                                **_storage_contract()["storage"],
-                               "composition": _storage_contract()["composition"],
+                               "composition": _storage_contract(storage_overlap)["composition"],
                                "geometry": _storage_areas.geometry_metadata(storage)}
+            if storage_overlap == "two_d_precedence":
+                storage_receipt.update(overlap_policy=storage_overlap, two_d_overlaps=overlaps)
         # Per-point raw/normalized evidence preserves Float64 bits including unchanged points.
         evidence = np.column_stack((arrays["points"][:, 3], arrays["normalized_m"]))
         evidence_path = folder / "point-m-evidence.f64"
@@ -706,7 +802,8 @@ def prepare_coupled_model(hdf_path, terrain_path, output_folder, *, profiles=Non
         mesh_folder = folder / "two_d"
         mesh_folder.mkdir()
         created_paths.append(mesh_folder)
-        mesh = _stage_mesh(hdf, mesh_folder, dict(zip(profile_ids, profiles)), budget, threads)
+        mesh = _stage_mesh(hdf, mesh_folder, dict(zip(profile_ids, profiles)), budget, threads,
+                           **({"invalid_cells": invalid_cells} if invalid_cells is not None else {}))
         for key in ("geometry_file",):
             mesh[key] = "two_d/" + mesh[key]
         mesh["mesh_files"] = ["two_d/" + f for f in mesh["mesh_files"]]
@@ -990,11 +1087,16 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
         final_method_id, final_schema = contracts["method"], contracts["schema"]
         component_contracts = _component_contracts(contracts)
         storage = receipt.get("storage")
+        precedence = False
         if storage:
             # Storage composes through coupled schema /2 on Fast-Map 0.18.0+;
             # results stay unqualified exactly as the schema /1 route.
             _, final_support = _require_storage_engine(capabilities, selected_grid_contract)
             final_method_id, final_schema = STORAGE_COMPOSITION_METHOD_ID, STORAGE_COMPOSITION_SCHEMA
+            precedence = storage.get("overlap_policy") == "two_d_precedence"
+            if precedence:
+                final_support = _require_precedence_engine(capabilities)
+                final_method_id = STORAGE_PRECEDENCE_METHOD_ID
             component_contracts["storage"] = _storage_contract()["storage"]
         grid = receipt["grid"]
         descriptor = receipt.get("grid_contract")
@@ -1186,7 +1288,8 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                 if storage:
                     composition["storage"] = {
                         "component": component(pool_out / "depth.bin", pool_out / "wse.bin"),
-                        "owners_file": str(pool_out / "owners.bin"), "area_count": storage["count"]}
+                        "owners_file": str(pool_out / "owners.bin"), "area_count": storage["count"],
+                        **({"two_d_precedence": True} if precedence else {})}
                     component_paths += [pool_out / "depth.bin", pool_out / "wse.bin", pool_out / "owners.bin"]
                 raw_hashes.update({path: digest(path) for path in component_paths})
                 verify_inputs()
@@ -1222,8 +1325,22 @@ def map_coupled_profiles(hdf_path, terrain_path, output_folder, *, profiles=None
                         not isinstance(counts.get("dry_two_d_suppressed_wet_xs"), int) or
                         not 0 <= counts["dry_two_d_suppressed_wet_xs"] <= counts["two_d_owned_pixels"]):
                     raise FimEngineError("coupled composition coverage counts differ")
+                ceded = counts.get("storage_ceded_to_two_d_pixels", 0) if storage and precedence else 0
+                if storage and precedence and (
+                        isinstance(ceded, bool) or not isinstance(ceded, int) or ceded < 0):
+                    raise FimEngineError("coupled storage composition ceded-pixel count is invalid")
+                if storage and not precedence and "storage_ceded_to_two_d_pixels" in counts:
+                    raise FimEngineError("coupled storage composition reported an unrequested precedence")
+                if storage and precedence:
+                    # Independently recount the ceded pixels: every pixel labelled by both the 2D
+                    # and the storage component, wet or dry, belongs to 2D.
+                    both = np.count_nonzero((np.fromfile(two_out / "owners.bin", dtype="<u4") != 0)
+                                            & (np.fromfile(pool_out / "owners.bin", dtype="<u4") != 0))
+                    if ceded != both:
+                        raise FimEngineError("coupled storage composition ceded-pixel count differs "
+                                             "from the component ownership intersection")
                 if storage and (
-                        counts.get("storage_owned_pixels") != pool_report["storage_owned_pixels"] or
+                        counts.get("storage_owned_pixels", 0) + ceded != pool_report["storage_owned_pixels"] or
                         isinstance(counts.get("dry_storage_suppressed_wet_xs"), bool) or
                         not isinstance(counts.get("dry_storage_suppressed_wet_xs"), int) or
                         not 0 <= counts["dry_storage_suppressed_wet_xs"] <= counts["storage_owned_pixels"]):
