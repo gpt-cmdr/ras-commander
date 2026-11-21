@@ -2414,6 +2414,131 @@ class TestBreaklineNameManagement:
 # ── Refinement region tests ─────────────────────────────────────────
 
 
+@pytest.fixture
+def multipart_breakline_geom(tmp_path):
+    """Text and compiled HDF with two single-part breaklines."""
+    geom_text = tmp_path / "parts.g01"
+    geom_text.write_text(
+        "Geom Title=PartsTest\n"
+        "BreakLine Name=Levee\n"
+        "BreakLine CellSize Min=10.000000\n"
+        "BreakLine CellSize Max=50.000000\n"
+        "BreakLine Near Repeats=1\n"
+        "BreakLine Protection Radius=0\n"
+        "BreakLine Polyline= 2 \n"
+        "     0.0  0.0\n"
+        "     100.0  0.0\n"
+        "BreakLine Name=Road\n"
+        "BreakLine CellSize Min=20.000000\n"
+        "BreakLine CellSize Max=80.000000\n"
+        "BreakLine Near Repeats=0\n"
+        "BreakLine Protection Radius=0\n"
+        "BreakLine Polyline= 3 \n"
+        "     0.0  50.0\n"
+        "     50.0  60.0\n"
+        "     100.0  50.0\n",
+        encoding="utf-8",
+    )
+    hdf_path = tmp_path / "parts.g01.hdf"
+    bl = "Geometry/2D Flow Area Break Lines"
+    dt = np.dtype([
+        ("Name", "S32"),
+        ("Cell Spacing Near", "<f4"),
+        ("Cell Spacing Far", "<f4"),
+        ("Near Repeats", "<i4"),
+        ("Protection Radius", "u1"),
+    ])
+    attrs = np.array([(b"Levee", 10, 50, 1, 0), (b"Road", 20, 80, 0, 0)], dtype=dt)
+    points = np.array([[0, 0], [100, 0], [0, 50], [50, 60], [100, 50]], dtype=np.float64)
+    info = np.array([[0, 2, 0, 1], [2, 3, 1, 1]], dtype=np.int32)
+    parts = np.array([[0, 2], [0, 3]], dtype=np.int32)
+    with h5py.File(str(hdf_path), "w") as hf:
+        hf.create_dataset(f"{bl}/Attributes", data=attrs)
+        hf.create_dataset(f"{bl}/Polyline Info", data=info)
+        hf[f"{bl}/Polyline Info"].attrs["Feature Type"] = b"Polyline"
+        hf.create_dataset(f"{bl}/Polyline Parts", data=parts)
+        hf.create_dataset(f"{bl}/Polyline Points", data=points)
+        hf.create_dataset("Geometry/Sentinel", data=np.array([7, 8, 9]))
+    return geom_text, hdf_path
+
+
+class TestMultiPartMeshFeatures:
+    """Multi-part breaklines and refinement regions (RAS Mapper's HDF layout)."""
+
+    def test_set_breakline_parts_writes_native_parts(self, multipart_breakline_geom):
+        geom_text, hdf_path = multipart_breakline_geom
+        text_before = geom_text.read_bytes()
+        backup = GeomMesh.set_breakline_parts(
+            geom_text,
+            "Levee",
+            [[(0, 0), (40, 0)], [(60, 0), (80, 10), (100, 0)]],
+        )
+        assert backup is not None and backup.is_file()
+        bl = "Geometry/2D Flow Area Break Lines"
+        with h5py.File(str(hdf_path), "r") as hf:
+            info = hf[f"{bl}/Polyline Info"][()]
+            parts = hf[f"{bl}/Polyline Parts"][()]
+            points = hf[f"{bl}/Polyline Points"][()]
+            names = [n.strip() for n in hf[f"{bl}/Attributes"]["Name"]]
+            assert hf[f"{bl}/Polyline Info"].attrs["Feature Type"] in (b"Polyline", "Polyline")
+            assert np.array_equal(hf["Geometry/Sentinel"][()], [7, 8, 9])
+        assert names == [b"Levee", b"Road"]
+        # Levee: 5 points in 2 parts; Road keeps its 3 points as one part.
+        assert info.tolist() == [[0, 5, 0, 2], [5, 3, 2, 1]]
+        assert parts.tolist() == [[0, 2], [2, 3], [0, 3]]
+        assert points[:5].tolist() == [[0, 0], [40, 0], [60, 0], [80, 10], [100, 0]]
+        assert points[5:].tolist() == [[0, 50], [50, 60], [100, 50]]
+        # The text has no part field and stays as it was.
+        assert geom_text.read_bytes() == text_before
+
+        from ras_commander.hdf import HdfBndry
+
+        lines = HdfBndry.get_breaklines(hdf_path)
+        levee = lines.loc[lines["Name"] == "Levee", "geometry"].iloc[0]
+        assert levee.geom_type == "MultiLineString"
+        assert [len(g.coords) for g in levee.geoms] == [2, 3]
+
+    def test_set_breakline_parts_rejects_bad_input(self, multipart_breakline_geom):
+        geom_text, hdf_path = multipart_breakline_geom
+        before = hdf_path.read_bytes()
+        with pytest.raises(ValueError, match="one breakline named"):
+            GeomMesh.set_breakline_parts(geom_text, "Missing", [[(0, 0), (1, 1)]])
+        with pytest.raises(ValueError, match="at least two"):
+            GeomMesh.set_breakline_parts(geom_text, "Levee", [[(0, 0)]])
+        with pytest.raises(ValueError, match="positive length"):
+            GeomMesh.set_breakline_parts(geom_text, "Levee", [[(1, 1), (1, 1)]])
+        assert hdf_path.read_bytes() == before
+
+    def test_replace_refinement_regions_writes_multipolygon_parts(
+        self, refinement_region_hdf
+    ):
+        from shapely.geometry import MultiPolygon, Polygon
+
+        geom_text, hdf_path = refinement_region_hdf
+        region = MultiPolygon([
+            Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+            Polygon([(20, 0), (30, 0), (30, 10)]),
+        ])
+        GeomMesh.replace_refinement_regions(
+            geom_text,
+            [
+                {"name": "Two", "polygon": region, "spacing_dx": 5.0},
+                {"name": "One", "polygon": [(40, 0), (50, 0), (50, 10)], "spacing_dx": 2.0},
+            ],
+            create_backup=False,
+        )
+        rr = "Geometry/2D Flow Area Refinement Regions"
+        with h5py.File(str(hdf_path), "r") as hf:
+            info = hf[f"{rr}/Polygon Info"][()]
+            parts = hf[f"{rr}/Polygon Parts"][()]
+            points = hf[f"{rr}/Polygon Points"][()]
+        # Each part is a closed ring: 5 + 4 points, then 4 for the second region.
+        assert info.tolist() == [[0, 9, 0, 2], [9, 4, 2, 1]]
+        assert parts.tolist() == [[0, 5], [5, 4], [0, 4]]
+        assert points[4].tolist() == points[0].tolist()
+        assert points[8].tolist() == points[5].tolist() == [20, 0]
+
+
 class TestRefinementRegions:
 
     def test_get_names(self, refinement_region_hdf):
