@@ -84,12 +84,102 @@ GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS = {
 }
 
 
+class _NativeExitHandle:
+    """A Windows process handle held from discovery until the exit code is read.
+
+    The handle keeps the process object, and so its exit code, alive after the
+    process exits. Its creation time is checked against the psutil identity so
+    a reused PID is never mistaken for the original child.
+    """
+
+    _SYNCHRONIZE = 0x00100000
+    _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    _WAIT_OBJECT_0 = 0x00000000
+    _WAIT_TIMEOUT = 0x00000102
+    _ERROR_INVALID_PARAMETER = 87
+    _STILL_ACTIVE = 259
+    # psutil reports Windows creation times from the same FILETIME; allow its
+    # float rounding but not a different process.
+    _CREATE_TIME_TOLERANCE = 0.01
+
+    def __init__(self, kernel32, handle):
+        self._kernel32 = kernel32
+        self._handle = handle
+
+    @classmethod
+    def open(cls, pid: int, create_time: float) -> "_NativeExitHandle":
+        import ctypes
+        from ctypes import wintypes
+
+        import psutil
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (
+            ctypes.POINTER(wintypes.FILETIME),
+        ) * 4
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        handle = kernel32.OpenProcess(
+            cls._SYNCHRONIZE | cls._PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid)
+        )
+        if not handle:
+            error = ctypes.get_last_error()
+            if error == cls._ERROR_INVALID_PARAMETER:
+                raise psutil.NoSuchProcess(
+                    pid, msg="exited before its exit-status handle could be opened"
+                )
+            raise ctypes.WinError(error)
+        times = [wintypes.FILETIME() for _ in range(4)]
+        if not kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times)):
+            error = ctypes.get_last_error()
+            kernel32.CloseHandle(handle)
+            raise ctypes.WinError(error)
+        created = (times[0].dwHighDateTime << 32 | times[0].dwLowDateTime) / 1e7 - 11644473600
+        if abs(created - float(create_time)) > cls._CREATE_TIME_TOLERANCE:
+            kernel32.CloseHandle(handle)
+            raise psutil.NoSuchProcess(pid, msg="PID now belongs to a different process")
+        return cls(kernel32, handle)
+
+    def wait(self, timeout: float) -> tuple:
+        """Return ``(exit_code, timed_out)`` after waiting up to ``timeout`` seconds."""
+        import ctypes
+        from ctypes import wintypes
+
+        self._kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        self._kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        self._kernel32.GetExitCodeProcess.argtypes = (
+            wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD),
+        )
+        milliseconds = min(int(timeout * 1000), 0xFFFFFFFE)
+        result = self._kernel32.WaitForSingleObject(self._handle, milliseconds)
+        if result == self._WAIT_TIMEOUT:
+            return None, True
+        if result != self._WAIT_OBJECT_0:
+            raise ctypes.WinError(ctypes.get_last_error())
+        code = wintypes.DWORD()
+        if not self._kernel32.GetExitCodeProcess(self._handle, ctypes.byref(code)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if code.value == self._STILL_ACTIVE:
+            raise OSError("process handle signaled but reports STILL_ACTIVE")
+        return int(code.value), False
+
+    def close(self) -> None:
+        if self._handle:
+            self._kernel32.CloseHandle(self._handle)
+            self._handle = None
+
+
 class GeomPreprocessor:
     """
     A class for managing HEC-RAS geometry preprocessor files.
 
     All methods are static and designed to be used without instantiation.
     """
+
+    # Windows: hold a native process handle from discovery so a short-lived
+    # child's exit code survives its exit (see _watch_preprocess_child).
+    _NATIVE_EXIT_HANDLES = os.name == "nt"
 
     @staticmethod
     @log_call
@@ -1168,7 +1258,17 @@ class GeomPreprocessor:
 
     @staticmethod
     def _watch_preprocess_child(child: Any, deadline: float) -> dict:
-        """Begin an owned-process wait while the native exit handle is available."""
+        """Begin an owned-process wait while the native exit handle is available.
+
+        On Windows the exit-status handle is opened synchronously, before the
+        waiter thread starts. ``psutil.Process.wait()`` opens a handle by PID
+        only when it runs, and returns ``None`` when the process has already
+        exited and no other handle keeps its kernel object. Short-lived HEC-RAS
+        helpers (``PipeServer.exe``, ``conhost.exe``, ``RasPlotDriver.exe``) can
+        exit in that gap, which used to report ``exit status None`` for a
+        successful run. A child that exits before the handle is opened is still
+        reported as unverified rather than assumed successful.
+        """
         import threading
 
         import psutil
@@ -1177,6 +1277,35 @@ class GeomPreprocessor:
             "identity": (child.pid, child.create_time()), "process": child,
             "finished": False, "exit_code": None, "error": None, "timed_out": False,
         }
+        if GeomPreprocessor._NATIVE_EXIT_HANDLES:
+            try:
+                handle = _NativeExitHandle.open(child.pid, record["identity"][1])
+            except (psutil.Error, OSError) as exc:
+                record["error"] = (
+                    f"preprocessing child {child.pid} exit status unobservable: {exc}"
+                )
+                record["finished"] = True
+                return record
+
+            def wait_native():
+                try:
+                    code, timed_out = handle.wait(max(0, deadline - time.monotonic()))
+                    if timed_out:
+                        record["timed_out"] = True
+                        record["error"] = (
+                            f"preprocessing child timed out: pid={child.pid}"
+                        )
+                    else:
+                        record["exit_code"] = code
+                except OSError as exc:
+                    record["error"] = "preprocessing child wait failed: " + str(exc)
+                finally:
+                    handle.close()
+                    record["finished"] = True
+
+            threading.Thread(target=wait_native, daemon=True).start()
+            return record
+
         def wait():
             try:
                 record["exit_code"] = child.wait(timeout=max(0, deadline - time.monotonic()))
