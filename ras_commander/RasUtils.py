@@ -120,60 +120,59 @@ class RasUtils:
         return path
 
     @staticmethod
-    def safe_resolve(path: Path) -> Path:
+    def safe_resolve(path: Union[str, Path]) -> Path:
         """
-        Resolve path while preserving Windows drive letters.
+        Return an absolute, normalized path that keeps the Windows drive letter.
 
-        On Windows with mapped network drives, Path.resolve() converts
-        drive letters (H:\\) to UNC paths (\\\\server\\share). HEC-RAS cannot
-        read from UNC paths, so we preserve the drive letter format.
+        On Windows, ``Path.resolve()`` converts a mapped network drive
+        (for example ``H:``) to its UNC target (``\\\\server\\share``) and a
+        ``subst`` drive to its backing folder. HEC-RAS 7.0.1 cannot open a
+        project from a UNC path: Ras.exe shows a hidden "Error loading project
+        data" dialog and stalls. Paths handed to HEC-RAS must therefore keep
+        the drive letter the caller used.
 
-        This function:
-        - On non-Windows: Uses standard resolve()
-        - On Windows with local drives: Uses standard resolve()
-        - On Windows with mapped drives: Falls back to absolute() to preserve drive letter
+        Behavior:
 
-        Parameters:
-            path (Path): Path to resolve
+        - Non-Windows: ``Path.resolve()``.
+        - Windows, when resolution keeps the same drive: ``Path.resolve()``.
+        - Windows, when resolution would change the drive (mapped network
+          drive, ``subst`` drive, or a relative path whose working directory
+          is on such a drive): ``os.path.normpath(Path.absolute())``. The
+          result is absolute and has no ``.`` or ``..`` segments, and the
+          drive is not resolved.
+
+        Args:
+            path (Union[str, Path]): Path to make absolute.
 
         Returns:
-            Path: Resolved path with drive letter preserved if applicable
+            Path: Absolute path with the caller's drive letter preserved.
 
         Example:
             >>> from pathlib import Path
             >>> from ras_commander import RasUtils
             >>> # Local drive - normal resolution
             >>> resolved = RasUtils.safe_resolve(Path("C:/Projects/Model.prj"))
-            >>> # Mapped drive - preserves H: instead of converting to UNC
+            >>> # Mapped drive - keeps H: instead of converting to UNC
             >>> resolved = RasUtils.safe_resolve(Path("H:/Projects/Model.prj"))
         """
-        # Ensure we have a Path object
         path = Path(path)
 
-        # On non-Windows, use standard resolve
         if os.name != 'nt':
             return path.resolve()
 
-        original_str = str(path)
+        # ``Path.absolute()`` does not resolve the drive, but on Windows it can
+        # retain ``.`` and ``..`` segments. Normalize them lexically without a
+        # filesystem lookup that could convert the drive to UNC.
+        lexical = Path(os.path.normpath(str(path.absolute())))
         resolved = path.resolve()
 
-        # Check if original had drive letter but resolved became UNC path
-        # Drive letter format: "X:..." where X is a letter
-        # UNC format: "\\..." (starts with double backslash)
-        has_drive_letter = len(original_str) >= 2 and original_str[1] == ':'
-        is_unc = str(resolved).startswith('\\\\')
-
-        if has_drive_letter and is_unc:
-            # Mapped network drive detected - use absolute() to preserve drive letter
+        if lexical.drive and resolved.drive.lower() != lexical.drive.lower():
             logger.debug(
-                f"Mapped drive detected: {original_str} would resolve to UNC {resolved}. "
-                f"Using absolute() to preserve drive letter."
+                "Keeping drive letter for %s; resolve() would return %s.",
+                lexical,
+                resolved,
             )
-            # ``Path.absolute()`` intentionally avoids resolving the mapped
-            # drive, but on Windows it can retain ``.`` and ``..`` segments.
-            # Normalize those segments lexically without another filesystem
-            # lookup that could convert the drive back to UNC.
-            return Path(os.path.normpath(str(path.absolute())))
+            return lexical
 
         return resolved
 

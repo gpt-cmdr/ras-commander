@@ -860,7 +860,7 @@ class RasCmdr:
         project_name: str,
     ) -> tuple[bool, Dict[str, Any]]:
         """Publish one plan's same-run evidence as a recoverable transaction."""
-        destination = Path(destination_folder).resolve(strict=False)
+        destination = RasUtils.safe_resolve(Path(destination_folder))
         normalized_plan = RasUtils.normalize_ras_number(plan_number)
         # Keep the hidden transaction path short enough for non-long-path
         # Windows installations. The destination promotion lock serializes
@@ -1170,7 +1170,7 @@ class RasCmdr:
         try:
             destination.mkdir(parents=True, exist_ok=True)
             for target in quarantine_targets:
-                if target.parent.resolve(strict=False) != destination:
+                if RasUtils.safe_resolve(target.parent) != destination:
                     raise ValueError(
                         f"Promotion artifact escapes destination: {target}"
                     )
@@ -1461,10 +1461,10 @@ class RasCmdr:
                 for plan_number in plan_numbers
             }
         )
-        destination = Path(project_folder).resolve(strict=False)
-        project_path = (
+        destination = RasUtils.safe_resolve(Path(project_folder))
+        project_path = RasUtils.safe_resolve(
             destination / f"{project_name}.prj"
-        ).resolve(strict=False)
+        )
         resolution_errors = []
         if not project_path.is_file():
             resolution_errors.append(
@@ -1508,12 +1508,12 @@ class RasCmdr:
             error.to_dict() for error in inventory.query_errors
         ]
         for plan_number in normalized_plans:
-            plan_path = (
+            plan_path = RasUtils.safe_resolve(
                 destination / f"{project_name}.p{plan_number}"
-            ).resolve(strict=False)
-            tmp_hdf_path = (
+            )
+            tmp_hdf_path = RasUtils.safe_resolve(
                 destination / f"{project_name}.p{plan_number}.tmp.hdf"
-            ).resolve(strict=False)
+            )
             if not plan_path.is_file():
                 resolution_errors.append(
                     {
@@ -1592,7 +1592,7 @@ class RasCmdr:
         project_name: str,
     ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
         """Acquire one cooperative exact-create lock for shared promotion."""
-        destination = Path(project_folder).resolve(strict=False)
+        destination = RasUtils.safe_resolve(Path(project_folder))
         lock_path = destination / (
             f".{project_name}.ras-commander-promotion.lock"
         )
@@ -3327,7 +3327,7 @@ class RasCmdr:
             if dest_folder is not None:
                 dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
 
-                if dest_folder.resolve() == Path(ras_obj.project_folder).resolve():
+                if RasUtils.safe_resolve(dest_folder) == RasUtils.safe_resolve(Path(ras_obj.project_folder)):
                     logger.info("Destination folder matches the active project folder; executing in place.")
                     dest_folder = None
                     compute_ras = ras_obj
@@ -4935,7 +4935,7 @@ class RasCmdr:
                 worker_folder = Path(worker_ras.project_folder)
                 assigned_plan_numbers = worker_plan_numbers.get(worker_id, [])
                 retained_worker_folder = str(
-                    worker_folder.resolve(strict=False)
+                    RasUtils.safe_resolve(worker_folder)
                 )
                 worker_must_be_retained = (not promotion_allowed
                     or worker_id in unsafe_worker_ids
@@ -5711,7 +5711,7 @@ class RasCmdr:
                         promotion_lock_evidence
                     )
             retained_test_folder = str(
-                compute_folder.resolve(strict=False)
+                RasUtils.safe_resolve(compute_folder)
             )
             retain_test_folder = not promotion_allowed
             if not promotion_allowed:

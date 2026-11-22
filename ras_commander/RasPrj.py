@@ -1330,10 +1330,12 @@ class RasPrj:
         return []
 
     def _resolve_candidate_path(self, path_value: Path) -> Path:
-        """Resolve project-relative paths without requiring the target to exist."""
+        """Resolve project-relative paths, keeping the caller's drive letter."""
+        from .RasUtils import RasUtils
+
         if path_value.is_absolute():
-            return path_value.resolve(strict=False)
-        return (self.project_folder / path_value).resolve(strict=False)
+            return RasUtils.safe_resolve(path_value)
+        return RasUtils.safe_resolve(self.project_folder / path_value)
 
     def _get_rasmap_scalar_path(self, column: str) -> Optional[Path]:
         if not rasmap_dataframe_is_usable(getattr(self, 'rasmap_df', None)):
@@ -1362,6 +1364,8 @@ class RasPrj:
         self,
         terrain_hdf_paths: List[Path],
     ) -> List[Path]:
+        from .RasUtils import RasUtils
+
         raster_paths = []
         seen = set()
 
@@ -1375,7 +1379,7 @@ class RasPrj:
                 terrain_hdf_path.with_suffix('.vrt'),
             ]
             for candidate in preferred_candidates:
-                resolved = candidate.resolve(strict=False)
+                resolved = RasUtils.safe_resolve(candidate)
                 candidate_key = str(resolved).lower()
                 if candidate_key in seen or not resolved.exists():
                     continue

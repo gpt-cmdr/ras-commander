@@ -221,9 +221,9 @@ def get_plan_result_artifact_paths(
         ):
             raise ValueError("ras_object must identify an initialized project")
     normalized = RasUtils.normalize_ras_number(plan_number)
-    folder = Path(
-        project_folder if explicit_project else ras_obj.project_folder
-    ).resolve()
+    folder = RasUtils.safe_resolve(
+        Path(project_folder if explicit_project else ras_obj.project_folder)
+    )
     name = str(project_name if explicit_project else ras_obj.project_name)
     if not name or Path(name).name != name or name in {".", ".."}:
         raise ValueError(
@@ -247,7 +247,7 @@ def get_plan_result_artifact_paths(
         resolved.legacy_output,
         *resolved.message_sidecars,
     ):
-        if candidate.resolve().parent != folder:
+        if RasUtils.safe_resolve(candidate).parent != folder:
             raise ValueError(
                 f"Execution artifact escapes the project folder: {candidate}"
             )
@@ -449,9 +449,9 @@ def remove_plan_execution_artifacts(
     # Validate the complete allowlist before the first permanent mutation.
     # This prevents a later directory/path validation failure from leaving an
     # unreported partially-cleaned project.
-    project_root = paths.plan_file.parent.resolve()
+    project_root = RasUtils.safe_resolve(paths.plan_file.parent)
     for candidate in candidates:
-        if candidate.resolve().parent != project_root:
+        if RasUtils.safe_resolve(candidate).parent != project_root:
             raise ValueError(
                 f"Refusing to remove an artifact outside {project_root}: "
                 f"{candidate}"
