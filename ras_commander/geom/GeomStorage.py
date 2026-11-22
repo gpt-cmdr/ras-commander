@@ -587,7 +587,7 @@ class GeomStorage:
             holes (Optional[Sequence[Sequence[Sequence[float]]]]): One XY vertex
                 ring per excluded area, each strictly inside ``outer`` and
                 disjoint from the others.
-            geometry: Alternatively, a shapely Polygon whose interior rings are
+            geometry (Optional[Polygon]): Alternatively, a shapely Polygon whose interior rings are
                 the excluded areas. Do not combine with ``outer``/``holes``.
 
         Returns:
