@@ -784,6 +784,9 @@ Structure geometry and SA/2D connections.
 - `list_sa2d_connections(hdf_path, *, ras_object=None)` - List SA/2D connections with time-series results
 - `get_structures(hdf_path, datetime_to_str=False)` - Structure geometry and available attributes as a GeoDataFrame
 - `get_geom_structures_attrs(hdf_path)` - Stored geometry structure attributes as a DataFrame
+- `get_bridge_coefficients(hdf_path)` - Every stored bridge coefficient set, one row per set.
+  A Multiple Opening structure may store one set per bridge opening; HEC-RAS applies the
+  first set to openings without their own. `get_structures` joins that first set.
 - `get_storage_area_polygons(hdf_path, *, ras_object=None)` - Extract storage
   area polygons and attributes from geometry or plan HDF files, including
   multi-ring polygons with interior rings; returns an empty GeoDataFrame when no
@@ -1496,6 +1499,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
       heading_level: 3
       show_source: false
       members:
+        - get_bridge_coefficients
         - get_connection_attachments
         - get_culvert_hydraulics
         - get_geom_structures_attrs

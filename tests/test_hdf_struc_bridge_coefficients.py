@@ -8,13 +8,13 @@ from pyproj import CRS
 from ras_commander.hdf import HdfStruc
 
 
-def _write_geometry(path, keys, key_dtype="i4"):
+def _write_geometry(path, keys, key_dtype="i4", types=(b"Bridge", b"Bridge", b"Bridge")):
     """Three distinguishable rows, reversed sparse coefficients, table sentinels."""
     with h5py.File(path, "w") as hdf:
         hdf.attrs["Projection"] = CRS.from_epsg(2278).to_wkt()
         group = hdf.create_group("Geometry/Structures")
         group.create_dataset("Attributes", data=np.array(
-            [(b"Bridge", b"River", b"Reach", str(i).encode()) for i in range(3)],
+            [(types[i], b"River", b"Reach", str(i).encode()) for i in range(3)],
             dtype=[("Type", "S16"), ("River", "S16"), ("Reach", "S16"), ("RS", "S16")],
         ))
         group.create_dataset("Centerline Info", data=[[0, 2], [2, 2], [4, 2]])
@@ -62,3 +62,47 @@ def test_invalid_native_coefficient_keys_raise_without_modifying_source(tmp_path
     with pytest.raises(ValueError, match="Invalid native Structure ID"):
         HdfStruc.get_structures(path)
     assert path.read_bytes() == before
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_multiple_opening_coefficient_sets_join_first_and_list_all(tmp_path):
+    """HEC-RAS stores one set per bridge opening of a Multiple Opening structure;
+    openings without their own set use the first. Row 0 here has two sets."""
+    path = _write_geometry(
+        tmp_path / "multiple_opening.g01.hdf", [0, 0, 2],
+        types=(b"Multiple Opening", b"Bridge", b"Bridge"),
+    )
+    before = path.read_bytes()
+    result = HdfStruc.get_structures(path)
+    assert result["Structure ID"].tolist() == [1, 2, 3]
+    assert result["Table Sentinel"].tolist() == [701, 702, 703]
+    np.testing.assert_allclose(result["Coef A"], [200., np.nan, 202.], equal_nan=True)
+
+    sets = HdfStruc.get_bridge_coefficients(path)
+    assert sets["Structure ID"].tolist() == [1, 1, 3]
+    assert sets["Native Structure ID"].tolist() == [0, 0, 2]
+    assert sets["Coefficient Set"].tolist() == [1, 2, 1]
+    assert sets["Type"].tolist() == ["Multiple Opening", "Multiple Opening", "Bridge"]
+    np.testing.assert_allclose(sets["Coef A"], [200., 201., 202.])
+    assert path.read_bytes() == before
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_repeated_coefficient_key_on_a_single_bridge_still_raises(tmp_path):
+    path = _write_geometry(
+        tmp_path / "repeat.g01.hdf", [1, 1],
+        types=(b"Multiple Opening", b"Bridge", b"Bridge"),
+    )
+    with pytest.raises(ValueError, match="only a Multiple Opening structure"):
+        HdfStruc.get_structures(path)
+    with pytest.raises(ValueError, match="only a Multiple Opening structure"):
+        HdfStruc.get_bridge_coefficients(path)
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_bridge_coefficients_absent_returns_empty(tmp_path):
+    path = tmp_path / "none.g01.hdf"
+    with h5py.File(path, "w") as hdf:
+        hdf.create_group("Geometry/Structures").create_dataset("Attributes", data=np.array(
+            [(b"Bridge",)], dtype=[("Type", "S16")]))
+    assert HdfStruc.get_bridge_coefficients(path).empty
