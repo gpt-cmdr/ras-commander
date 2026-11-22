@@ -919,3 +919,66 @@ def test_7x_results_file_is_not_invalidated(tmp_path, group):
     with pytest.raises(ValueError, match="GEOMETRY_CACHE_SCHEMA_UNSUPPORTED"):
         invalidate_products(path)
     assert path.read_bytes() == before
+
+
+def _projection_attribute_fixture(tmp_path, wkt):
+    text, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["Projection"] = np.bytes_(wkt)
+    expected = snapshot(text, path)
+    expected["areas"] = {"Synthetic": {"seed_count": 2}}
+    assert "/@Projection" in expected["attributes"]
+    return text, path, expected
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_projection_attribute_removed_by_native_preprocessing_is_not_an_input_change(tmp_path):
+    """HEC-RAS 7.0.1 removes /@Projection when the project's .prj is unavailable.
+
+    Observed on RasExamples Chippewa_2D g01 (its .rasmap names a projection
+    file the example does not ship) and on BLE San Gabriel areas.
+    """
+    from pyproj import CRS
+
+    text, path, expected = _projection_attribute_fixture(
+        tmp_path, CRS.from_epsg(26915).to_wkt(version="WKT1_ESRI")
+    )
+    with h5py.File(path, "r+") as hdf:
+        del hdf.attrs["Projection"]
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert changed == missing == []
+    assert evidence["projection_attributes_cleared"] == ["/@Projection"]
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_projection_attribute_replaced_by_a_different_crs_still_fails(tmp_path):
+    from pyproj import CRS
+
+    text, path, expected = _projection_attribute_fixture(
+        tmp_path, CRS.from_epsg(26915).to_wkt(version="WKT1_ESRI")
+    )
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["Projection"] = np.bytes_(CRS.from_epsg(26916).to_wkt(version="WKT1_ESRI"))
+    changed, _, evidence = validate(text, path, expected, time.time() - 1)
+    assert changed == ["/@Projection"]
+    assert evidence["projection_attributes_cleared"] == []
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_removed_projection_dataset_still_fails(tmp_path):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        del hdf["Projection"]
+    assert "Projection" in validate(text, path, expected, time.time() - 1)[0]
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_other_removed_association_attribute_still_fails(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf["Geometry"].attrs["Terrain Filename"] = np.bytes_("Terrain.hdf")
+    expected = snapshot(text, path)
+    expected["areas"] = {"Synthetic": {"seed_count": 2}}
+    with h5py.File(path, "r+") as hdf:
+        del hdf["Geometry"].attrs["Terrain Filename"]
+    assert validate(text, path, expected, time.time() - 1)[0] == ["Geometry@Terrain Filename"]
