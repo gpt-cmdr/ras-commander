@@ -452,11 +452,20 @@ def snapshot(
                     result["attributes"][f"{path}@{name}"] = _digest(
                         read_attr(hdf[path], name)
                     )
-        for path in ("Projection", CALIBRATION):
-            if path in hdf:
-                result["inputs"][path] = _digest(read_typed(hdf[path]))
-                if path == "Projection":
-                    result["projections"][path] = read_typed(hdf[path])
+        if "Projection" in hdf:
+            result["inputs"]["Projection"] = _digest(read_typed(hdf["Projection"]))
+            result["projections"]["Projection"] = read_typed(hdf["Projection"])
+        # The land-cover calibration table is HEC-owned preprocessor output,
+        # not an authored input. HEC-RAS 7.0.1 rebuilds it from the sidecar
+        # classes and the LCMann text overrides: it reorders rows, drops the
+        # blank row, sanitizes class names, and writes NaN for classes without
+        # an override (NaN means "use the sidecar base value"). Record its
+        # digest as evidence only. Its existence after preprocessing is still
+        # required by the geometry HDF inventory check.
+        if CALIBRATION in hdf:
+            result["hec_owned_outputs"] = {
+                CALIBRATION: _digest(read_typed(hdf[CALIBRATION]))
+            }
         # Refinement regions are HDF-only authored input, including when the
         # cached parent topology has not yet been refreshed from child text.
         if REFINEMENT in hdf:
@@ -1284,5 +1293,15 @@ def validate(
                 )
     if expected["areas"]:
         changed.extend(_mesh_hdf_consistency_issues(geometry_path, hdf_path))
-    evidence.update(inputs_preserved=not changed, products_complete=not missing)
+    rewritten = []
+    if expected.get("hec_owned_outputs"):
+        with h5py.File(hdf_path, "r") as hdf:
+            for path, digest in expected["hec_owned_outputs"].items():
+                if path not in hdf or _digest(read_typed(hdf[path])) != digest:
+                    rewritten.append(path)
+    evidence.update(
+        inputs_preserved=not changed,
+        products_complete=not missing,
+        hec_owned_outputs_rewritten=sorted(rewritten),
+    )
     return sorted(set(changed)), sorted(set(missing)), evidence

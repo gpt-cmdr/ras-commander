@@ -919,3 +919,51 @@ def test_7x_results_file_is_not_invalidated(tmp_path, group):
     with pytest.raises(ValueError, match="GEOMETRY_CACHE_SCHEMA_UNSUPPORTED"):
         invalidate_products(path)
     assert path.read_bytes() == before
+
+
+def _calibration_rows(rows):
+    return np.array(
+        rows, dtype=[("Land Cover Name", "S40"), ("Mann n", "<f4"), ("Default", "<f4")]
+    )
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_native_calibration_table_rewrite_is_not_an_input_change(tmp_path):
+    """HEC-RAS 7.0.1 rebuilds the land-cover calibration table on preprocessing.
+
+    It drops the blank row, reorders classes, sanitizes ``/`` in class names,
+    and writes NaN for classes without an override (NaN means use the sidecar
+    base value). The completion contract must not report that rewrite as a
+    changed authored input, but it must still guard the authored mesh inputs.
+    """
+    from ras_commander.geom._preprocess_contract import CALIBRATION
+
+    text, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset(
+            CALIBRATION,
+            data=_calibration_rows(
+                [(b"", np.nan, np.nan), (b"NoData", 0.06, 0.04), (b"Shrub/Scrub", 0.08, 0.04)]
+            ),
+        )
+    expected = snapshot(text, path)
+    expected["areas"] = {"Synthetic": {"seed_count": 2}}
+    assert CALIBRATION not in expected["inputs"]
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+
+    with h5py.File(path, "r+") as hdf:
+        del hdf[CALIBRATION]
+        hdf.create_dataset(
+            CALIBRATION,
+            data=_calibration_rows(
+                [(b"NoData", 0.06, 0.04), (b"Shrub-Scrub", np.nan, np.nan)]
+            ),
+        )
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert changed == missing == []
+    assert evidence["hec_owned_outputs_rewritten"] == [CALIBRATION]
+
+    # Authored mesh inputs remain immutable.
+    with h5py.File(path, "r+") as hdf:
+        hdf[f"{AREA}/Cell Points"][0, 0] += 0.01
+    assert validate(text, path, expected, time.time() - 1)[0]
