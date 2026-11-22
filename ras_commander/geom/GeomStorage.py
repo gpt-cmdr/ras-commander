@@ -15,6 +15,7 @@ List of Functions:
   2D-only viewing/global extents from authored perimeters
 - set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
 - plan_2d_flow_area_perimeter() - Inspect serialization and adjacent duplicate removal
+- build_keyhole_perimeter() - Build one keyhole ring from an outer ring and excluded-area rings
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - get_2d_flow_area_cell_spacing() - Read persisted base mesh spacing
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
@@ -475,8 +476,14 @@ class GeomStorage:
     def _normalize_perimeter_coords(
         coordinates: Optional[Sequence[Sequence[float]]] = None,
         geometry=None,
+        allow_keyhole: bool = False,
     ) -> List[tuple[float, float]]:
-        """Normalize coordinate or shapely polygon input into a closed XY ring."""
+        """Normalize coordinate or shapely polygon input into a closed XY ring.
+
+        A shapely Polygon with interior rings becomes a keyhole ring when
+        ``allow_keyhole`` is true. Otherwise only its exterior is used, as
+        before, and a warning names the ignored holes.
+        """
         if coordinates is None and geometry is None:
             raise ValueError("Provide polygon coordinates or a shapely geometry")
         if coordinates is not None and geometry is not None:
@@ -485,7 +492,23 @@ class GeomStorage:
         if geometry is not None:
             geom_type = getattr(geometry, "geom_type", None)
             if geom_type == "Polygon":
-                raw_coords = list(geometry.exterior.coords)
+                interiors = list(geometry.interiors)
+                if interiors and allow_keyhole:
+                    from ._keyhole import build_keyhole_ring
+
+                    raw_coords = build_keyhole_ring(
+                        list(geometry.exterior.coords),
+                        [list(ring.coords) for ring in interiors],
+                    )
+                else:
+                    if interiors:
+                        logger.warning(
+                            "2D flow area perimeter uses the polygon exterior only; "
+                            "%d interior ring(s) are ignored. Pass allow_keyhole=True "
+                            "to keep them as excluded areas.",
+                            len(interiors),
+                        )
+                    raw_coords = list(geometry.exterior.coords)
             elif geom_type == "LinearRing":
                 raw_coords = list(geometry.coords)
             else:
@@ -539,8 +562,70 @@ class GeomStorage:
 
     @staticmethod
     @log_call
+    def build_keyhole_perimeter(
+        outer: Optional[Sequence[Sequence[float]]] = None,
+        holes: Optional[Sequence[Sequence[Sequence[float]]]] = None,
+        geometry=None,
+    ) -> List[tuple[float, float]]:
+        """Build a keyhole perimeter ring for a 2D flow area with excluded areas.
+
+        HEC-RAS stores one perimeter ring per 2D flow area. An excluded area
+        (a hole) is encoded as a keyhole: the ring runs in along a straight
+        cut, around the excluded area in the opposite direction, and back out
+        along the same cut, so each cut edge appears twice. Each hole is
+        joined by the shortest cut between ring and hole vertices that stays
+        inside the area and crosses no boundary or earlier cut.
+
+        Pass the result to ``set_2d_flow_area_perimeter(..., allow_keyhole=True)``.
+        HEC-RAS 7.0.1 ``Ras.exe`` did not mesh keyhole perimeters in
+        qualification ("Error generating Mesh"); this is authoring support,
+        not a qualified HEC-RAS mesh workflow.
+
+        Args:
+            outer (Optional[Sequence[Sequence[float]]]): Outer boundary XY
+                vertices, open or closed.
+            holes (Optional[Sequence[Sequence[Sequence[float]]]]): One XY vertex
+                ring per excluded area, each strictly inside ``outer`` and
+                disjoint from the others.
+            geometry: Alternatively, a shapely Polygon whose interior rings are
+                the excluded areas. Do not combine with ``outer``/``holes``.
+
+        Returns:
+            List[tuple[float, float]]: Closed keyhole ring (first vertex
+            repeated last), starting at the first outer vertex.
+
+        Raises:
+            ValueError: If the rings do not form a valid polygon with at least
+                one hole, or no straight cut can join a hole.
+
+        Example:
+            >>> ring = GeomStorage.build_keyhole_perimeter(
+            ...     outer=[(0, 0), (100, 0), (100, 100), (0, 100)],
+            ...     holes=[[(40, 40), (60, 40), (60, 60), (40, 60)]],
+            ... )
+            >>> GeomStorage.set_2d_flow_area_perimeter(
+            ...     "model.g01", "Perimeter 1", coordinates=ring, allow_keyhole=True
+            ... )
+        """
+        from ._keyhole import build_keyhole_ring
+
+        if geometry is not None:
+            if outer is not None or holes is not None:
+                raise ValueError("Provide either geometry or outer/holes, not both")
+            if getattr(geometry, "geom_type", None) != "Polygon":
+                raise ValueError("geometry must be a shapely Polygon")
+            outer = list(geometry.exterior.coords)
+            holes = [list(ring.coords) for ring in geometry.interiors]
+        if outer is None or not holes:
+            raise ValueError("Provide an outer ring and at least one hole ring")
+        return build_keyhole_ring(outer, holes)
+
+    @staticmethod
+    @log_call
     def plan_2d_flow_area_perimeter(
-        coordinates: Optional[Sequence[Sequence[float]]] = None, geometry=None
+        coordinates: Optional[Sequence[Sequence[float]]] = None,
+        geometry=None,
+        allow_keyhole: bool = False,
     ) -> dict:
         """Plan a closed native ring without mutation, in source horizontal units.
 
@@ -553,11 +638,20 @@ class GeomStorage:
         source validity; requires a valid authored polygon and at least three
         retained vertices. A numeric closing overlap can itself be repaired.
         No CRS conversion or general simplification is performed.
+
+        With ``allow_keyhole=True`` the ring may instead be a keyhole ring:
+        one ring that encodes excluded areas (holes) through cut edges that
+        appear twice, once in each direction. The serialized ring must be a
+        proper keyhole (see ``build_keyhole_perimeter``); any other invalid
+        ring is still rejected. A shapely Polygon with interior rings is
+        converted to a keyhole ring.
         """
         from shapely.geometry import Polygon
         from .GeomMesh import PERIMETER_NEAR_DUPLICATE_TOL
 
-        coords = GeomStorage._normalize_perimeter_coords(coordinates, geometry)
+        coords = GeomStorage._normalize_perimeter_coords(
+            coordinates, geometry, allow_keyhole=allow_keyhole
+        )
         def key(point):
             return tuple(
                 f"{v:.{GeomStorage._max_precision_for_field(v, GeomStorage.SURFACE_LINE_COLUMN)}f}"
@@ -586,8 +680,19 @@ class GeomStorage:
             raise ValueError("2D flow area perimeter needs three distinct serialized vertices")
         source = Polygon(coords)
         authored = Polygon([serialized(point) for point in kept])
-        if not authored.is_valid or source.is_empty or authored.is_empty:
+        keyhole_domain = None
+        if source.is_empty or authored.is_empty:
             raise ValueError("2D flow area perimeter normalization requires valid polygons")
+        if not authored.is_valid:
+            if not allow_keyhole:
+                raise ValueError(
+                    "2D flow area perimeter normalization requires valid polygons"
+                )
+            from ._keyhole import validate_keyhole_ring
+
+            keyhole_domain = validate_keyhole_ring(
+                [serialized(point) for point in kept]
+            )
         displacement = source.boundary.hausdorff_distance(authored.boundary)
         # Field rounding is measured separately from adjacent-vertex removal;
         # no chain may turn this numerical repair into general simplification.
@@ -610,6 +715,10 @@ class GeomStorage:
             'area_change': authored.area - source.area,
             'source_valid': bool(source.is_valid),
             'authored_valid': True,
+            'keyhole': keyhole_domain is not None,
+            'excluded_area_count': (
+                len(keyhole_domain.interiors) if keyhole_domain is not None else 0
+            ),
         }
 
     @staticmethod
@@ -1260,6 +1369,9 @@ class GeomStorage:
 
         Parses the ``Storage Area Surface Line= N`` block to build a Shapely
         Polygon from the N 16-char fixed-width XY pairs that follow it.
+        A keyhole ring (a 2D flow area with excluded areas, see
+        ``build_keyhole_perimeter``) is returned as its domain: a valid
+        Polygon whose interior rings are the excluded areas.
 
         Parameters:
             geom_file: Path to .g## geometry file
@@ -1371,6 +1483,13 @@ class GeomStorage:
                         if len(vertices) >= 3:
                             try:
                                 polygon = ShapelyPolygon(vertices)
+                                if not polygon.is_valid:
+                                    from ._keyhole import validate_keyhole_ring
+
+                                    try:
+                                        polygon = validate_keyhole_ring(vertices)
+                                    except ValueError:
+                                        pass  # Not a keyhole; keep the raw ring.
                             except Exception as poly_err:
                                 logger.warning(
                                     f"Could not create polygon for '{sa_name}': {poly_err}"
@@ -1622,6 +1741,7 @@ class GeomStorage:
         point_generation_data: Optional[Union[str, Sequence[Optional[float]]]] = None,
         recompute_centroid: bool = False,
         create_backup: bool = True,
+        allow_keyhole: bool = False,
     ) -> Path:
         """Create or update a storage-area-backed 2D flow area perimeter in .g## text.
 
@@ -1634,6 +1754,16 @@ class GeomStorage:
             recompute_centroid: When updating an existing block, recompute the
                 header centroid from the polygon. Default False preserves the
                 original header coordinates.
+            allow_keyhole: Accept a keyhole ring, the single-ring form
+                HEC-RAS uses for a 2D flow area with excluded areas (holes).
+                Each hole is joined to the boundary by a cut whose edge
+                appears twice, once in each direction. Only a proper keyhole
+                ring is accepted; other invalid rings are still rejected. A
+                shapely Polygon with interior rings passed as ``geometry`` is
+                converted to a keyhole ring. Default False. HEC-RAS 7.0.1
+                ``Ras.exe`` reported "Error generating Mesh" for keyhole
+                perimeters in qualification, while the same computation
+                points meshed with the plain outer ring.
         """
         geom_file = Path(geom_file)
         if not geom_file.exists():
@@ -1644,6 +1774,7 @@ class GeomStorage:
         plan = GeomStorage.plan_2d_flow_area_perimeter(
             coordinates=coordinates,
             geometry=geometry,
+            allow_keyhole=allow_keyhole,
         )
         coords = plan['coordinates']
         if plan['removed_adjacent_vertex_indexes']:
