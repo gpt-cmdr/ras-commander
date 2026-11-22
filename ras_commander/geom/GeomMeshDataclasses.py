@@ -170,6 +170,11 @@ class MeshResult:
     # Empty unless exact physical parent cells were copied into an owned child.
     cell_subset: Dict[str, Any] = field(default_factory=dict)
 
+    # Pre-mesh containment policy used by generate(): "strict" refuses
+    # violations; "warn" logs them, records them here and continues.
+    premesh_policy: str = "strict"
+    premesh_warnings: List[Dict[str, Any]] = field(default_factory=list)
+
     @property
     def ok(self) -> bool:
         return self.status == "complete"

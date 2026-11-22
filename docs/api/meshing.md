@@ -688,6 +688,24 @@ matching mesh generation. Replace checks for the old `"success"` string with
 violations. `BCFixResult.ok` means no unresolved conflicts in that result; these
 are operation-specific states, not hydraulic acceptance criteria.
 
+`GeomMesh.generate()` and `generate_all()` apply the pre-mesh containment audit
+before meshing. `premesh_policy="strict"` (the default) returns an error for an
+area with violations. `premesh_policy="warn"` logs each violation as a warning,
+records it in `MeshResult.premesh_warnings` (each entry is a
+`DomainContainmentViolation.to_dict()` plus the `stage`, `initial` or
+`after_perimeter_repair`), and continues meshing. `allow_boundary_connections`
+is applied first, so SA/2D connections it admits are not warnings. HEC-RAS
+preprocessing still decides whether the mesh is accepted; run
+`GeomPreprocessor.run_geometry_preprocessor()` and check its result.
+
+```python
+result = GeomMesh.generate(
+    "02", ras_object=ras, allow_boundary_connections=True, premesh_policy="warn"
+)
+for warning in result.premesh_warnings:
+    print(warning["feature_type"], warning["feature_name"], warning["reason"])
+```
+
 ::: ras_commander.geom.GeomMeshDataclasses.MeshResult
     options:
       heading_level: 3

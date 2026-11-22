@@ -1290,9 +1290,16 @@ class TestDomainContainmentAudit:
     def test_boundary_connection_option_does_not_shift_positional_arguments(self):
         import inspect
 
-        for fn in (GeomMesh.audit_domain_containment, GeomMesh.generate, GeomMesh.generate_all):
+        # New options are appended in order, so existing positional calls keep
+        # their meaning: allow_boundary_connections, then premesh_policy.
+        tails = {
+            GeomMesh.audit_domain_containment: ["allow_boundary_connections"],
+            GeomMesh.generate: ["allow_boundary_connections", "premesh_policy"],
+            GeomMesh.generate_all: ["allow_boundary_connections", "premesh_policy"],
+        }
+        for fn, tail in tails.items():
             names = list(inspect.signature(fn).parameters)
-            assert names[-1] == "allow_boundary_connections", fn.__name__
+            assert names[-len(tail):] == tail, fn.__name__
 
     def test_boundary_condition_lines_do_not_fail_mesh_feature_gate(self, tmp_path):
         geom_text, _hdf_path = _write_containment_fixture(
