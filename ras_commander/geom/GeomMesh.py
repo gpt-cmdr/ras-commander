@@ -3855,6 +3855,46 @@ def _validated_computation_points(computation_points, perimeter):
     return points
 
 
+_PREMESH_POLICIES = ("strict", "warn")
+
+
+def _check_premesh_policy(premesh_policy: str) -> str:
+    """Validate a pre-mesh containment policy name."""
+    if premesh_policy not in _PREMESH_POLICIES:
+        raise ValueError(
+            f"premesh_policy must be one of {_PREMESH_POLICIES}, got {premesh_policy!r}"
+        )
+    return premesh_policy
+
+
+def _apply_premesh_policy(containment, premesh_policy: str, result, stage: str) -> bool:
+    """Return True when meshing may continue after a containment audit.
+
+    ``"strict"`` continues only on a passing audit. ``"warn"`` logs each
+    violation as a warning, records it on ``result.premesh_warnings`` and
+    continues; HEC-RAS preprocessing remains the authority on the mesh.
+    """
+    if containment:
+        return True
+    if premesh_policy != "warn":
+        return False
+    logger.warning(
+        "[%s] premesh_policy='warn': continuing past %d pre-mesh containment "
+        "violation(s) at %s",
+        containment.mesh_name, len(containment.violations), stage,
+    )
+    for violation in containment.violations:
+        record = dict(violation.to_dict(), stage=stage)
+        result.premesh_warnings.append(record)
+        logger.warning(
+            "[%s] pre-mesh %s %s (index %s): %s",
+            containment.mesh_name, violation.feature_type,
+            violation.feature_name or "<unnamed>", violation.feature_index,
+            violation.reason,
+        )
+    return True
+
+
 class GeomMesh:
     """
     Headless 2D mesh generation, repair, and BC conflict resolution.
@@ -5972,6 +6012,7 @@ class GeomMesh:
         require_complete_products: bool = False,
         grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
         allow_boundary_connections: bool = False,
+        premesh_policy: str = "strict",
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -6051,6 +6092,14 @@ class GeomMesh:
                 authored on the perimeter pass the containment gate when they
                 lie within one base cell of the 2D area (default False keeps
                 the one-cell inward margin).
+            premesh_policy: What to do with features that fail the pre-mesh
+                containment gate after ``allow_boundary_connections`` is
+                applied. ``"strict"`` (default) refuses the area. ``"warn"``
+                logs every violation as a warning, records it in
+                ``MeshResult.premesh_warnings`` and continues, leaving HEC-RAS
+                to accept or reject the mesh during preprocessing. Use it for
+                geometries HEC-RAS accepts with breaklines or structures near
+                the perimeter, or with 1-point breaklines.
             robustness_screening: Opt-in ras-commander optimization (default False).
                 Screen requested/accepted ratios, 0.05 and 0.1 with saved-point,
                 region-edge and unconstrained variants. Retain region seeds and
@@ -6082,7 +6131,8 @@ class GeomMesh:
             supply an initialized project with a referencing plan.
 
         Raises:
-            ValueError: The face-length ratio is not positive and finite.
+            ValueError: The face-length ratio is not positive and finite, or
+                ``premesh_policy`` is not ``"strict"`` or ``"warn"``.
             TypeError: ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
                 (A grid anchor whose spacing differs from the cell size
                 returns ``status="exception"`` with the reason.)
@@ -6090,12 +6140,14 @@ class GeomMesh:
                 fails, chained to the original mesh repair reason. Retries
                 share the existing ``max_iterations`` bound.
         """
+        _check_premesh_policy(premesh_policy)
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
 
         result = MeshResult(
             mesh_name=mesh_name or f"<index {mesh_index}>",
             status="error",
             geom_text_path=str(geom_path),
+            premesh_policy=premesh_policy,
         )
 
         min_face_length_ratio = _normalize_positive_value(
@@ -6198,7 +6250,9 @@ class GeomMesh:
             result.mesh_name = domain_containment.mesh_name
             mesh_name = domain_containment.mesh_name
             result.geom_hdf_path = str(hdf_path)
-            if not domain_containment:
+            if not _apply_premesh_policy(
+                domain_containment, premesh_policy, result, "initial"
+            ):
                 preview = ", ".join(
                     f"{item.feature_type}:{item.feature_name or item.feature_index}"
                     for item in domain_containment.violations[:5]
@@ -6379,7 +6433,9 @@ class GeomMesh:
                     allow_boundary_connections=allow_boundary_connections,
                 )
                 result.domain_containment = containment
-                if not containment:
+                if not _apply_premesh_policy(
+                    containment, premesh_policy, result, "after_perimeter_repair"
+                ):
                     raise RuntimeError("Repaired perimeter failed mesh-feature containment")
                 # Every object loaded from the old HDF must be replaced before
                 # computing or saving another mesh; candidate-only retries are stale.
@@ -6785,6 +6841,7 @@ class GeomMesh:
         robustness_screening: bool = False,
         require_complete_products: bool = False,
         allow_boundary_connections: bool = False,
+        premesh_policy: str = "strict",
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -6816,6 +6873,8 @@ class GeomMesh:
                 defaults to False.
             allow_boundary_connections: Forward the boundary-connection
                 allowance described by generate(); defaults to False.
+            premesh_policy: Forward the pre-mesh containment policy described
+                by generate(): ``"strict"`` (default) or ``"warn"``.
             robustness_screening: Forward the opt-in screening described by
                 generate(). Currently requires a single 2D flow area.
 
@@ -6856,6 +6915,7 @@ class GeomMesh:
                 refinement_region_constraints=refinement_region_constraints,
                 strict_refinement_containment=strict_refinement_containment,
                 allow_boundary_connections=allow_boundary_connections,
+                premesh_policy=premesh_policy,
                 robustness_screening=robustness_screening,
                 _require_current_hdf=False,
                 require_complete_products=require_complete_products,
