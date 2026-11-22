@@ -919,3 +919,80 @@ def test_7x_results_file_is_not_invalidated(tmp_path, group):
     with pytest.raises(ValueError, match="GEOMETRY_CACHE_SCHEMA_UNSUPPORTED"):
         invalidate_products(path)
     assert path.read_bytes() == before
+
+
+BREAKLINES = "Geometry/2D Flow Area Break Lines"
+
+
+def _breakline_case(tmp_path, authored, stored, path=BREAKLINES, prefix="BreakLine"):
+    """Authored text features and a native HDF table holding ``stored`` points."""
+    from ras_commander.geom._preprocess_contract import _text_features
+
+    arc = "Polyline" if prefix == "BreakLine" else "Arc"
+    name_key = f"{prefix} Name=" if prefix == "BreakLine" else "BC Line Name="
+    arc_key = f"{prefix} {arc}=" if prefix == "BreakLine" else "BC Line Arc="
+    lines = [
+        name_key + "Breakline 48",
+        f"{arc_key} {len(authored)}",
+        "".join(f"{x:16.6f}{y:16.6f}" for x, y in authored),
+    ]
+    features = _text_features(lines, name_key, arc_key)
+    hdf_path = tmp_path / "Synthetic.g01.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        group = hdf.create_group(path)
+        group.create_dataset(
+            "Attributes", data=np.array([(b"Breakline 48",)], dtype=[("Name", "S16")])
+        )
+        group.create_dataset("Polyline Info", data=[[0, len(stored), 0, 1]])
+        group.create_dataset(
+            "Polyline Points", data=np.asarray(stored, dtype=float).reshape(-1, 2)
+        )
+    return hdf_path, features
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_one_point_breakline_stored_verbatim_is_preserved(tmp_path):
+    """HEC-RAS 7.0.1 keeps an authored 1-point breakline as one point.
+
+    BLE San Gabriel areas (HEC-RAS 7.0.1) carry 4-13 such breaklines each; the
+    contract's two-point minimum reported every one as changed.
+    """
+    from ras_commander.geom._preprocess_contract import _feature_issues
+
+    point = [(3106917.835786, 10252179.548139)]
+    path, features = _breakline_case(tmp_path, point, point)
+    with h5py.File(path, "r") as hdf:
+        assert _feature_issues(hdf, BREAKLINES, features) == []
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize(
+    "authored, stored",
+    [
+        ([(10.0, 20.0)], [(10.5, 20.0)]),            # moved point
+        ([(10.0, 20.0)], np.empty((0, 2))),          # point dropped
+        ([(10.0, 20.0), (30.0, 40.0)], [(10.0, 20.0)]),  # line shortened to a point
+    ],
+    ids=["moved", "dropped", "shortened"],
+)
+def test_one_point_breakline_real_changes_still_fail(tmp_path, authored, stored):
+    from ras_commander.geom._preprocess_contract import _feature_issues
+
+    path, features = _breakline_case(tmp_path, authored, stored)
+    with h5py.File(path, "r") as hdf:
+        assert _feature_issues(hdf, BREAKLINES, features) == [
+            f"{BREAKLINES}/0: authored identity or coordinates changed"
+        ]
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_one_point_boundary_line_is_still_rejected(tmp_path):
+    from ras_commander.geom._preprocess_contract import _feature_issues
+
+    point = [(10.0, 20.0)]
+    bc = "Geometry/Boundary Condition Lines"
+    path, features = _breakline_case(tmp_path, point, point, path=bc, prefix="BC")
+    with h5py.File(path, "r") as hdf:
+        assert _feature_issues(hdf, bc, features) == [
+            f"{bc}/0: authored identity or coordinates changed"
+        ]
