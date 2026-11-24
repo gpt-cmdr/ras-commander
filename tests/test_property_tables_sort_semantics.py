@@ -116,13 +116,26 @@ _FACE_TABLES = (
 )
 
 
+def _drop_face_tables(geometry_hdf):
+    with h5py.File(geometry_hdf, "r+") as hdf:
+        for name in _FACE_TABLES:
+            if _AREA + name in hdf:
+                del hdf[_AREA + name]
+
+
+def _require_face_tables(geometry_hdf):
+    with h5py.File(geometry_hdf, "r") as hdf:
+        missing = [name for name in _FACE_TABLES if _AREA + name not in hdf]
+    assert missing == [], f"producer did not write {missing}"
+
+
 @pytest.mark.integration
 @pytest.mark.real_ras
 @pytest.mark.destructive_copy
 def test_recompute_face_tables_match_native_plan_compute(tmp_path):
     """Weise_2D discriminates the sorts at equal-station face end points."""
     _require_netfx_pythonnet()
-    _hecras_701()
+    install = _hecras_701()
     from ras_commander import RasExamples, RasMap, init_ras_project
     from ras_commander.geom import GeomPreprocessor
 
@@ -130,25 +143,25 @@ def test_recompute_face_tables_match_native_plan_compute(tmp_path):
         source = RasExamples.extract_project("Weise_2D", output_path=tmp_path / "src")
     except Exception as exc:  # download or archive unavailable
         pytest.skip(f"Weise_2D example unavailable: {exc}")
-    with h5py.File(source / "Weise.g08.hdf", "r") as hdf:
-        # The 6.6 archive stores no face profiles, so their presence below
-        # proves the native run produced them.
-        assert _AREA + "Faces Profile Values" not in hdf
 
+    # Drop the face tables from each disposable copy before its producer runs,
+    # so each comparison reads tables that the producer wrote.
     native = tmp_path / "native" / "Weise_2D"
     shutil.copytree(source, native)
-    project = init_ras_project(native, "7.0.1")
+    native_hdf = native / "Weise.g08.hdf"
+    _drop_face_tables(native_hdf)
+    project = init_ras_project(native, str(install / "Ras.exe"))
     # The geometry-only Ras.exe run is HEC-RAS's own producer. Its completion
     # contract is not asserted here: it reports land-cover attachment items
     # on this example that are unrelated to face profiles.
     GeomPreprocessor.run_geometry_preprocessor("01", ras_object=project, max_wait=900)
-    native_hdf = native / "Weise.g08.hdf"
-    with h5py.File(native_hdf, "r") as hdf:
-        assert _AREA + "Faces Profile Values" in hdf
+    _require_face_tables(native_hdf)
 
     mapper = tmp_path / "mapper" / "Weise_2D"
     shutil.copytree(native, mapper)
+    _drop_face_tables(mapper / "Weise.g08.hdf")
     RasMap.recompute_property_tables(mapper, mapper / "Weise.g08", hecras_version="7.0.1")
+    _require_face_tables(mapper / "Weise.g08.hdf")
 
     with h5py.File(native_hdf, "r") as expected, h5py.File(
         mapper / "Weise.g08.hdf", "r"
