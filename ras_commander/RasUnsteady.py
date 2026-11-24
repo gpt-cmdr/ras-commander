@@ -3442,13 +3442,13 @@ class RasUnsteady:
     def _complete_gridded_meteorology_block(
         lines: List[str],
     ) -> Tuple[List[str], Tuple[str, ...]]:
-        """Complete and order the HEC-RAS gridded-meteorology text block.
+        """Complete and order the HEC-RAS meteorology text block.
 
         HEC-RAS 7.0 can exit successfully after ``Error processing event
-        conditions`` when gridded precipitation is enabled but one of the
-        baseline evapotranspiration, air-density, or air-pressure ``Mode``
-        records is absent.  RAS-authored gridded files make those modes
-        explicit.  Existing nonblank choices remain authoritative; only
+        conditions`` when gridded or constant precipitation is enabled but
+        one of the baseline evapotranspiration, air-density, or air-pressure
+        ``Mode`` records is absent.  RAS-authored gridded and constant files
+        make those modes explicit.  Existing nonblank choices remain authoritative; only
         absent or blank records receive the RAS defaults.
 
         HEC-RAS also expects every ``Met BC=`` record to remain contiguous and
@@ -3562,7 +3562,7 @@ class RasUnsteady:
         RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
         if completed_modes:
             logger.info(
-                "Completed required gridded meteorology modes in %s: %s",
+                "Completed required meteorology modes in %s: %s",
                 unsteady_path.name,
                 ", ".join(completed_modes),
             )
@@ -3613,9 +3613,13 @@ class RasUnsteady:
             + filtered_lines[insert_index:]
         )
         completed_modes: Tuple[str, ...] = ()
+        # Constant and Gridded precipitation share the HEC-RAS 7.0 event
+        # conditions requirement: without explicit evapotranspiration,
+        # air-density, and air-pressure modes, the plan stops with
+        # "Error processing event conditions" and writes no results.
         if any(
             key == "Met BC=Precipitation|Mode"
-            and str(value).strip().casefold() == "gridded"
+            and str(value).strip().casefold() in {"constant", "gridded"}
             for key, value in desired_entries
         ):
             updated_lines, completed_modes = (
@@ -3707,9 +3711,10 @@ class RasUnsteady:
         ``Met BC=Precipitation|...`` state as a single block, removing stale
         mode/source keys from prior Constant, Point, DSS, GDAL, or legacy GDAL
         Datasetname states. Unrecognized precipitation keys such as
-        ``Expanded View`` are preserved. Gridded mode also completes the
-        required evapotranspiration, air-density, and air-pressure mode
-        records without replacing explicit nonblank choices.
+        ``Expanded View`` are preserved. Constant and Gridded modes also
+        complete the required evapotranspiration, air-density, and
+        air-pressure mode records without replacing explicit nonblank
+        choices.
 
         Parameters
         ----------
@@ -5658,6 +5663,18 @@ class RasUnsteady:
         Writes the ``Precipitation Mode`` switch and the constant-mode
         ``Met BC=Precipitation|...`` keys, and updates the
         ``<unsteady_file>.hdf`` sidecar attributes when it exists.
+
+        HEC-RAS 7.0 stops with ``Error processing event conditions`` and
+        writes no results when constant precipitation is enabled without
+        explicit evapotranspiration, air-density, and air-pressure modes.
+        Files that never had meteorology, such as most 5.x/6.x example
+        unsteady files, lack those records. The method therefore completes
+        absent or blank records with the HEC-RAS defaults
+        (``Met BC=Evapotranspiration|Mode=None``,
+        ``Met BC=Air Density|Mode=Constant``,
+        ``Met BC=Air Pressure|Mode=Constant``) and keeps the ``Met BC=``
+        records contiguous after the meteorology headers. Existing nonblank
+        modes are preserved.
 
         Parameters
         ----------

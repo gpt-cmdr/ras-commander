@@ -205,6 +205,96 @@ def test_inserts_missing_keys_into_minimal_file(tmp_path):
     assert lines.index("Precipitation Mode=Enable") > lines.index("Flow Title=Minimal")
 
 
+_BASELINE_MODES = (
+    "Met BC=Evapotranspiration|Mode=None",
+    "Met BC=Air Density|Mode=Constant",
+    "Met BC=Air Pressure|Mode=Constant",
+)
+
+# Header of BaldEagleCrkMulti2D BaldEagleDamBrk.u13: a 5.00 file with no
+# meteorology records. HEC-RAS 7.0.1 rejected the pre-fix constant write
+# with "Error processing event conditions".
+_NO_MET_BODY = (
+    "Flow Title=Single 2D Area\n"
+    "Program Version=5.00\n"
+    "Use Restart= 0 \n"
+    "Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DSNormalDepth   \n"
+    "Friction Slope=0.0003\n"
+)
+
+
+def test_completes_baseline_met_modes_for_file_without_meteorology(tmp_path):
+    """Regression: constant rain on a file without met records must run in 7.0."""
+    from ras_commander import RasUnsteady
+
+    unsteady_path = _write_unsteady(tmp_path / "NoMet.u13", _NO_MET_BODY)
+
+    RasUnsteady.set_constant_precipitation(unsteady_path, value=1.0, units="in/hr")
+
+    lines = unsteady_path.read_text(encoding="utf-8").splitlines()
+    for record in _BASELINE_MODES:
+        assert lines.count(record) == 1, record
+    met_indices = [i for i, line in enumerate(lines) if line.startswith("Met BC=")]
+    # Met BC records stay contiguous and follow the Precipitation Mode header.
+    assert met_indices == list(range(met_indices[0], met_indices[-1] + 1))
+    assert lines.index("Precipitation Mode=Enable") < met_indices[0]
+    assert met_indices[-1] < next(
+        i for i, line in enumerate(lines) if line.startswith("Boundary Location=")
+    )
+    # Non-meteorology content is unchanged.
+    non_met = [
+        line for line in lines
+        if not line.startswith(("Met BC=", "Precipitation Mode="))
+    ]
+    assert non_met == _NO_MET_BODY.splitlines()
+
+
+def test_preserves_explicit_baseline_met_modes(tmp_path):
+    from ras_commander import RasUnsteady
+
+    unsteady_path = _write_unsteady(
+        tmp_path / "Explicit.u01",
+        _NO_MET_BODY
+        + "Met BC=Evapotranspiration|Mode=Constant\n"
+        + "Met BC=Air Density|Mode=Point\n"
+        + "Met BC=Air Pressure|Mode=\n",
+    )
+
+    RasUnsteady.set_constant_precipitation(unsteady_path)
+
+    lines = unsteady_path.read_text(encoding="utf-8").splitlines()
+    assert lines.count("Met BC=Evapotranspiration|Mode=Constant") == 1
+    assert lines.count("Met BC=Air Density|Mode=Point") == 1
+    assert "Met BC=Evapotranspiration|Mode=None" not in lines
+    assert "Met BC=Air Density|Mode=Constant" not in lines
+    # A blank mode is completed with the HEC-RAS default.
+    assert lines.count("Met BC=Air Pressure|Mode=Constant") == 1
+    assert "Met BC=Air Pressure|Mode=" not in lines
+
+
+def test_set_met_precipitation_mode_constant_completes_baseline_modes(tmp_path):
+    from ras_commander import RasUnsteady
+
+    unsteady_path = _write_unsteady(tmp_path / "Mode.u01", _NO_MET_BODY)
+
+    RasUnsteady.set_met_precipitation_mode(unsteady_path, "Constant")
+
+    lines = unsteady_path.read_text(encoding="utf-8").splitlines()
+    assert "Met BC=Precipitation|Mode=Constant" in lines
+    for record in _BASELINE_MODES:
+        assert lines.count(record) == 1, record
+
+
+def test_constant_write_is_idempotent(tmp_path):
+    from ras_commander import RasUnsteady
+
+    unsteady_path = _write_unsteady(tmp_path / "Twice.u01", _NO_MET_BODY)
+    RasUnsteady.set_constant_precipitation(unsteady_path, value=0.5)
+    first = unsteady_path.read_text(encoding="utf-8")
+    RasUnsteady.set_constant_precipitation(unsteady_path, value=0.5)
+    assert unsteady_path.read_text(encoding="utf-8") == first
+
+
 def test_validates_inputs(davis_style_unsteady):
     from ras_commander import RasUnsteady
 
