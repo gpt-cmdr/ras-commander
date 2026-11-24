@@ -175,6 +175,35 @@ def _initialize_runtime(install: Path) -> tuple[list, list]:
     return handles, libraries
 
 
+def _require_net45_sort_semantics() -> None:
+    """Refuse pre-4.5 .NET quirks; HEC-RAS's own hosts target 4.7.2.
+
+    Without a 4.5+ target, Array.Sort and List<T>.Sort use the legacy
+    quicksort, which orders equal-station face profile samples differently
+    from HEC-RAS plan compute. The parent sets COMPlus_TargetFrameworkMoniker.
+    """
+    from System import Object
+    from System.Reflection import BindingFlags
+
+    compatibility = Object().GetType().Assembly.GetType(
+        "System.Runtime.Versioning.BinaryCompatibility"
+    )
+    flag = (
+        compatibility.GetProperty(
+            "TargetsAtLeast_Desktop_V4_5", BindingFlags.NonPublic | BindingFlags.Static
+        )
+        if compatibility is not None
+        else None
+    )
+    if flag is None or not bool(flag.GetValue(None)):
+        raise RuntimeError(
+            "RasMapperLib host runs with pre-4.5 .NET Framework compatibility; "
+            "its sort order would differ from HEC-RAS. Launch this worker through "
+            "ras-commander, which sets COMPlus_TargetFrameworkMoniker. "
+            "Refusing native work."
+        )
+
+
 def main() -> None:
     """Compute native tables in the caller's disposable geometry HDF."""
     if importlib.util.find_spec("clr") is None:
@@ -185,6 +214,7 @@ def main() -> None:
     install = Path(sys.argv[1]).absolute()
     geometry = Path(sys.argv[2]).absolute()
     handles, libraries = _initialize_runtime(install)
+    _require_net45_sort_semantics()
     if len(sys.argv) == 5 and sys.argv[3] == "--bc-types":
         from RasMapperLib import RASGeometry
 
