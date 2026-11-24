@@ -13,6 +13,7 @@ import pytest
 
 import ras_commander._gdal_runtime as gdal_runtime
 import ras_commander._landcover_native as native
+from ras_commander._native_worker_environment import rasmapper_host_environment
 
 
 def test_missing_pythonnet_has_actionable_error_before_native_loading(monkeypatch):
@@ -91,6 +92,10 @@ def test_worker_command_uses_direct_file_and_geometry_working_directory(
     assert options["cwd"] == str(tmp_path)
     assert options["timeout"] == 1800
     assert options["capture_output"]
+    # The pythonnet host must run with HEC-RAS's .NET 4.5+ sort semantics.
+    assert options["env"]["COMPlus_TargetFrameworkMoniker"] == (
+        ".NETFramework,Version=v4.7.2"
+    )
 
 
 @pytest.mark.parametrize("failure", ["exit", "timeout"])
@@ -134,6 +139,7 @@ def test_worker_imports_only_stdlib_and_native_interop():
         "clr",
         "RasMapperLib",
         "HDF",
+        "System",
     }
 
 
@@ -292,6 +298,8 @@ def test_real_native_hdf5_identity_guard(tmp_path, mode):
         text=True,
         timeout=60,
         check=False,
+        # The worker refuses a host without HEC-RAS's .NET 4.5+ semantics.
+        env=rasmapper_host_environment(None),
     )
     output = result.stdout + result.stderr
     if mode == "clean":
@@ -308,3 +316,38 @@ def test_real_native_hdf5_identity_guard(tmp_path, mode):
             assert "MANAGED_SEES_ALTERNATE 1 SELECTED_SEES_ALTERNATE 0" in output
             assert "(0, 1, 10, 6) (0, 1)" in output
             assert "HDF.PInvoke DLL identity check failed:" in output
+
+
+def test_real_worker_refuses_pre_net45_host(tmp_path):
+    if sys.platform != "win32" or (
+        "clr" not in sys.modules and importlib.util.find_spec("clr") is None
+    ):
+        pytest.skip("Requires Windows Python and pythonnet")
+    root = Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)"))
+    selected = Path(
+        os.environ.get("RAS_COMMANDER_TEST_INSTALL", root / "HEC" / "HEC-RAS" / "6.6")
+    )
+    if not (selected / "bin64/hdf5.dll").is_file():
+        pytest.skip("A HEC-RAS native HDF5 installation is unavailable")
+    script = tmp_path / "identity_probe.py"
+    script.write_text(NATIVE_IDENTITY_PROBE)
+    worker = Path(native.__file__).with_name("_property_tables_worker.py").absolute()
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.casefold() != "complus_targetframeworkmoniker"
+    }
+    result = subprocess.run(
+        [sys.executable, "-I", str(script), str(worker), str(selected), str(selected), "clean"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+        env=environment,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "pre-4.5 .NET Framework compatibility" in output
+    assert "COMPUTE_REACHED" not in output
+

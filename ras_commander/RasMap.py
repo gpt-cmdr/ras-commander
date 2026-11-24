@@ -1659,7 +1659,10 @@ class RasMap:
 
         Modern native computation runs in an isolated process using the
         selected HEC-RAS installation's bundled HDF5 DLLs, with a 1,800-second
-        timeout. Mutates the supplied geometry HDF in its existing CRS/units;
+        timeout. That process runs RasMapperLib with the .NET Framework 4.7.2
+        target semantics of HEC-RAS's own hosts, so sorting ties in face
+        profiles resolve as in HEC-RAS plan compute.
+        Mutates the supplied geometry HDF in its existing CRS/units;
         use a disposable model copy. Process success does not replace the
         complete-geometry/table-pair checks or hydraulic QA.
         """
