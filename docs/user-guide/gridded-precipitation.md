@@ -88,7 +88,10 @@ Met BC=Air Pressure|Mode=Constant
 
 The API also keeps the complete `Met BC=` block contiguous and immediately
 after the top-level meteorology headers. This applies equally to imported
-raster, GeoTIFF/GRIB translation, and DSS configuration. It does not remove the
+raster, GeoTIFF/GRIB translation, and DSS configuration. Constant precipitation
+has the same requirement in HEC-RAS 6.6 and 7.0.1, so
+`set_constant_precipitation()` and `set_met_precipitation_mode("Constant")`
+complete the same records. It does not remove the
 need to inspect HEC-RAS runtime messages: a zero exit code alone is not proof
 that event conditions were accepted.
 

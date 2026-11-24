@@ -578,9 +578,15 @@ def test_set_met_precipitation_mode_changes_only_managed_raw_records(
 
     updated = unsteady_file.read_bytes()
     assert updated != original
-    assert _unmanaged_precipitation_records(updated) == (
-        _unmanaged_precipitation_records(original)
-    )
+    # The official file has no air-pressure mode. Constant mode completes it
+    # (HEC-RAS 7.0 rejects enabled precipitation without it) and changes no
+    # other unmanaged record.
+    completed = b"Met BC=Air Pressure|Mode=Constant\r\n"
+    assert completed not in original
+    updated_unmanaged = _unmanaged_precipitation_records(updated)
+    assert updated_unmanaged.count(completed) == 1
+    updated_unmanaged.remove(completed)
+    assert updated_unmanaged == _unmanaged_precipitation_records(original)
     assert b"Met BC=Precipitation|Mode=Constant" in updated
     assert b"Met BC=Precipitation|Constant Value=2.5" in updated
 

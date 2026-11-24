@@ -771,6 +771,10 @@ native Single. That rounded value is written consistently to the text and
 existing HDF sidecar. Overflow and underflow to zero fail before either write.
 Omit `ratio` to preserve existing ratio records. Rates may use `in/hr` or
 `mm/hr`; native preprocessing and readback remain separate checks.
+Like the gridded setters, it completes absent or blank
+`Met BC=Evapotranspiration|Mode`, `Met BC=Air Density|Mode`, and
+`Met BC=Air Pressure|Mode` records with the HEC-RAS defaults. Without them,
+HEC-RAS 7.0 reports `Error processing event conditions` and writes no results.
 
 `disable_meteorology(..., remove_source_references=True)` prepares an owned
 boundary-only child without inherited gridded or point meteorological sources.

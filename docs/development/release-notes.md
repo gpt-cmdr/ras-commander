@@ -9,6 +9,14 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Constant precipitation now runs on unsteady files without meteorology
+  records.** `RasUnsteady.set_constant_precipitation()` and
+  `set_met_precipitation_mode("Constant")` complete absent or blank
+  `Met BC=Evapotranspiration|Mode`, `Met BC=Air Density|Mode`, and
+  `Met BC=Air Pressure|Mode` records with the HEC-RAS defaults, as the gridded
+  setters already did. Before this change, BaldEagleCrkMulti2D plan 03 (u13)
+  stopped with `Error processing event conditions` and wrote no results in
+  HEC-RAS 6.6 and 7.0.1. Existing nonblank modes are preserved.
 - **`HdfSlim` writes lossless slim copies of 2D plan result HDFs.** `plan()`
   reports what a policy keeps and drops, `slim()` writes a copy that keeps only
   the selected per-mesh time series, re-chunked for fast reads and verified
