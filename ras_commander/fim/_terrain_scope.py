@@ -182,6 +182,8 @@ def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
     """Identify the priority-1 source TIFF and level-0 mask of a terrain HDF."""
     import h5py
 
+    from ..fast_hdf import read_attr
+
     terrain_hdf = Path(terrain_hdf).resolve(strict=True)
     with h5py.File(terrain_hdf, "r") as source:
         terrain = source.get("Terrain")
@@ -193,10 +195,12 @@ def top_priority_source(terrain_hdf, rasmap_path=None) -> dict:
         }
         if not records:
             raise FimUnsupportedError(f"{terrain_hdf.name} registers no terrain source rasters")
-        files = {name: _leaf(group.attrs["File"], "source file") for name, group in records.items()}
+        # Attribute values go through the engine router (same values as h5py in
+        # auto mode); membership tests above and the Mask layout below are metadata.
+        files = {name: _leaf(read_attr(group, "File"), "source file") for name, group in records.items()}
         if len(set(files.values())) != len(files):
             raise FimUnsupportedError("terrain sources share a raster file")
-        priorities = {name: group.attrs.get("Priority") for name, group in records.items()}
+        priorities = {name: read_attr(group, "Priority", None) for name, group in records.items()}
         declared = [value for value in priorities.values() if value is not None]
         vrt = terrain_hdf.with_suffix(".vrt")
         vrt_order = _vrt_order(vrt) if vrt.is_file() else None

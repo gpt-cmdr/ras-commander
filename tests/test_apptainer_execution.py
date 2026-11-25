@@ -34,9 +34,33 @@ FIXTURES = Path(__file__).parent / "fixtures" / "apptainer"
 PROFILE = FIXTURES / "site_profile.json"
 EXAMPLE = Path(__file__).parents[1] / "examples" / "site_profiles" / "clb-slurm.example.json"
 SACCT_DONE = "4242|COMPLETED|0:0|00:10:00|node01\n"
-BASH = next((candidate for candidate in (
-    shutil.which("bash"), r"C:\Program Files\Git\bin\bash.exe",
-) if candidate and Path(candidate).is_file()), None)
+def _is_wsl_launcher(candidate):
+    """System32 and WindowsApps ``bash.exe`` start WSL, not a bash that sees Windows paths."""
+    if os.name != "nt":
+        return False
+    path = str(Path(candidate).resolve()).lower()
+    system_root = os.environ.get("SystemRoot", r"C:\Windows").lower()
+    return path.startswith(system_root + "\\") or "\\windowsapps\\" in path
+
+
+def _find_bash():
+    """First bash that is not a WSL launcher: Git for Windows, then every PATH entry.
+
+    ``shutil.which("bash")`` returns only the first PATH match, which on Windows
+    is often the System32 launcher, so each PATH entry is searched on its own.
+    """
+    candidates = [r"C:\Program Files\Git\bin\bash.exe"]
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if entry:
+            candidates.append(shutil.which("bash", path=entry))
+    return next((candidate for candidate in candidates
+                 if candidate and Path(candidate).is_file()
+                 and not _is_wsl_launcher(candidate)), None)
+
+
+# These tests pass Windows paths to bash, so on Windows they need an MSYS
+# bash (Git for Windows); the WSL launcher may have no distribution at all.
+BASH = _find_bash()
 
 
 def _profile_dict():

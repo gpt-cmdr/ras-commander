@@ -19,6 +19,7 @@ accepted TCU, or the backend under test. Nothing is downloaded. Test 3 needs no 
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import pickle
@@ -588,6 +589,12 @@ def _xs_results(plan_hdf: Path) -> Dict[str, np.ndarray]:
 
 class BoundaryBench:
     def __init__(self, root: Path, version: str):
+        # The bench reads the source series on the native backend, whatever
+        # backend the test then writes with. Skip only when the optional package
+        # is absent: an installed wheel that fails to load must fail the bench.
+        if importlib.util.find_spec("ras_commander_fast_dss") is None:
+            pytest.skip("ras-commander-fast-dss is not installed")
+        _backend.import_native()
         self.root, self.version = root, version
         self.project = _extract(version, BOUNDARY_PROJECT, root / "src")
         self.ras = init_ras_project(

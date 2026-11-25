@@ -934,7 +934,14 @@ class HdfResultsMesh:
                         record["status"] = "native_refused"
                         record["reason"] = str(exc)
                     records.append(record)
-        return pd.DataFrame.from_records(records, columns=columns)
+        report = pd.DataFrame.from_records(records, columns=columns)
+        # pandas 3 infers a str dtype for these text columns and turns None into
+        # NaN; keep object dtype with None, as pandas 2 returns.
+        for column in ("id_dim", "reason"):
+            report[column] = pd.Series(
+                [record[column] for record in records], index=report.index, dtype=object
+            )
+        return report
 
     @staticmethod
     def _truncate_profile_line_flow_dataframe(

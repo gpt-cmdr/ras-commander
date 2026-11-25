@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 from scripts.qualification.execution_evidence.fingerprint_contracts import (
@@ -13,6 +14,12 @@ HASH_A = "a" * 64
 HASH_B = "b" * 64
 GIT_HEAD = "c" * 40
 STAMP = "2026-08-28T12:00:00+00:00"
+
+# Wall-clock budget for a real child Python process that must start, import the
+# qualification modules and finish. A cold interpreter can take more than 10 s
+# under ``pytest -n 8`` on Windows; the live supervisor caps its own hello wait
+# at 60 s. Override with RAS_QUALIFICATION_CHILD_TIMEOUT_SECONDS.
+CHILD_TIMEOUT_SECONDS = float(os.environ.get("RAS_QUALIFICATION_CHILD_TIMEOUT_SECONDS", "60"))
 
 
 def file_sha256(path: Path) -> str:

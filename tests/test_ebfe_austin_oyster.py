@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import shutil
+import tempfile
 import zipfile
 
 import h5py
@@ -121,6 +122,32 @@ def fixture_identity(monkeypatch: pytest.MonkeyPatch):
     asset.update(original)
 
 
+@pytest.fixture
+def short_root():
+    """Workspace under the system temp folder rather than pytest's basetemp.
+
+    The organizer enforces the 240-character contract on every active path below
+    its output folder. The deepest output folder here,
+    ``downloads/AustinOyster_12040205``, plus the deepest delivered file leaves
+    104 characters for the root; a deep basetemp (``--basetemp`` or
+    ``pytest-xdist`` worker folders) can exceed that.
+    """
+    root = Path(tempfile.mkdtemp(prefix="ao-"))
+    deepest = root.joinpath(
+        "downloads", "AustinOyster_12040205", "RAS Model", "AustinOyster", "Input",
+        "Projection", "NAD_1983_2011_StatePlane_Texas_South_Central_FIPS_4204_FtUS.prj",
+    )
+    try:
+        if len(str(deepest)) > RasEbfeModels._WINDOWS_PATH_WARNING_LENGTH:
+            pytest.skip(
+                f"temporary folder {root} is too deep for the Austin-Oyster "
+                f"240-character path contract ({len(str(deepest))} characters)"
+            )
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_aliases_and_exact_registry_metadata():
     for alias in ("austin-oyster", "austinoyster", "12040205"):
         assert RasEbfeModels.normalize_model_key(alias) == "austin-oyster"
@@ -165,8 +192,9 @@ def test_aliases_and_exact_registry_metadata():
 
 @pytest.mark.synthetic_hdf_layout
 def test_organizer_exact_contract_repairs_and_reuse(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fixture_identity
+    short_root: Path, monkeypatch: pytest.MonkeyPatch, fixture_identity
 ):
+    tmp_path = short_root
     source = _build_delivery(tmp_path)
     archive = source / "12040205_Models.zip"
     monkeypatch.setitem(fixture_identity, "size_bytes", archive.stat().st_size)
@@ -373,10 +401,11 @@ def test_all_28_path_equivalent_hdf_attributes_are_preserved(tmp_path: Path):
 
 @pytest.mark.synthetic_hdf_layout
 def test_public_dispatchers_organize_and_download_austin_oyster(
-    tmp_path: Path,
+    short_root: Path,
     monkeypatch: pytest.MonkeyPatch,
     fixture_identity,
 ):
+    tmp_path = short_root
     seed = _build_delivery(tmp_path / "seed")
     seed_archive = seed / "12040205_Models.zip"
     monkeypatch.setitem(fixture_identity, "size_bytes", seed_archive.stat().st_size)
