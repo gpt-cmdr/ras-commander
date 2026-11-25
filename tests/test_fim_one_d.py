@@ -12,10 +12,15 @@ from ras_commander.fim import RasFim, FimPreparedOneDModel, FimUnsupportedError
 from ras_commander.fim._one_d import canonical_arrays, normalize_segment, render_ranks, station_m
 
 
+# Upstream to downstream, as HEC-RAS lists cross sections; the results tables repeat them.
+XS_STATIONS = [b"200", b"100"]
+
+
 def inputs():
     attrs = np.zeros(2, dtype=[("River", "S8"), ("Reach", "S8"), ("RS", "S8"), ("Left Bank", "f8"), ("Right Bank", "f8")] +
                      [(side+" Levee "+v, "f8") for side in ("Left", "Right") for v in ("Sta", "Elev")])
-    attrs["River"] = b"Main"
+    # HEC-RAS stores a non-empty River, Reach and RS for every cross section.
+    attrs["River"], attrs["Reach"], attrs["RS"] = b"Main", b"Upper", XS_STATIONS
     attrs["Left Bank"], attrs["Right Bank"] = 20, 80
     for side in ("Left", "Right"):
         attrs[side+" Levee Sta"] = np.nan
@@ -31,23 +36,36 @@ def inputs():
             "Polyline Points": np.array([[0., 100.], [100., 100.], [0., 0.], [100., 0.]])}
 
 
-@pytest.fixture
-def files(tmp_path):
-    hdf = tmp_path / "model.p01.hdf"
-    data = inputs()
+def write_plan(hdf, crs="EPSG:6588"):
+    """Two-cross-section unsteady plan HDF stored the way HEC-RAS stores it.
+
+    Text attributes are fixed-length ASCII (a Python str would be written as
+    variable-length text, which HEC-RAS never writes), and the results carry the
+    output clock (``Time`` in days and ``Time Date Stamp``) beside the series.
+    """
     with h5py.File(hdf, "w") as f:
-        f.attrs["Units System"] = "US Customary"
-        f.attrs["Projection"] = rasterio.crs.CRS.from_epsg(6588).to_wkt()
-        f.create_group("Geometry").attrs["SI Units"] = False
-        for name, value in data.items():
+        f.attrs["Units System"] = np.bytes_("US Customary")
+        f.attrs["Projection"] = np.bytes_(rasterio.crs.CRS.from_user_input(crs).to_wkt())
+        f.create_group("Geometry").attrs["SI Units"] = np.bytes_("False")
+        for name, value in inputs().items():
             base = "Geometry/Cross Section Interpolation Surfaces/" if name.startswith("TIN") or name == "XSIDs" else "Geometry/Cross Sections/"
             f.create_dataset(base+name, data=value)
         base = "Results/Unsteady/Output/Output Blocks/Base Output/"
         result_attrs = np.zeros(2, dtype=[("River", "S8"), ("Reach", "S8"), ("Station", "S8")])
-        result_attrs["River"] = b"Main"
+        result_attrs["River"], result_attrs["Reach"], result_attrs["Station"] = b"Main", b"Upper", XS_STATIONS
+        time = f.create_dataset(base+"Unsteady Time Series/Time", data=[0., 1 / 24])
+        time.attrs["Time"] = np.bytes_("days")
+        f.create_dataset(base+"Unsteady Time Series/Time Date Stamp",
+                         data=np.array([b"01JAN2000 00:00:00", b"01JAN2000 01:00:00"], dtype="S19"))
         f.create_dataset(base+"Unsteady Time Series/Cross Sections/Cross Section Attributes", data=result_attrs)
         f.create_dataset(base+"Summary Output/Cross Sections/Maximum Water Surface", data=[[10., 20.]])
         f.create_dataset(base+"Unsteady Time Series/Cross Sections/Water Surface", data=[[5., 10.], [10., 20.]])
+    return hdf
+
+
+@pytest.fixture
+def files(tmp_path):
+    hdf = write_plan(tmp_path / "model.p01.hdf")
     terrain = tmp_path / "terrain.tif"
     with rasterio.open(terrain, "w", driver="GTiff", width=512, height=512, count=1, dtype="float32",
                        crs="EPSG:6588", transform=from_origin(0, 256, 1, 1), tiled=True, blockxsize=256, blockysize=256) as dst:
@@ -511,7 +529,7 @@ def test_bound_source_crs_prepares_and_preserves_unapplied_binding(files, tmp_pa
         transformation=ToWGS84Transformation(projected.geodetic_crs,
             x_axis_translation=shift, y_axis_translation=2 * shift, z_axis_translation=3 * shift))
     with h5py.File(files[0], "a") as hdf:
-        hdf.attrs["Projection"] = bound.to_wkt()
+        hdf.attrs["Projection"] = np.bytes_(bound.to_wkt())
     source_sha = digest(files[0])
     terrain_sha = digest(files[1])
     prepared = RasFim.prepare_one_d_model(*files, tmp_path / "prepared", profiles={"max": "Max"},
@@ -537,7 +555,7 @@ def test_bound_model_still_refuses_different_terrain_datum_or_units(files, tmp_p
     bound = BoundCRS(source_crs=projected, target_crs=CRS.from_epsg(4326),
         transformation=ToWGS84Transformation(projected.geodetic_crs, x_axis_translation=1))
     with h5py.File(files[0], "a") as hdf:
-        hdf.attrs["Projection"] = bound.to_wkt()
+        hdf.attrs["Projection"] = np.bytes_(bound.to_wkt())
     with rasterio.open(files[1], "r+") as terrain:
         terrain.crs = CRS.from_epsg(datum)
     with pytest.raises(FimUnsupportedError, match="CRS differ"):

@@ -32,6 +32,7 @@ def _add_storage_area(hdf, name="Pond", ring=STORAGE_SQUARE, levels=(1.5, 2.5), 
         group = f.create_group("Geometry/Storage Areas")
         group.create_dataset("Attributes", data=attrs)
         group.create_dataset("Polygon Info", data=np.array([[0, len(ring), 0, 1]], dtype="i4"))
+        group.create_dataset("Polygon Parts", data=np.array([[0, len(ring)]], dtype="i4"))
         group.create_dataset("Polygon Points", data=np.asarray(ring, dtype="f8"))
         series = f.create_dataset(BASE + "Unsteady Time Series/Storage Areas/Water Surface",
                                   data=np.asarray(levels, dtype="f4").reshape(-1, 1))
@@ -249,8 +250,6 @@ def test_storage_series_binds_shared_timestamp_axis(files, monkeypatch):
     prefix = BASE + "Unsteady Time Series/"
     _add_storage_area(files[0])
     with h5py.File(files[0], "a") as handle:
-        handle.create_dataset(prefix + "Time Date Stamp",
-                              data=np.array([b"01JAN2000 00:00:00", b"01JAN2000 01:00:00"]))
         handle.create_dataset(prefix + "2D Flow Areas/m/Water Surface", data=np.ones((2, 2)))
     monkeypatch.setattr(HdfMesh, "get_mesh_area_names", lambda _: ["m"])
     monkeypatch.setattr(HdfResultsMesh, "get_mesh_timeseries",

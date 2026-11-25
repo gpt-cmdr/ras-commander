@@ -53,7 +53,7 @@ def test_non_epsg_crs_refuses_at_preparation(files, tmp_path, monkeypatch):
     crs = CRS.from_proj4("+proj=tmerc +lat_0=29.3 +lon_0=-94.7 +k=0.99971 +x_0=12345 +y_0=9876 +datum=NAD83 +units=us-ft +no_defs")
     assert crs.to_epsg() is None
     with h5py.File(files[0], "a") as source:
-        source.attrs["Projection"] = crs.to_wkt()
+        source.attrs["Projection"] = np.bytes_(crs.to_wkt())
     with rasterio.open(files[1], "r+") as terrain:
         terrain.crs = crs
     monkeypatch.setattr(_coupled, "_stage_mesh", lambda *args: pytest.fail("staged unsupported CRS"))
@@ -74,7 +74,7 @@ def test_bound_model_source_infers_projected_epsg_and_retains_binding(files, tmp
         transformation=ToWGS84Transformation(projected.geodetic_crs,
             x_axis_translation=shift, y_axis_translation=2 * shift, z_axis_translation=3 * shift))
     with h5py.File(files[0], "a") as hdf:
-        hdf.attrs["Projection"] = bound.to_wkt()
+        hdf.attrs["Projection"] = np.bytes_(bound.to_wkt())
     prepared = RasFim.prepare_coupled_model(*files, tmp_path / "prep", allow_unqualified=True)
     receipt = prepared.validate()
     assert receipt["schema"] == "ras-commander-coupled-preparation/1" and receipt["qualified"] is False
@@ -424,7 +424,6 @@ def test_timestamp_axis_identity_and_mismatch(files, monkeypatch, mesh_rows):
     from ras_commander import HdfMesh, HdfResultsMesh
     prefix = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/"
     with h5py.File(files[0], "a") as handle:
-        handle.create_dataset(prefix+"Time Date Stamp", data=np.array([b"01JAN2000 00:00:00", b"01JAN2000 01:00:00"]))
         handle.create_dataset(prefix+"2D Flow Areas/m/Water Surface", data=np.ones((mesh_rows, 2)))
     monkeypatch.setattr(HdfMesh, "get_mesh_area_names", lambda _: ["m"])
     monkeypatch.setattr(HdfResultsMesh, "get_mesh_timeseries", lambda *args, **kwargs: SimpleNamespace(dataset_path=prefix+"2D Flow Areas/m/Water Surface"))
