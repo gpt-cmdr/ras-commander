@@ -14,6 +14,7 @@ from scripts.qualification.execution_evidence.receipts import (
 )
 from scripts.qualification.execution_evidence.snapshots import snapshot_tree
 
+from ._helpers import CHILD_TIMEOUT_SECONDS
 from .offline_helpers import (
     last_json_line,
     make_captured_legacy_project,
@@ -443,14 +444,14 @@ from dataclasses import replace
 from scripts.qualification.execution_evidence import offline_supervisor as supervisor
 from scripts.qualification.execution_evidence.planning import load_run
 
-run_root, mode = sys.argv[1], sys.argv[2]
+run_root, mode, child_timeout = sys.argv[1], sys.argv[2], float(sys.argv[3])
 context = load_run(run_root)
 attempt, request, request_sha = supervisor.create_attempt_request(
     context, lane_id="captured-legacy-41", action="stage"
 )
 if mode == "crash":
     supervisor._worker_command = lambda request, path: [request["python_executable"], "-c", "import os; os._exit(7)"]
-    verified = supervisor.supervise_request(attempt, request, request_sha, timeout_seconds=10)
+    verified = supervisor.supervise_request(attempt, request, request_sha, timeout_seconds=child_timeout)
     print(json.dumps({"terminal": verified.receipt["terminal_category"], "exit": verified.receipt["worker_exit_code"], "refs": verified.receipt["referenced_artifacts"]}))
 elif mode == "timeout":
     supervisor._worker_command = lambda request, path: [request["python_executable"], "-c", "import time; time.sleep(60)"]
@@ -462,7 +463,7 @@ elif mode == "exit_mismatch":
         return replace(original(*args, **kwargs), returncode=7)
     supervisor._run_child = mismatched
     try:
-        supervisor.supervise_request(attempt, request, request_sha, timeout_seconds=30)
+        supervisor.supervise_request(attempt, request, request_sha, timeout_seconds=child_timeout)
     except supervisor.OfflineSupervisorError as exc:
         print(json.dumps({"rejected": True, "detail": str(exc)}))
     else:
@@ -474,12 +475,12 @@ elif mode == "runtime_pin":
         attempt / "request.json", request, replace=True
     )
     verified = supervisor.supervise_request(
-        attempt, request, request_sha, timeout_seconds=30
+        attempt, request, request_sha, timeout_seconds=child_timeout
     )
     print(json.dumps({"terminal": verified.receipt["terminal_category"], "exit": verified.receipt["worker_exit_code"], "stderr": (attempt / "stderr.log").read_text(encoding="utf-8", errors="replace")}))
 '''
     return subprocess.run(
-        [sys.executable, "-c", code, str(run_root), mode],
+        [sys.executable, "-c", code, str(run_root), mode, str(CHILD_TIMEOUT_SECONDS)],
         cwd=runtime_repo,
         env=runtime_environment(runtime_repo),
         check=False,
@@ -487,7 +488,7 @@ elif mode == "runtime_pin":
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=90,
+        timeout=CHILD_TIMEOUT_SECONDS + 60,
     )
 
 

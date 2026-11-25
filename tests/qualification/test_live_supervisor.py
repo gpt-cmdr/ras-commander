@@ -33,7 +33,7 @@ from scripts.qualification.execution_evidence.receipts import (
     write_json_with_digest,
 )
 from scripts.qualification.execution_evidence.snapshots import snapshot_tree
-from ._helpers import GIT_HEAD, HASH_A, valid_table_rows
+from ._helpers import CHILD_TIMEOUT_SECONDS, GIT_HEAD, HASH_A, valid_table_rows
 
 
 pytestmark = pytest.mark.qualification_harness
@@ -1516,7 +1516,7 @@ def test_real_python_subprocess_authorization_accepts_exact_windows_venv_child(
 ) -> None:
     """Exercise the actual venv-launcher topology without HEC-RAS or COM."""
     context = _context(tmp_path)
-    context.manifest["defaults"]["termination_grace_seconds"] = 10
+    context.manifest["defaults"]["termination_grace_seconds"] = CHILD_TIMEOUT_SECONDS
     host_lock = ExclusiveQualificationLock(
         tmp_path / "locks" / "real-engine.lock",
         kind="real_engine",
@@ -1580,10 +1580,10 @@ def test_real_python_subprocess_authorization_accepts_exact_windows_venv_child(
             intent_sha256,
             expected_command=command,
         )
-        stdout, stderr = process.communicate(timeout=10)
+        stdout, stderr = process.communicate(timeout=CHILD_TIMEOUT_SECONDS)
     finally:
         if process.poll() is None:
-            process.wait(timeout=12)
+            process.wait(timeout=CHILD_TIMEOUT_SECONDS)
         host_lock.release()
 
     assert process.returncode == 0, (stdout, stderr)
@@ -1600,7 +1600,7 @@ def test_real_cancel_subprocess_requires_parent_authorization_before_action(
     tmp_path: Path,
 ) -> None:
     context = _context(tmp_path)
-    context.manifest["defaults"]["termination_grace_seconds"] = 10
+    context.manifest["defaults"]["termination_grace_seconds"] = CHILD_TIMEOUT_SECONDS
     host_lock = ExclusiveQualificationLock(
         tmp_path / "locks" / "real-engine.lock",
         kind="real_engine",
@@ -1674,10 +1674,10 @@ def test_real_cancel_subprocess_requires_parent_authorization_before_action(
             binding_sha256,
             command,
         )
-        stdout, stderr = process.communicate(timeout=10)
+        stdout, stderr = process.communicate(timeout=CHILD_TIMEOUT_SECONDS)
     finally:
         if process.poll() is None:
-            process.wait(timeout=12)
+            process.wait(timeout=CHILD_TIMEOUT_SECONDS)
         host_lock.release()
 
     assert process.returncode == 0, (stdout, stderr)

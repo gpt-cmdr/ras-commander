@@ -43,11 +43,24 @@ def _is_wsl_launcher(candidate):
     return path.startswith(system_root + "\\") or "\\windowsapps\\" in path
 
 
+def _find_bash():
+    """First bash that is not a WSL launcher: Git for Windows, then every PATH entry.
+
+    ``shutil.which("bash")`` returns only the first PATH match, which on Windows
+    is often the System32 launcher, so each PATH entry is searched on its own.
+    """
+    candidates = [r"C:\Program Files\Git\bin\bash.exe"]
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if entry:
+            candidates.append(shutil.which("bash", path=entry))
+    return next((candidate for candidate in candidates
+                 if candidate and Path(candidate).is_file()
+                 and not _is_wsl_launcher(candidate)), None)
+
+
 # These tests pass Windows paths to bash, so on Windows they need an MSYS
 # bash (Git for Windows); the WSL launcher may have no distribution at all.
-BASH = next((candidate for candidate in (
-    r"C:\Program Files\Git\bin\bash.exe", shutil.which("bash"),
-) if candidate and Path(candidate).is_file() and not _is_wsl_launcher(candidate)), None)
+BASH = _find_bash()
 
 
 def _profile_dict():

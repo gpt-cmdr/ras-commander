@@ -254,6 +254,8 @@ def test_availability_report_matches_reader_qualification(source):
         "mesh_name", "variable", "dataset_path", "shape", "rows",
         "time_rows", "stored_bytes", "id_dim", "status", "reason",
     ]
+    # Object dtype with None on pandas 2 and 3 alike (pandas 3 would infer str and NaN).
+    assert report["id_dim"].dtype == object and report["reason"].dtype == object
     rows = report.set_index("variable")
     assert "Boundary Conditions" not in rows.index
     assert rows.loc["Depth", ["status", "id_dim"]].tolist() == ["available", "cell_id"]
