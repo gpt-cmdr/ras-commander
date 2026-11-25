@@ -259,6 +259,7 @@ def test_availability_report_matches_reader_qualification(source):
     rows = report.set_index("variable")
     assert "Boundary Conditions" not in rows.index
     assert rows.loc["Depth", ["status", "id_dim"]].tolist() == ["available", "cell_id"]
+    assert rows.loc["Depth", "reason"] is None
     assert rows.loc["Face Velocity", ["status", "id_dim"]].tolist() == ["available", "face_id"]
     assert rows.loc["Time Step", ["status", "id_dim"]].tolist() == ["available", "time"]
     wind = rows.loc["Face Wind Term"]
