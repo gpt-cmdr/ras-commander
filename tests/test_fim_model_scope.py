@@ -93,7 +93,8 @@ def test_text_evidence_cannot_bypass_mixed_guard(tmp_path, declaration):
     geometry = tmp_path / 'model.g01'
     geometry.write_text('Geom Title=Scope\n' + declaration + '\n', encoding='utf-8')
     with h5py.File(path, 'a') as source:
-        source.require_group('Plan Data/Plan Information').attrs['Geometry Filename'] = geometry.name
+        # Fixed-length ASCII, as HEC-RAS stores it (a str would write variable-length text).
+        source.require_group('Plan Data/Plan Information').attrs['Geometry Filename'] = np.bytes_(geometry.name)
     scope = RasFim.inspect_model_scope(path)
     assert scope.dimension == 'mixed_1d_2d' and scope.cross_section_count == 0
     assert scope.geometry_path == geometry.resolve()

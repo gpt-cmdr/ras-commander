@@ -79,6 +79,10 @@ def test_negative_invalid_and_invalid_holes_remain_refused(tmp_path):
 
 
 @pytest.mark.parametrize('kind', ['nonfinite', 'empty', 'range', 'too_short_closed', 'part_range'])
+# 'range' and 'part_range' store Polygon Info offsets outside the point and part
+# arrays on purpose. HEC-RAS never writes that, and in required mode the engine
+# reports it as corrupt (FastHdfError) before the FIM reader can refuse it.
+@pytest.mark.synthetic_hdf_layout('range', 'part_range')
 def test_structural_admission_remains(tmp_path, kind):
     ring = list(BOWTIE)
     info = None

@@ -241,23 +241,9 @@ def test_real_engine_round_trips_an_esri_terrain(tmp_path, untagged):
 
 
 def _one_d_files(tmp_path, crs):
-    from test_fim_one_d import inputs
+    from test_fim_one_d import write_plan
 
-    hdf = tmp_path / "model.p01.hdf"
-    with h5py.File(hdf, "w") as f:
-        f.attrs["Units System"] = "US Customary"
-        f.attrs["Projection"] = rasterio.crs.CRS.from_user_input(crs).to_wkt()
-        f.create_group("Geometry").attrs["SI Units"] = False
-        for name, value in inputs().items():
-            base = ("Geometry/Cross Section Interpolation Surfaces/"
-                    if name.startswith("TIN") or name == "XSIDs" else "Geometry/Cross Sections/")
-            f.create_dataset(base + name, data=value)
-        base = "Results/Unsteady/Output/Output Blocks/Base Output/"
-        attrs = np.zeros(2, dtype=[("River", "S8"), ("Reach", "S8"), ("Station", "S8")])
-        attrs["River"] = b"Main"
-        f.create_dataset(base + "Unsteady Time Series/Cross Sections/Cross Section Attributes", data=attrs)
-        f.create_dataset(base + "Summary Output/Cross Sections/Maximum Water Surface", data=[[10., 20.]])
-        f.create_dataset(base + "Unsteady Time Series/Cross Sections/Water Surface", data=[[5., 10.], [10., 20.]])
+    hdf = write_plan(tmp_path / "model.p01.hdf", crs)
     terrain = tmp_path / "terrain.tif"
     with rasterio.open(terrain, "w", driver="GTiff", width=512, height=512, count=1, dtype="float32",
                        crs=crs, transform=from_origin(0, 256, 1, 1), tiled=True, blockxsize=256,
