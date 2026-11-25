@@ -588,6 +588,12 @@ def _xs_results(plan_hdf: Path) -> Dict[str, np.ndarray]:
 
 class BoundaryBench:
     def __init__(self, root: Path, version: str):
+        # The bench reads the source series on the native backend, whatever
+        # backend the test then writes with.
+        try:
+            _backend.import_native()
+        except ImportError as exc:
+            pytest.skip(f"ras-commander-fast-dss is not installed: {exc}")
         self.root, self.version = root, version
         self.project = _extract(version, BOUNDARY_PROJECT, root / "src")
         self.ras = init_ras_project(
