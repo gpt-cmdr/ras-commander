@@ -10,6 +10,7 @@ execution occurs here.
 
 import json
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,12 @@ from ras_commander.fim import RasFim, _engine, _horizontal, _storage_areas  # no
 from ras_commander.fim.errors import FimEngineError, FimUnsupportedError  # noqa: E402
 
 BASE = "Results/Unsteady/Output/Output Blocks/Base Output"
+
+
+def _ras_stamp(moment):
+    """HEC-RAS ``Time Date Stamp`` text (``01JAN2000 00:00:00``), independent of locale."""
+    month = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()[moment.month - 1]
+    return f"{moment.day:02d}{month}{moment.year} {moment:%H:%M:%S}".encode()
 
 
 def _plan(path, areas, series=None, maximum=None, swap_columns=False, names=None):
@@ -49,8 +56,10 @@ def _plan(path, areas, series=None, maximum=None, swap_columns=False, names=None
             clock = f.create_group(f"{BASE}/Unsteady Time Series")
             time = clock.create_dataset("Time", data=np.arange(len(series), dtype=np.float64) / 24)
             time.attrs["Time"] = np.bytes_("days")
+            start = datetime(2000, 1, 1)
             clock.create_dataset("Time Date Stamp", data=np.array(
-                [f"01JAN2000 {hour:02d}:00:00".encode() for hour in range(len(series))], dtype="S19"))
+                [_ras_stamp(start + timedelta(hours=hour)) for hour in range(len(series))],
+                dtype="S19"))
             ts = clock.create_group("Storage Areas")
             stored = series[:, ::-1] if swap_columns else series
             ts.create_dataset("Water Surface", data=stored)

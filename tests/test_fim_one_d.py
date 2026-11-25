@@ -17,7 +17,7 @@ XS_STATIONS = [b"200", b"100"]
 
 
 def inputs():
-    attrs = np.zeros(2, dtype=[("River", "S8"), ("Reach", "S8"), ("RS", "S8"), ("Left Bank", "f8"), ("Right Bank", "f8")] +
+    attrs = np.zeros(2, dtype=[("River", "S16"), ("Reach", "S16"), ("RS", "S8"), ("Left Bank", "f8"), ("Right Bank", "f8")] +
                      [(side+" Levee "+v, "f8") for side in ("Left", "Right") for v in ("Sta", "Elev")])
     # HEC-RAS stores a non-empty River, Reach and RS for every cross section.
     attrs["River"], attrs["Reach"], attrs["RS"] = b"Main", b"Upper", XS_STATIONS
@@ -51,7 +51,8 @@ def write_plan(hdf, crs="EPSG:6588"):
             base = "Geometry/Cross Section Interpolation Surfaces/" if name.startswith("TIN") or name == "XSIDs" else "Geometry/Cross Sections/"
             f.create_dataset(base+name, data=value)
         base = "Results/Unsteady/Output/Output Blocks/Base Output/"
-        result_attrs = np.zeros(2, dtype=[("River", "S8"), ("Reach", "S8"), ("Station", "S8")])
+        # Field widths as HEC-RAS writes them: River and Reach |S16, RS/Station |S8.
+        result_attrs = np.zeros(2, dtype=[("River", "S16"), ("Reach", "S16"), ("Station", "S8")])
         result_attrs["River"], result_attrs["Reach"], result_attrs["Station"] = b"Main", b"Upper", XS_STATIONS
         time = f.create_dataset(base+"Unsteady Time Series/Time", data=[0., 1 / 24])
         time.attrs["Time"] = np.bytes_("days")
