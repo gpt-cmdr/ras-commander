@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`compute_plan()` fails fast on HEC-RAS blocking error forms.** HEC-RAS 6.x
+  reports fatal unsteady-flow input errors, such as a missing boundary DSS file,
+  in a VB6 form ("The following errors were found preparing unsteady flow data
+  for simulation:") rather than a Win32 message box, and Ras.exe does not
+  continue after the form is closed. The dialog watchdog now reads these forms
+  for the run's own process tree, closes them, and `compute_plan()` cancels the
+  plan and returns a failure with `failure_type="RasBlockingDialogError"` and the
+  form text in `execution_details["blocking_dialogs"]`. Before this change the
+  run waited until `max_runtime` (or indefinitely). The classifier is
+  `ras_commander.RasDialogWatchdog.classify_ras_dialog()`.
 - **Constant precipitation now runs on unsteady files without meteorology
   records.** `RasUnsteady.set_constant_precipitation()` and
   `set_met_precipitation_mode("Constant")` complete absent or blank

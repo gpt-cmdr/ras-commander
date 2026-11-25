@@ -75,6 +75,97 @@ _STRICT_STOP_TIMEOUT_SECONDS = 5.0
 _SMTO_BLOCK = 0x0001
 _SMTO_ABORTIFHUNG = 0x0002
 
+# HEC-RAS 6.x Ras.exe is a Visual Basic 6 program. Its own error reports are
+# VB6 forms (``ThunderRT6FormDC``), not Win32 ``#32770`` message boxes, and
+# their controls use ``ThunderRT6*`` classes. Dismissing one with Close does not
+# let the run continue: Ras.exe stays alive until it is stopped.
+_VB6_FORM_CLASS_PREFIXES = ("thunderrt6form", "thunderform")
+_VB6_BUTTON_CLASSES = frozenset({"thunderrt6commandbutton", "thundercommandbutton"})
+_TEXT_CONTROL_CLASSES = frozenset(
+    {
+        "static",
+        "edit",
+        "listbox",
+        "thunderrt6textbox",
+        "thundertextbox",
+        "thunderrt6listbox",
+        "thunderlistbox",
+    }
+)
+_LISTBOX_CLASSES = frozenset({"listbox", "thunderrt6listbox", "thunderlistbox"})
+_VB6_DISMISS_LABELS = ("close", "ok")
+# Buttons that identify a progress or interactive form rather than an error
+# report. A form exposing any of these is never treated as a blocking error.
+_VB6_NON_ERROR_BUTTONS = frozenset({"pause", "stop", "cancel", "compute", "abort"})
+# Known non-error Ras.exe forms whose titles could otherwise match generically.
+_VB6_NON_ERROR_TITLES = frozenset({"hec-ras computations", "loading file", "ras"})
+# Reviewed HEC-RAS blocking error forms: (classification, title/body phrase).
+_KNOWN_BLOCKING_ERROR_PHRASES = (
+    (
+        "unsteady_flow_preparation_error",
+        "errors were found preparing unsteady flow data",
+    ),
+)
+_GENERIC_ERROR_PATTERN = re.compile(r"\berrors?\b")
+_MAX_DIALOG_TEXT_ITEMS = 100
+_MAX_DIALOG_TEXT_CHARS = 4000
+_LB_GETCOUNT = 0x018B
+_LB_GETTEXT = 0x0189
+_LB_GETTEXTLEN = 0x018A
+_WM_GETTEXT = 0x000D
+_BM_CLICK = 0x00F5
+
+
+class RasBlockingDialogError(RuntimeError):
+    """A HEC-RAS process showed an error dialog that blocks the run."""
+
+
+def _is_vb6_form_class(window_class: str) -> bool:
+    return str(window_class or "").casefold().startswith(_VB6_FORM_CLASS_PREFIXES)
+
+
+def classify_ras_dialog(
+    window_class: str,
+    title: str,
+    body: str = "",
+    button_labels=(),
+) -> Optional[str]:
+    """Classify a top-level HEC-RAS window as a blocking error dialog.
+
+    Args:
+        window_class: Win32 class name of the top-level window.
+        title: Window caption.
+        body: Text read from the window's static, text, and list controls.
+        button_labels: Captions of the window's buttons.
+
+    Returns:
+        ``"unsteady_flow_preparation_error"`` or another reviewed phrase
+        classification for known HEC-RAS error forms, ``"blocking_error"`` for
+        other VB6 error forms that offer only a Close/OK style dismissal, or
+        ``None`` when the window is not a blocking error form. Win32
+        ``#32770`` message boxes return ``None``; :class:`DialogWatchdog`
+        keeps dismissing those so the run can continue.
+    """
+    if not _is_vb6_form_class(window_class):
+        return None
+    normalized_title = " ".join(str(title or "").split()).casefold()
+    normalized_body = " ".join(str(body or "").split()).casefold()
+    labels = {
+        str(label).replace("&", "").strip().casefold() for label in button_labels
+    }
+    if labels & _VB6_NON_ERROR_BUTTONS:
+        return None
+    for classification, phrase in _KNOWN_BLOCKING_ERROR_PHRASES:
+        if phrase in normalized_title or phrase in normalized_body:
+            return classification
+    if normalized_title in _VB6_NON_ERROR_TITLES:
+        return None
+    if not labels.intersection(_VB6_DISMISS_LABELS):
+        return None
+    if _GENERIC_ERROR_PATTERN.search(normalized_title):
+        return "blocking_error"
+    return None
+
 
 def _safe_wall_time() -> float:
     """Return a finite timestamp suitable for strict JSON serialization."""
@@ -738,20 +829,59 @@ class _ExactDialogObserver:
 class DismissedDialog:
     """Record of a single dismissed dialog."""
 
-    __slots__ = ("pid", "process_name", "title", "body", "button", "timestamp")
+    __slots__ = (
+        "pid",
+        "process_name",
+        "title",
+        "body",
+        "button",
+        "timestamp",
+        "window_class",
+        "classification",
+    )
 
-    def __init__(self, pid: int, process_name: str, title: str, body: str, button: str):
+    def __init__(
+        self,
+        pid: int,
+        process_name: str,
+        title: str,
+        body: str,
+        button: str,
+        window_class: str = _DIALOG_CLASS,
+        classification: Optional[str] = None,
+    ):
         self.pid = pid
         self.process_name = process_name
         self.title = title
         self.body = body
         self.button = button
         self.timestamp = time.time()
+        self.window_class = window_class
+        self.classification = classification
+
+    @property
+    def is_blocking_error(self) -> bool:
+        """True when dismissing this dialog does not let the run continue."""
+        return self.classification is not None
+
+    def to_dict(self) -> dict:
+        """Return a JSON-safe record for execution diagnostics."""
+        return {
+            "pid": int(self.pid),
+            "process_name": str(self.process_name),
+            "window_class": str(self.window_class),
+            "classification": self.classification,
+            "title": str(self.title),
+            "body": str(self.body),
+            "button": str(self.button),
+            "timestamp": float(self.timestamp),
+        }
 
     def __repr__(self) -> str:
         return (
             f"DismissedDialog(pid={self.pid}, process={self.process_name!r}, "
-            f"title={self.title!r}, button={self.button!r})"
+            f"title={self.title!r}, button={self.button!r}, "
+            f"classification={self.classification!r})"
         )
 
 
@@ -784,6 +914,7 @@ class DialogWatchdog:
         self._dismissed: List[DismissedDialog] = []
         self._lock = threading.Lock()
         self._seen_hwnds: Set[int] = set()
+        self._seen_forms: Set[tuple] = set()
         self._psutil_unavailable_logged = False
         self._psutil_failure_logged = False
 
@@ -858,6 +989,21 @@ class DialogWatchdog:
         with self._lock:
             return list(self._dismissed)
 
+    def blocking_errors(self, pids: Optional[Set[int]] = None) -> List[DismissedDialog]:
+        """Return blocking error dialogs seen so far, optionally for given PIDs.
+
+        A blocking error dialog is a HEC-RAS error form (for example the
+        HEC-RAS 6.x "errors were found preparing unsteady flow data" form)
+        after which Ras.exe does not continue, even once the form is closed.
+        Only processes registered with :meth:`add_pid`, and their child
+        processes, are inspected for these forms.
+        """
+        records = [record for record in self.dismissed if record.is_blocking_error]
+        if pids is None:
+            return records
+        wanted = {int(pid) for pid in pids}
+        return [record for record in records if int(record.pid) in wanted]
+
     def summary(self) -> str:
         records = self.dismissed
         if not records:
@@ -907,22 +1053,44 @@ class DialogWatchdog:
                 logger.debug("DialogWatchdog scan error: %s", exc)
             self._stop.wait(self._poll_interval)
 
+    def _collect_tracked_pids(self) -> Set[int]:
+        """Return explicitly registered PIDs and their descendant processes.
+
+        VB6 error forms are inspected only for these processes, never for
+        auto-discovered Ras.exe instances belonging to other runs.
+        """
+        with self._lock:
+            tracked = set(self._pids)
+        if not _PSUTIL:
+            return tracked
+        for pid in list(tracked):
+            try:
+                for child in psutil.Process(pid).children(recursive=True):
+                    tracked.add(child.pid)
+            except Exception:
+                pass
+        return tracked
+
     def _scan_and_dismiss(self) -> None:
         ras_pids = self._collect_ras_pids()
-        if not ras_pids:
+        tracked_pids = self._collect_tracked_pids()
+        if not ras_pids and not tracked_pids:
             return
 
         dialogs: List[tuple] = []
+        forms: List[tuple] = []
 
         def _enum_cb(hwnd, _):
             try:
                 if not win32gui.IsWindowVisible(hwnd):
                     return True
-                if win32gui.GetClassName(hwnd) != _DIALOG_CLASS:
-                    return True
+                window_class = win32gui.GetClassName(hwnd)
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                if pid in ras_pids:
-                    dialogs.append((hwnd, pid))
+                if window_class == _DIALOG_CLASS:
+                    if pid in ras_pids:
+                        dialogs.append((hwnd, pid))
+                elif pid in tracked_pids and _is_vb6_form_class(window_class):
+                    forms.append((hwnd, pid, window_class))
             except Exception:
                 pass
             return True
@@ -934,6 +1102,160 @@ class DialogWatchdog:
                 continue
             self._seen_hwnds.add(hwnd)
             self._dismiss(hwnd, pid)
+
+        for hwnd, pid, window_class in forms:
+            self._inspect_vb6_form(hwnd, pid, window_class)
+
+    @staticmethod
+    def _send_message_timeout(hwnd, message, wparam, lparam, timeout_ms=1000):
+        """Send a message without hanging on an unresponsive window."""
+        import ctypes
+
+        result = ctypes.c_size_t()
+        ok = ctypes.windll.user32.SendMessageTimeoutW(
+            hwnd,
+            message,
+            wparam,
+            lparam,
+            _SMTO_ABORTIFHUNG,
+            timeout_ms,
+            ctypes.byref(result),
+        )
+        if not ok:
+            raise TimeoutError(f"SendMessageTimeout failed for hwnd {hwnd}")
+        return result.value
+
+    def _control_text(self, hwnd, control_class: str) -> List[str]:
+        """Read text from a static, edit, or list control in another process."""
+        import ctypes
+
+        texts: List[str] = []
+        if control_class.casefold() in _LISTBOX_CLASSES:
+            count = self._send_message_timeout(hwnd, _LB_GETCOUNT, 0, 0)
+            for index in range(min(int(count), _MAX_DIALOG_TEXT_ITEMS)):
+                length = self._send_message_timeout(hwnd, _LB_GETTEXTLEN, index, 0)
+                if length <= 0 or length > _MAX_DIALOG_TEXT_CHARS:
+                    continue
+                buffer = ctypes.create_unicode_buffer(int(length) + 1)
+                self._send_message_timeout(hwnd, _LB_GETTEXT, index, buffer)
+                if buffer.value.strip():
+                    texts.append(buffer.value.strip())
+            return texts
+        buffer = ctypes.create_unicode_buffer(_MAX_DIALOG_TEXT_CHARS)
+        self._send_message_timeout(hwnd, _WM_GETTEXT, _MAX_DIALOG_TEXT_CHARS, buffer)
+        if buffer.value.strip():
+            texts.append(buffer.value.strip())
+        return texts
+
+    def _read_form(self, hwnd) -> tuple:
+        """Return ``(body, buttons)`` for a VB6 form."""
+        body_parts: List[str] = []
+        buttons: List[tuple] = []
+        children: List[tuple] = []
+
+        def _child_cb(child, _):
+            try:
+                children.append((child, win32gui.GetClassName(child)))
+            except Exception:
+                pass
+            return True
+
+        try:
+            win32gui.EnumChildWindows(hwnd, _child_cb, None)
+        except Exception:
+            pass
+        for child, child_class in children:
+            normalized_class = child_class.casefold()
+            try:
+                if normalized_class in _VB6_BUTTON_CLASSES or normalized_class == "button":
+                    text = win32gui.GetWindowText(child)
+                    if text:
+                        buttons.append((child, text))
+                elif normalized_class in _TEXT_CONTROL_CLASSES:
+                    body_parts.extend(self._control_text(child, child_class))
+            except Exception:
+                continue
+        return " | ".join(body_parts)[:_MAX_DIALOG_TEXT_CHARS], buttons
+
+    def _inspect_vb6_form(self, hwnd: int, pid: int, window_class: str) -> None:
+        """Record and dismiss a blocking HEC-RAS VB6 error form."""
+        try:
+            title = win32gui.GetWindowText(hwnd)
+            key = (hwnd, title)
+            if key in self._seen_forms:
+                return
+            self._seen_forms.add(key)
+            # Check buttons first so progress and interactive forms (Pause,
+            # Cancel, ...) are never read in depth or clicked.
+            labels = {
+                label.replace("&", "").strip().casefold()
+                for _, label in self._read_form_buttons(hwnd)
+            }
+            if labels & _VB6_NON_ERROR_BUTTONS or not labels & set(_VB6_DISMISS_LABELS):
+                return
+            body, buttons = self._read_form(hwnd)
+            if not body:
+                # The form can be shown before its list is filled.
+                time.sleep(0.3)
+                body, buttons = self._read_form(hwnd)
+            labels = [label for _, label in buttons]
+            classification = classify_ras_dialog(window_class, title, body, labels)
+            if classification is None:
+                return
+            pname = self._process_name(pid)
+            button_hwnd = None
+            button_text = "none"
+            for wanted in _VB6_DISMISS_LABELS:
+                for candidate_hwnd, candidate_text in buttons:
+                    if candidate_text.replace("&", "").strip().casefold() == wanted:
+                        button_hwnd, button_text = candidate_hwnd, candidate_text
+                        break
+                if button_hwnd:
+                    break
+            logger.error(
+                "DialogWatchdog: HEC-RAS blocking error dialog — process=%s "
+                "PID=%d title=%r body=%r",
+                pname, pid, title, body,
+            )
+            if button_hwnd:
+                try:
+                    self._send_message_timeout(button_hwnd, _BM_CLICK, 0, 0)
+                except Exception as exc:
+                    logger.debug("DialogWatchdog: could not click %r: %s", button_text, exc)
+                    button_text = f"{button_text} (click failed)"
+            record = DismissedDialog(
+                pid,
+                pname,
+                title,
+                body,
+                button_text,
+                window_class=window_class,
+                classification=classification,
+            )
+            with self._lock:
+                self._dismissed.append(record)
+        except Exception as exc:
+            logger.debug("DialogWatchdog: failed to inspect form hwnd %s: %s", hwnd, exc)
+
+    def _read_form_buttons(self, hwnd) -> List[tuple]:
+        buttons: List[tuple] = []
+
+        def _child_cb(child, _):
+            try:
+                child_class = win32gui.GetClassName(child).casefold()
+                if child_class in _VB6_BUTTON_CLASSES or child_class == "button":
+                    text = win32gui.GetWindowText(child)
+                    if text:
+                        buttons.append((child, text))
+            except Exception:
+                pass
+            return True
+
+        try:
+            win32gui.EnumChildWindows(hwnd, _child_cb, None)
+        except Exception:
+            pass
+        return buttons
 
     def _read_body(self, hwnd) -> str:
         texts: List[str] = []
