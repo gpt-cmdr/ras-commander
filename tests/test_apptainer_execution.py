@@ -34,9 +34,20 @@ FIXTURES = Path(__file__).parent / "fixtures" / "apptainer"
 PROFILE = FIXTURES / "site_profile.json"
 EXAMPLE = Path(__file__).parents[1] / "examples" / "site_profiles" / "clb-slurm.example.json"
 SACCT_DONE = "4242|COMPLETED|0:0|00:10:00|node01\n"
+def _is_wsl_launcher(candidate):
+    """System32 and WindowsApps ``bash.exe`` start WSL, not a bash that sees Windows paths."""
+    if os.name != "nt":
+        return False
+    path = str(Path(candidate).resolve()).lower()
+    system_root = os.environ.get("SystemRoot", r"C:\Windows").lower()
+    return path.startswith(system_root + "\\") or "\\windowsapps\\" in path
+
+
+# These tests pass Windows paths to bash, so on Windows they need an MSYS
+# bash (Git for Windows); the WSL launcher may have no distribution at all.
 BASH = next((candidate for candidate in (
-    shutil.which("bash"), r"C:\Program Files\Git\bin\bash.exe",
-) if candidate and Path(candidate).is_file()), None)
+    r"C:\Program Files\Git\bin\bash.exe", shutil.which("bash"),
+) if candidate and Path(candidate).is_file() and not _is_wsl_launcher(candidate)), None)
 
 
 def _profile_dict():

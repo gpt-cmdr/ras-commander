@@ -52,8 +52,8 @@ def test_terrain_modification_analysis_notebook_commits_fresh_evidence():
         cell for cell in notebook["cells"] if cell.get("cell_type") == "code"
     ]
 
-    assert len(code_cells) == 10
-    assert [cell.get("execution_count") for cell in code_cells] == list(range(1, 11))
+    assert len(code_cells) == 11
+    assert [cell.get("execution_count") for cell in code_cells] == list(range(1, 12))
     assert all("execution" in cell.get("metadata", {}) for cell in code_cells)
     assert all(
         output.get("output_type") != "error"
@@ -72,11 +72,12 @@ def test_terrain_modification_analysis_notebook_commits_fresh_evidence():
 
     output_text = _output_text(notebook)
     for evidence in (
-        "Project: run\\example_projects\\BaldEagleCrkMulti2D_930_terrainmod",
+        # Evidence of the 2026-11-11 design-grade channel re-run (2f899946b).
+        "Proposed copy: run\\example_projects\\BaldEagleCrkMulti2D_930_terrainmod",
         "Modification: River Channel",
-        "Alignment: 100 points",
-        "Profile: 2961 points sampled",
-        "Volume-elevation: 42 points",
+        "Alignment: 99 points",
+        "Raised anywhere: False",
+        "Existing curve: 42 points",
     ):
         assert evidence in output_text
 

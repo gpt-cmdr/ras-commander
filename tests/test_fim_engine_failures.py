@@ -17,7 +17,10 @@ from test_fim_coupled import (  # Existing format/staging fixtures, no vendor ru
 )
 
 
-@pytest.mark.parametrize("suffix", ["plain text"*900, "🙂"*5000, "é🙂漢"*2500])
+# Explicit ids: pytest puts the node id in PYTEST_CURRENT_TEST, and the escaped
+# multi-byte values (~50,000 characters) exceed the Windows environment limit.
+@pytest.mark.parametrize("suffix", ["plain text"*900, "🙂"*5000, "é🙂漢"*2500],
+                         ids=["ascii", "astral", "mixed"])
 def test_stderr_tail_read_is_bounded_and_keeps_last_decoded_characters(suffix):
     reads=[]
     class BoundedLog(io.BytesIO):
