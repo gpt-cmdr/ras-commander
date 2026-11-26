@@ -896,6 +896,7 @@ def validate(
         return changed, ["geometry HDF"], evidence
     if hdf_path.stat().st_mtime < started - 2:
         missing.append("geometry HDF not freshly written")
+    projection_cleared: list[str] = []
     with h5py.File(hdf_path, "r") as hdf:
         for path, digest in expected["inputs"].items():
             same = path in hdf and (
@@ -907,6 +908,17 @@ def validate(
                 changed.append(path)
         for key, digest in expected["attributes"].items():
             path, name = key.rsplit("@", 1)
+            if name == "Projection" and (
+                path not in hdf or name not in hdf[path].attrs
+            ):
+                # HEC-RAS derives Projection attributes from the project's
+                # projection when it preprocesses. HEC-RAS 7.0.1 removes the
+                # attribute when that projection is unavailable, for example
+                # when the .rasmap names a missing .prj. A removed attribute is
+                # HEC-owned output, not an authored input change. A remaining
+                # attribute must still describe the same CRS (checked below).
+                projection_cleared.append(key)
+                continue
             if (
                 path not in hdf
                 or name not in hdf[path].attrs
@@ -1284,5 +1296,9 @@ def validate(
                 )
     if expected["areas"]:
         changed.extend(_mesh_hdf_consistency_issues(geometry_path, hdf_path))
-    evidence.update(inputs_preserved=not changed, products_complete=not missing)
+    evidence.update(
+        inputs_preserved=not changed,
+        products_complete=not missing,
+        projection_attributes_cleared=sorted(projection_cleared),
+    )
     return sorted(set(changed)), sorted(set(missing)), evidence
