@@ -294,3 +294,7 @@ A skills-only plugin grants no Python/runtime/project access and does not enforc
 PyPI discovery automation proposes review PRs, not unattended installs or publication.
 Repository writing standards govern repository content and contributions only, including packaged
 instructions; they do not govern external user deliverables produced with these workflows.
+
+## CI efficiency purpose and goals
+
+See [.github/CI-EFFICIENCY.md](.github/CI-EFFICIENCY.md) for the owner-requested CI efficiency work: remove redundant setup and irrelevant executions, shorten feedback, and release burst capacity to engineering. Preserve required behavioral, native-platform and release checks; uncertain selection runs broad validation. Record timing/cache evidence rather than claiming savings from job count alone. This note documents the authorized CI change, not new authority to change runner profiles, credentials or engineering acceptance.
