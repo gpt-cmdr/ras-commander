@@ -198,12 +198,15 @@ class GeomStorage:
     _BOOLEAN_KEYWORDS = {
         '2D Multiple Face Mann n': 'spatially_varied_mann_on_faces',
         '2D Composite LC': 'composite_classification',
+        # HEC-RAS 7.x: keep the stored mesh instead of rebuilding it from seed points.
+        '2D Locked': 'locked',
     }
 
     _DEFAULT_2D_SETTINGS = {
         'mannings_n': 0.04,
         'spatially_varied_mann_on_faces': False,
         'composite_classification': False,
+        'locked': False,
         'cell_vol_tol': 0.01,
         'cell_min_area_fraction': 0.01,
         'face_profile_tol': 0.01,
@@ -1562,6 +1565,7 @@ class GeomStorage:
             'mannings_n',
             'spatially_varied_mann_on_faces',
             'composite_classification',
+            'locked',
             'cell_vol_tol',
             'cell_min_area_fraction',
             'face_profile_tol',
@@ -1819,6 +1823,7 @@ class GeomStorage:
         flow_area_name: str,
         spatially_varied_mann_on_faces: Optional[bool] = None,
         composite_classification: Optional[bool] = None,
+        locked: Optional[bool] = None,
         mannings_n: Optional[float] = None,
         cell_vol_tol: Optional[float] = None,
         cell_min_area_fraction: Optional[float] = None,
@@ -1830,7 +1835,14 @@ class GeomStorage:
         point_generation_data: Optional[Union[str, Sequence[Optional[float]]]] = None,
         create_backup: bool = True,
     ) -> Path:
-        """Update 2D flow area text settings without making HDF the edit target."""
+        """Update 2D flow area text settings without making HDF the edit target.
+
+        ``locked`` writes (True) or removes (False) the HEC-RAS 7.x
+        ``2D Locked=-1`` key. HEC-RAS 7.0.1 rebuilds an unlocked 2D mesh from its
+        seed points on every geometry preprocess; a locked area keeps the mesh
+        stored in the geometry HDF, which must then contain a complete mesh group
+        whose ``Attributes`` row also has ``Locked`` set.
+        """
         geom_file = Path(geom_file)
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
@@ -1840,6 +1852,7 @@ class GeomStorage:
         updates = {
             'spatially_varied_mann_on_faces': spatially_varied_mann_on_faces,
             'composite_classification': composite_classification,
+            'locked': locked,
             'mannings_n': mannings_n,
             'cell_vol_tol': cell_vol_tol,
             'cell_min_area_fraction': cell_min_area_fraction,
