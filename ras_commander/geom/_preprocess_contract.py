@@ -237,10 +237,20 @@ def _feature_issues(
             ):
                 issues.append(f"{path}/{index}: unsupported polygon part ranges")
         coords = read_typed(points, slice(start, start + count))
+        # HEC-RAS 7.0.1 stores an authored 1-point breakline verbatim (one
+        # point, same coordinates); BLE San Gabriel areas carry 4-13 of them.
+        # Accept a single point only for breaklines, and only when the text
+        # also authors exactly one point; the coordinate check still applies.
+        minimum = (
+            1
+            if path == "Geometry/2D Flow Area Break Lines"
+            and feature["coordinates"].shape[0] == 1
+            else 2
+        )
         if (
             name != feature["name"]
             or start < 0
-            or count < 2
+            or count < minimum
             or coords.shape != feature["coordinates"].shape
             or not np.allclose(coords, feature["coordinates"], rtol=0, atol=1e-6)
         ):
