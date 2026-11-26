@@ -390,6 +390,61 @@ class RasCmdr:
         return remaining
 
     @staticmethod
+    def _wait_for_launcher(
+        process,
+        watchdog,
+        deadline_monotonic: Optional[float],
+        *,
+        plan_number: Union[str, Number, Path],
+        max_runtime_seconds: Optional[float],
+        execution_details: Optional[dict] = None,
+        poll_seconds: float = 1.0,
+    ) -> int:
+        """Wait for the launcher, failing fast on a blocking HEC-RAS error dialog.
+
+        HEC-RAS 6.x can report a fatal input error (for example a missing DSS
+        file while preparing unsteady flow data) in a VB6 form and then wait
+        indefinitely, even after the form is closed. When the dialog watchdog
+        records such a form, raise ``RasBlockingDialogError`` so compute_plan
+        cancels the exact plan and returns a failure with the dialog text.
+        """
+        if watchdog is None or not hasattr(watchdog, "blocking_errors"):
+            return process.wait(
+                timeout=RasCmdr._remaining_runtime(
+                    deadline_monotonic,
+                    plan_number=plan_number,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
+            )
+        from .RasDialogWatchdog import RasBlockingDialogError
+
+        while True:
+            remaining = RasCmdr._remaining_runtime(
+                deadline_monotonic,
+                plan_number=plan_number,
+                max_runtime_seconds=max_runtime_seconds,
+            )
+            wait_seconds = (
+                poll_seconds if remaining is None else min(poll_seconds, remaining)
+            )
+            try:
+                return process.wait(timeout=wait_seconds)
+            except subprocess.TimeoutExpired:
+                if remaining is not None and remaining <= poll_seconds:
+                    raise
+            blocking = watchdog.blocking_errors()
+            if blocking:
+                records = [record.to_dict() for record in blocking]
+                if execution_details is not None:
+                    execution_details["blocking_dialogs"] = records
+                first = records[0]
+                detail = first["body"] or "(no dialog text was readable)"
+                raise RasBlockingDialogError(
+                    f"HEC-RAS showed a blocking error dialog for plan "
+                    f"{plan_number}: {first['title']!r}: {detail}"
+                )
+
+    @staticmethod
     def _direct_windows_compute_command(
         executable: Union[str, Path],
         project_path: Union[str, Path],
@@ -3850,6 +3905,15 @@ class RasCmdr:
                                 float(bco_monitor.max_wait_seconds),
                                 remaining,
                             )
+                        if _watchdog and hasattr(_watchdog, "blocking_errors"):
+                            # Stop monitoring as soon as HEC-RAS reports a
+                            # blocking error dialog; the launcher wait below
+                            # then raises with the dialog text.
+                            bco_monitor.blocking_condition = lambda: (
+                                "HEC-RAS showed a blocking error dialog"
+                                if _watchdog.blocking_errors()
+                                else None
+                            )
                         bco_monitor.monitor_until_signal(process)
                         RasCmdr._remaining_runtime(
                             _deadline_monotonic,
@@ -3859,12 +3923,13 @@ class RasCmdr:
 
                     _active_failure_stage = "launcher_wait"
                     try:
-                        return_code = process.wait(
-                            timeout=RasCmdr._remaining_runtime(
-                                _deadline_monotonic,
-                                plan_number=plan_number,
-                                max_runtime_seconds=max_runtime_seconds,
-                            )
+                        return_code = RasCmdr._wait_for_launcher(
+                            process,
+                            _watchdog,
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
+                            execution_details=_execution_details,
                         )
                         RasCmdr._remaining_runtime(
                             _deadline_monotonic,
