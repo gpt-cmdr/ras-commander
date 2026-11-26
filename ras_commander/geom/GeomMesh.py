@@ -1803,7 +1803,16 @@ def _sync_breakline_spacing_text_to_hdf(
                         data["Protection Radius"][fid] = protection_flag
                         changed = True
             if changed:
-                hf[bl_key][:] = data
+                _write_compound_fields(
+                    hf[bl_key],
+                    data,
+                    (
+                        "Cell Spacing Near",
+                        "Cell Spacing Far",
+                        *(("Near Repeats",) if has_nr else ()),
+                        *(("Protection Radius",) if has_pr else ()),
+                    ),
+                )
                 logger.debug(
                     f"Synced {len(bl_spacings)} breakline spacings "
                     f"from text → HDF"
@@ -2010,6 +2019,29 @@ def _read_cell_size_from_hdf(
     return fallback
 
 
+def _write_compound_fields(dataset, data, fields) -> None:
+    """Write selected members of a compound HDF table, leaving the others as stored.
+
+    Assigning a whole compound array back through h5py re-encodes every
+    member. A native fixed-width ``Name`` written by RASGeometry.Save() can be
+    exactly as long as its NULLTERM field, and that rewrite drops its last
+    character (for example ``Perimeter 1`` becomes ``Perimeter``). A later
+    RasMapperLib load then sees a different 2D area name. Writing only the
+    changed numeric members through a subset memory type avoids touching the
+    string members.
+    """
+    import h5py
+    import numpy as np
+
+    subset = np.dtype([(name, data.dtype[name]) for name in fields])
+    values = np.empty(data.shape, dtype=subset)
+    for name in fields:
+        values[name] = data[name]
+    dataset.id.write(
+        h5py.h5s.ALL, h5py.h5s.ALL, values, mtype=h5py.h5t.py_create(subset)
+    )
+
+
 def _sync_cell_size_to_hdf(
     hdf_path: Path, cell_size: float, mesh_name: str | None = None
 ) -> None:
@@ -2039,7 +2071,9 @@ def _sync_cell_size_to_hdf(
                     data["Spacing dy"][i] = cell_size
                     changed = True
             if changed:
-                hf[attrs_key][:] = data
+                _write_compound_fields(
+                    hf[attrs_key], data, ("Spacing dx", "Spacing dy")
+                )
                 logger.debug(f"Synced cell size {cell_size} → HDF Spacing dx/dy")
     except Exception as exc:
         logger.warning(f"Could not sync cell size to HDF: {exc}")
@@ -2254,6 +2288,93 @@ def _format_seed_coordinate(value: float, *, strict: bool = False) -> str:
     if strict and len(text) > 16:
         raise ValueError("computation point coordinate exceeds a native 16-character field")
     return text[:16].ljust(16)
+
+
+def _replace_hdf_area_seeds(hdf_path: Path, mesh_name: str, cell_centers) -> int:
+    """Make the geometry HDF seed tables hold exactly one area's new seeds.
+
+    ``Geometry/2D Flow Areas/Cell Info`` packs one ``[start, count]`` row per
+    area into the collection-level ``Cell Points`` table. RASGeometry.Save()
+    rewrites the area mesh but can leave these seed rows unchanged, so a
+    regenerated mesh with a different seed count kept the previous seeds (and
+    any rows beyond the new count) in the HDF. This replaces the selected
+    area's block with the coordinates written to the geometry text, repacks
+    the other areas' blocks unchanged, and writes both datasets at their new
+    exact size.
+
+    Returns:
+        int: Number of seed rows written for ``mesh_name``.
+
+    Raises:
+        ValueError: If the HDF does not identify ``mesh_name`` exactly once or
+            its seed tables are malformed.
+    """
+    import h5py
+    import numpy as np
+
+    # Store the values the 16-character text fields represent, so the HDF
+    # mirror and the authored text describe the same seeds.
+    seeds = np.asarray(
+        [
+            [float(_format_seed_coordinate(float(x))), float(_format_seed_coordinate(float(y)))]
+            for x, y in np.asarray(cell_centers, dtype=np.float64).reshape(-1, 2)
+        ],
+        dtype=np.float64,
+    ).reshape(-1, 2)
+    base = "Geometry/2D Flow Areas"
+    with h5py.File(str(hdf_path), "r+") as hdf:
+        group = hdf[base]
+        attrs = group["Attributes"][()]
+        names = [_decode_hdf_text(value) for value in attrs["Name"]]
+        if names.count(mesh_name) != 1:
+            raise ValueError(
+                f"Geometry HDF does not identify 2D flow area {mesh_name!r} exactly once"
+            )
+        index = names.index(mesh_name)
+        if "Cell Info" in group and "Cell Points" in group:
+            info = np.asarray(group["Cell Info"][()], dtype=np.int64)
+            points = np.asarray(group["Cell Points"][()], dtype=np.float64)
+            if (
+                info.ndim != 2
+                or info.shape[0] != len(names)
+                or info.shape[1] < 2
+                or points.ndim != 2
+                or (len(points) and points.shape[1] != 2)
+            ):
+                raise ValueError("Geometry HDF seed tables are malformed")
+            blocks = []
+            for start, count in info[:, :2]:
+                if start < 0 or count < 0 or start + count > len(points):
+                    raise ValueError("Geometry HDF Cell Info is outside Cell Points")
+                blocks.append(points[start:start + count].reshape(-1, 2))
+            info_dtype = group["Cell Info"].dtype
+            points_dtype = group["Cell Points"].dtype
+        else:
+            blocks = [np.empty((0, 2), dtype=np.float64) for _ in names]
+            info_dtype, points_dtype = np.dtype(np.int32), np.dtype(np.float64)
+        blocks[index] = seeds
+        counts = np.array([len(block) for block in blocks], dtype=np.int64)
+        starts = np.concatenate(([0], np.cumsum(counts)[:-1]))
+        new_info = np.column_stack((starts, counts)).astype(info_dtype)
+        new_points = (
+            np.concatenate(blocks) if blocks else np.empty((0, 2))
+        ).astype(points_dtype)
+        for name, values in (("Cell Info", new_info), ("Cell Points", new_points)):
+            saved_attrs = dict(group[name].attrs) if name in group else {}
+            if name in group:
+                del group[name]
+            dataset = group.create_dataset(
+                name,
+                data=values,
+                maxshape=(None, values.shape[1]),
+                chunks=True if len(values) else None,
+            )
+            for key, value in saved_attrs.items():
+                dataset.attrs[key] = value
+    # Attributes is left as RASGeometry.Save() wrote it. Rewriting a compound
+    # row through h5py re-encodes the native fixed-width Name field and can
+    # drop its last character.
+    return len(seeds)
 
 
 def _patch_text_seeds(
@@ -4459,7 +4580,7 @@ class GeomMesh:
                 raise ValueError(
                     f"Refinement region {target_desc} not found in HDF."
                 )
-            hf[rr_key][:] = data
+            _write_compound_fields(hf[rr_key], data, ("Spacing dx", "Spacing dy"))
 
         target = (
             f"FID {region_fid}" if region_fid is not None
@@ -6494,8 +6615,10 @@ class GeomMesh:
                     if hasattr(d2fa, "SetMinFaceLengthRatio"):
                         d2fa.SetMinFaceLengthRatio(fid, float(ratio))
                     _new_seeds = None
+                    _hdf_saved = False
                     try:
                         _save_mesh(geom, d2fa, fid, mesh, ns)
+                        _hdf_saved = True
                         import h5py as _h5
                         with _h5.File(str(hdf_path), "r") as _hf:
                             _cc_path = (
@@ -6529,6 +6652,10 @@ class GeomMesh:
                     # Write to .g01 text — the only persistent output
                     _set_point_generation_data(text_path, float(cell_size), mesh_name=mesh_name)
                     _patch_text_seeds(text_path, _new_seeds, mesh_name=mesh_name)
+                    if _hdf_saved:
+                        # Keep the HDF seed mirror exactly equal to the new
+                        # text seeds; Save() can leave the previous rows.
+                        _replace_hdf_area_seeds(hdf_path, mesh_name, _new_seeds)
 
                     result.status = "complete"
                     result.mesh_state = state_name
