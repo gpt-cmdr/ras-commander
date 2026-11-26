@@ -4055,6 +4055,165 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def set_breakline_parts(
+        geom_number: Union[str, Number, Path],
+        breakline_name: str,
+        parts,
+        *,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """Store one breakline as a multi-part polyline in the compiled HDF.
+
+        RAS Mapper keeps a breakline as one feature that can hold several
+        parts, for example a line drawn in pieces that share one name and one
+        set of spacing values. The ``.g##`` text has no field for parts: each
+        ``BreakLine Polyline=`` block holds one point list. Parts therefore
+        exist only in the compiled geometry HDF
+        (``Geometry/2D Flow Area Break Lines``).
+
+        This method replaces the named breakline's points in that HDF with
+        ``parts``, keeps its attributes (name and spacing), and leaves every
+        other breakline unchanged. RAS Mapper's seed generation and mesh
+        construction read the HDF, so ``GeomMesh.generate`` then regenerates
+        seeds and builds the mesh with the multi-part line. The ``.g##`` text
+        is not changed, and a later compile from text writes the text's
+        single-part line to the HDF again.
+
+        Args:
+            geom_number: Geometry number or path to the ``.g##`` text file.
+            breakline_name: Name of the breakline to replace. It must match
+                exactly one breakline in the HDF.
+            parts (Sequence[Sequence[tuple[float, float]]] | MultiLineString):
+                The parts in order, each with at least two finite (x, y)
+                points and a positive length, in project units. A Shapely
+                ``MultiLineString`` or ``LineString`` is also accepted.
+            hecras_dir: Optional HEC-RAS installation for HDF validation.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
+            create_backup: Back up the HDF before replacing it (default True).
+
+        Returns:
+            Backup path, or None when ``create_backup`` is False.
+
+        Raises:
+            ValueError: Invalid parts, or no unique breakline of that name.
+                No file is changed.
+        """
+        import h5py
+        import numpy as np
+
+        from .GeomParser import GeomParser
+
+        if hasattr(parts, "geoms"):
+            raw_parts = [list(g.coords) for g in parts.geoms]
+        elif hasattr(parts, "coords"):
+            raw_parts = [list(parts.coords)]
+        else:
+            raw_parts = [list(part) for part in parts]
+        if not raw_parts:
+            raise ValueError("parts must contain at least one part")
+        part_coords = []
+        for index, part in enumerate(raw_parts):
+            coords = np.asarray(part, dtype=np.float64)
+            if coords.ndim != 2 or coords.shape[1] != 2 or len(coords) < 2:
+                raise ValueError(f"parts[{index}] must hold at least two (x, y) points")
+            if not np.isfinite(coords).all():
+                raise ValueError(f"parts[{index}] has non-finite coordinates")
+            if not np.hypot(*np.diff(coords, axis=0).T).sum() > 0:
+                raise ValueError(f"parts[{index}] must have a positive length")
+            part_coords.append(coords)
+
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+            ignore_seed_count=True,
+        )
+        group = "Geometry/2D Flow Area Break Lines"
+        keys = {name: f"{group}/{name}" for name in (
+            "Attributes", "Polyline Info", "Polyline Parts", "Polyline Points")}
+        with h5py.File(str(hdf_path), "r") as hf:
+            if any(key not in hf for key in keys.values()):
+                raise ValueError(f"{hdf_path.name} has no complete breakline group")
+            names = [
+                value.decode("utf-8", errors="replace").strip()
+                for value in hf[keys["Attributes"]]["Name"]
+            ]
+            info = hf[keys["Polyline Info"]][()]
+            old_parts = hf[keys["Polyline Parts"]][()]
+            old_points = hf[keys["Polyline Points"]][()]
+            attrs = {key: dict(hf[path].attrs) for key, path in keys.items()}
+        matches = [fid for fid, name in enumerate(names) if name == breakline_name]
+        if len(matches) != 1:
+            raise ValueError(
+                f"Expected one breakline named {breakline_name!r}, found {len(matches)}"
+            )
+        target = matches[0]
+
+        info_rows, part_rows, point_arrays = [], [], []
+        point_offset = 0
+        for fid, (p0, pn, q0, qn) in enumerate(info):
+            if fid == target:
+                feature_parts = part_coords
+            else:
+                points = old_points[p0 : p0 + pn]
+                feature_parts = [
+                    points[start : start + count]
+                    for start, count in old_parts[q0 : q0 + qn]
+                ] or [points]
+            counts = [len(c) for c in feature_parts]
+            info_rows.append([point_offset, sum(counts), len(part_rows), len(counts)])
+            start = 0
+            for count in counts:
+                part_rows.append([start, count])
+                start += count
+            point_arrays.extend(feature_parts)
+            point_offset += sum(counts)
+        new = {
+            "Polyline Info": np.asarray(info_rows, dtype=info.dtype).reshape((-1, 4)),
+            "Polyline Parts": np.asarray(part_rows, dtype=old_parts.dtype).reshape((-1, 2)),
+            "Polyline Points": np.vstack(point_arrays).astype(old_points.dtype),
+        }
+
+        temp_path = hdf_path.with_name(f".{hdf_path.name}.{uuid4().hex}.tmp")
+        backup_path = None
+        try:
+            shutil.copy2(hdf_path, temp_path)
+            with h5py.File(str(temp_path), "r+") as hf:
+                for name, data in new.items():
+                    del hf[keys[name]]
+                    _create_hdf_dataset(hf, keys[name], data)
+                    for key, value in attrs[name].items():
+                        hf[keys[name]].attrs[key] = value
+            with h5py.File(str(temp_path), "r") as hf:
+                stored = hf[keys["Polyline Info"]][()][target]
+                if int(stored[3]) != len(part_coords) or not np.array_equal(
+                    hf[keys["Polyline Points"]][int(stored[0]) : int(stored[0] + stored[1])],
+                    np.vstack(part_coords),
+                ):
+                    raise RuntimeError("Breakline part validation failed")
+                if len(hf[keys["Polyline Info"]]) != len(names):
+                    raise RuntimeError("Breakline count validation failed")
+            if create_backup:
+                backup_path = GeomParser.create_backup(hdf_path)
+            release_native_sessions(temp_path, hdf_path)
+            os.replace(temp_path, hdf_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
+        logger.info(
+            "Stored breakline %r as %d parts in %s",
+            breakline_name,
+            len(part_coords),
+            hdf_path.name,
+        )
+        return backup_path
+
+    @staticmethod
+    @log_call
     def get_breakline_names(
         geom_number: Union[str, Number, Path],
         ras_object=None,
@@ -4656,6 +4815,12 @@ class GeomMesh:
         defaults to an empty string. The replacement is built and validated in
         a same-directory temporary HDF before it is promoted over the original.
 
+        A Shapely ``MultiPolygon`` (or any object with ``geoms``) becomes one
+        multi-part region: one HDF feature whose parts are its polygons, in
+        order, each stored as a closed ring. This is how RAS Mapper stores a
+        region drawn with several parts; all parts share the region's spacing
+        and properties.
+
         Optional native properties are ``shift_dx``, ``shift_dy``,
         ``perimeter_spacing``, ``near_repeats``, ``far_spacing`` and
         ``protection_radius``. Missing floating properties default to NaN;
@@ -4712,17 +4877,24 @@ class GeomMesh:
             polygon = raw.get("polygon", raw.get("geometry"))
             if polygon is None:
                 raise ValueError(f"regions[{index}] is missing polygon or geometry")
-            if hasattr(polygon, "interiors") and polygon.interiors:
-                raise ValueError(f"regions[{index}] polygon has unsupported interior rings")
-            coords = _normalise_polygon_coords(polygon)
-            if len(coords) < 3:
-                raise ValueError(
-                    f"regions[{index}] polygon must have at least 3 vertices"
-                )
-            if not np.isfinite(coords).all():
-                raise ValueError(f"regions[{index}] polygon has non-finite coordinates")
-            if not np.allclose(coords[0], coords[-1]):
-                coords = np.vstack([coords, coords[:1]])
+            part_polygons = list(polygon.geoms) if hasattr(polygon, "geoms") else [polygon]
+            if not part_polygons:
+                raise ValueError(f"regions[{index}] polygon has no parts")
+            part_coords = []
+            for part in part_polygons:
+                if hasattr(part, "interiors") and part.interiors:
+                    raise ValueError(f"regions[{index}] polygon has unsupported interior rings")
+                coords = _normalise_polygon_coords(part)
+                if len(coords) < 3:
+                    raise ValueError(
+                        f"regions[{index}] polygon must have at least 3 vertices"
+                    )
+                if not np.isfinite(coords).all():
+                    raise ValueError(f"regions[{index}] polygon has non-finite coordinates")
+                if not np.allclose(coords[0], coords[-1]):
+                    coords = np.vstack([coords, coords[:1]])
+                part_coords.append(coords)
+            coords = np.vstack(part_coords)
 
             spacing_dx = float(raw.get("spacing_dx"))
             spacing_dy = float(raw.get("spacing_dy", spacing_dx))
@@ -4739,6 +4911,7 @@ class GeomMesh:
                 {
                     "name": _truncate_ras_name(str(raw.get("name", ""))),
                     "coords": np.asarray(coords, dtype=np.float64),
+                    "part_counts": [len(c) for c in part_coords],
                     "spacing_dx": spacing_dx,
                     "spacing_dy": spacing_dy,
                 }
@@ -4763,10 +4936,17 @@ class GeomMesh:
         part_rows = []
         point_arrays = []
         point_offset = 0
-        for region_index, region in enumerate(normalized):
+        for region in normalized:
             coords = region["coords"]
-            info_rows.append([point_offset, len(coords), region_index, 1])
-            part_rows.append([0, len(coords)])
+            # Info: first point, point count, first part, part count. Parts:
+            # each part's first point within the feature, and its count.
+            info_rows.append(
+                [point_offset, len(coords), len(part_rows), len(region["part_counts"])]
+            )
+            part_start = 0
+            for count in region["part_counts"]:
+                part_rows.append([part_start, count])
+                part_start += count
             point_arrays.append(coords)
             point_offset += len(coords)
         polygon_info = np.asarray(info_rows, dtype=np.int32).reshape((-1, 4))
@@ -4806,6 +4986,8 @@ class GeomMesh:
                         )
                     if len(hf[info_key]) != len(normalized):
                         raise RuntimeError("Refinement-region count validation failed")
+                    if len(hf[parts_key]) != len(polygon_parts):
+                        raise RuntimeError("Refinement-region part validation failed")
                     if len(hf[points_key]) != len(polygon_points):
                         raise RuntimeError("Refinement-region point validation failed")
                 elif rr_group_key in hf:
