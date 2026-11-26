@@ -26,7 +26,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_unknown_empty_manual_schedule_and_override_widen(self):
         self.assertTrue(select([])[0])
-        for event in ["schedule", "workflow_dispatch", "workflow_call"]:
+        for event in ["push", "schedule", "workflow_dispatch", "workflow_call"]:
             self.assertTrue(select(["README.md"], event)[0])
         self.assertTrue(select(["README.md"], force=True)[0])
 
@@ -128,6 +128,91 @@ class TimingTests(unittest.TestCase):
             receipt = json.loads((Path(folder) / "ci-receipts/timings.jsonl").read_text())
             self.assertEqual(receipt["exit_code"], 7)
             self.assertGreaterEqual(receipt["seconds"], 0)
+
+
+class WorkflowAdmissionTests(unittest.TestCase):
+    def test_actual_condition_and_receipt_fail_closed(self):
+        import ast
+        import os
+        from pathlib import Path
+        import shutil
+        import subprocess
+
+        workflow = Path(__file__).resolve().parents[1] / "workflows/native-dss.yml"
+        block = workflow.read_text(encoding="utf8").split("  native-dss:", 1)[1]
+        # Extract the actual GitHub condition, not a duplicated policy function.
+        condition = next(
+            line.strip()[4:].removeprefix("${{").removesuffix("}}").strip()
+            for line in block.splitlines()
+            if line.strip().startswith("if: ${{")
+        )
+        receipt = next(
+            line.strip()[5:]
+            for line in block.splitlines()
+            if line.strip().startswith('run: test "$PLAN_RESULT"')
+        )
+        for result, heavy, cancelled, fork, admitted, valid in [
+            ("success", "true", False, False, True, True),
+            ("success", "false", False, False, False, True),
+            ("failure", "", False, False, True, False),
+            ("success", "", False, False, True, False),
+            ("success", "invalid", False, False, True, False),
+            ("skipped", "", False, False, True, False),
+            ("success", "true", True, False, False, True),
+            ("success", "true", False, True, False, True),
+        ]:
+            value = condition.removeprefix("${{").strip()
+            replacements = {
+                "!cancelled()": str(not cancelled),
+                "needs.change-plan.result": repr(result),
+                "needs.change-plan.outputs.heavy": repr(heavy),
+                "github.event_name": repr("pull_request"),
+                "github.event.pull_request.head.repo.full_name": repr(
+                    "fork/repo" if fork else "owner/repo"
+                ),
+                "github.repository": repr("owner/repo"),
+            }
+            for key, replacement in replacements.items():
+                value = value.replace(key, replacement)
+            value = value.replace("&&", "and").replace("||", "or")
+            tree = ast.parse(value, mode="eval")
+            allowed = (
+                ast.Expression,
+                ast.BoolOp,
+                ast.And,
+                ast.Or,
+                ast.Compare,
+                ast.Eq,
+                ast.NotEq,
+                ast.Constant,
+            )
+            self.assertTrue(all(isinstance(node, allowed) for node in ast.walk(tree)))
+            self.assertEqual(
+                eval(compile(tree, "condition", "eval"), {"__builtins__": {}}), admitted
+            )
+            bash = shutil.which("bash")
+            if os.name == "nt":
+                git_bash = (
+                    Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+                )
+                if git_bash.is_file():
+                    bash = str(git_bash)
+            self.assertIsNotNone(bash)
+            response = subprocess.run(
+                [bash, "--noprofile", "--norc", "-c", receipt],
+                env=dict(os.environ, PLAN_RESULT=result, PLAN_HEAVY=heavy),
+                capture_output=True,
+            )
+            self.assertEqual(response.returncode == 0, valid)
+
+    def test_non_pr_groups_retain_each_main_revision(self):
+        from pathlib import Path
+
+        workflow = (Path(__file__).resolve().parents[1] / "workflows/native-dss.yml").read_text(
+            encoding="utf8"
+        )
+        self.assertIn("format('run-{0}', github.run_id)", workflow)
+        self.assertTrue(select(["README.md"], event="push")[0])
 
 
 if __name__ == "__main__":

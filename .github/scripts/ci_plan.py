@@ -21,7 +21,7 @@ SAFE_DOCS = frozenset(
 
 
 def select(paths, event="pull_request", force=False):
-    if force or event not in {"pull_request", "push"} or not paths:
+    if force or event != "pull_request" or not paths:
         return True, "full: explicit, scheduled, manual, or unavailable diff"
     for raw in paths:
         if raw not in SAFE_DOCS:
