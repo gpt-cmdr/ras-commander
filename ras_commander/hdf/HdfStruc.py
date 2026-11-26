@@ -13,6 +13,7 @@ All of the methods in this class are static and are designed to be used without 
 
 List of Functions in HdfStruc:
 - get_structures()
+- get_bridge_coefficients()
 - get_geom_structures_attrs()
 - get_culvert_hydraulics()
 - get_storage_area_polygons()
@@ -400,7 +401,12 @@ class HdfStruc:
         - CRS is preserved from the source file
         - Public Structure IDs remain one-based. Bridge coefficients are joined
           by their native zero-based Attributes row IDs, not the display IDs.
-          Duplicate or out-of-range coefficient IDs raise ValueError.
+          Out-of-range or non-integer coefficient IDs raise ValueError.
+        - A Multiple Opening structure may store several coefficient sets, one
+          per bridge opening; HEC-RAS applies the first set to openings without
+          their own. Its row carries the first stored set; use
+          get_bridge_coefficients for every set. Several sets on any other
+          structure type raise ValueError.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
@@ -573,17 +579,15 @@ class HdfStruc:
                 # Native coefficient IDs refer to zero-based Attributes rows;
                 # the public Structure ID column is a one-based display ID.
                 if not bridge_coef.empty and 'Structure ID' in bridge_coef.columns:
-                    native_ids = bridge_coef['Structure ID']
-                    if (not pd.api.types.is_integer_dtype(native_ids.dtype)
-                            or native_ids.duplicated().any()
-                            or (native_ids < 0).any()
-                            or (native_ids >= len(struct_attrs)).any()):
-                        raise ValueError(
-                            "Invalid native Structure ID in Bridge Coefficient Attributes: "
-                            "expected unique zero-based Structures/Attributes row IDs"
-                        )
+                    HdfStruc._check_bridge_coefficient_ids(bridge_coef, struct_attrs)
+                    # A Multiple Opening structure may store one coefficient set
+                    # per bridge opening. HEC-RAS applies the first set (Bridge
+                    # #1) to openings without their own, so the first stored set
+                    # is the structure's row here; get_bridge_coefficients
+                    # returns every set.
                     struct_gdf = struct_gdf.merge(
-                        bridge_coef.set_index('Structure ID'),
+                        bridge_coef.drop_duplicates('Structure ID', keep='first')
+                        .set_index('Structure ID'),
                         left_index=True,
                         right_index=True,
                         how='left',
@@ -682,6 +686,88 @@ class HdfStruc:
             reraise_required(e)
             logger.error(f"Error reading structures from {hdf_path} (Geometry/Structures): {str(e)}")
             raise
+
+    @staticmethod
+    def _check_bridge_coefficient_ids(bridge_coef: pd.DataFrame, struct_attrs: pd.DataFrame) -> None:
+        """Validate native Bridge Coefficient Attributes ``Structure ID`` keys.
+
+        Keys are integer, zero-based ``Structures/Attributes`` row indices. A key
+        may repeat only on a ``Multiple Opening`` structure (one coefficient set
+        per bridge opening). Raises ``ValueError`` otherwise. Reads nothing.
+        """
+        native_ids = bridge_coef['Structure ID']
+        if (not pd.api.types.is_integer_dtype(native_ids.dtype)
+                or (native_ids < 0).any()
+                or (native_ids >= len(struct_attrs)).any()):
+            raise ValueError(
+                "Invalid native Structure ID in Bridge Coefficient Attributes: "
+                "expected zero-based Structures/Attributes row IDs"
+            )
+        repeated = sorted(int(i) for i in native_ids[native_ids.duplicated()].unique())
+        if repeated:
+            types = (
+                struct_attrs['Type'].astype(str).str.strip()
+                if 'Type' in struct_attrs.columns else None
+            )
+            if types is None or any(types.iloc[i] != 'Multiple Opening' for i in repeated):
+                raise ValueError(
+                    "Invalid native Structure ID in Bridge Coefficient Attributes: "
+                    "only a Multiple Opening structure may store more than one "
+                    "coefficient set"
+                )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_bridge_coefficients(hdf_path: Path | str) -> pd.DataFrame:
+        """
+        Return every stored bridge coefficient set, one row per set.
+
+        ``get_structures`` joins one set per structure. A Multiple Opening
+        structure may store one set per bridge opening, and HEC-RAS applies the
+        first set (Bridge #1) to openings without their own; this method returns
+        all of them. Read-only; values and units are as stored.
+
+        Parameters
+        ----------
+        hdf_path : Path or str
+            Path to the HEC-RAS geometry or plan HDF5 file
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns ``Structure ID`` (one-based, as in ``get_structures``),
+            ``Native Structure ID`` (zero-based Attributes row), ``Coefficient
+            Set`` (one-based, in stored order within the structure), ``Type``
+            (the structure type) and every Bridge Coefficient Attributes field.
+            Empty when the file stores no bridge coefficients.
+
+        Raises
+        ------
+        ValueError
+            When a coefficient key is not an integer Attributes row index, or
+            repeats on a structure that is not a Multiple Opening.
+        """
+        with h5py.File(hdf_path, 'r') as hdf:
+            path = "Geometry/Structures/Bridge Coefficient Attributes"
+            attrs_path = "Geometry/Structures/Attributes"
+            if path not in hdf or attrs_path not in hdf:
+                return pd.DataFrame()
+            coef = HdfStruc._decode_bytes_columns(pd.DataFrame(read_typed(hdf[path])))
+            attrs = HdfStruc._decode_bytes_columns(pd.DataFrame(read_typed(hdf[attrs_path])))
+        if coef.empty or 'Structure ID' not in coef.columns:
+            return pd.DataFrame()
+        HdfStruc._check_bridge_coefficient_ids(coef, attrs)
+        native = coef['Structure ID'].astype('int64')
+        result = coef.drop(columns=['Structure ID'])
+        result.insert(0, 'Type', (
+            attrs['Type'].astype(str).str.strip().iloc[native].to_numpy()
+            if 'Type' in attrs.columns else None
+        ))
+        result.insert(0, 'Coefficient Set', native.groupby(native).cumcount().to_numpy() + 1)
+        result.insert(0, 'Native Structure ID', native.to_numpy())
+        result.insert(0, 'Structure ID', native.to_numpy() + 1)
+        return result.reset_index(drop=True)
 
     @staticmethod
     @log_call
