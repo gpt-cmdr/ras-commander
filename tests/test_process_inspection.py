@@ -1368,6 +1368,31 @@ def test_cancel_exact_terminates_tree_and_leaves_unrelated_process(
     assert RasCmdr.cancel_plan("01", ras_object=ras_obj) is False
 
 
+@pytest.mark.parametrize('wrong_mapper', [False, True])
+def test_cancel_exact_mapper_preprocessor_requires_both_paths(monkeypatch, tmp_path, wrong_mapper):
+    ras_obj = FakeRas(tmp_path)
+    launcher = FakeProcess(10, 'Ras.exe',
+        ['Ras.exe', str(ras_obj.prj_file), str(ras_obj.plan_path)], cwd=str(tmp_path))
+    mapper = tmp_path / ('Other.rasmap' if wrong_mapper else 'Fox.rasmap')
+    engine = FakeProcess(11, 'RasProcess.exe',
+        [r'C:\HEC\RasProcess.exe', 'CompletePreProcess', str(mapper),
+         str(tmp_path / 'Fox.p01.tmp.hdf'), 'Units=US Customary'], cwd=str(tmp_path))
+    unrelated = FakeProcess(20, 'RasProcess.exe',
+        [r'C:\HEC\RasProcess.exe', 'CompletePreProcess', str(tmp_path/'Other.rasmap'),
+         str(tmp_path/'Other.p01.tmp.hdf'), 'Units=US Customary'], cwd=str(tmp_path))
+    launcher._children = [engine]
+    _patch_psutil(monkeypatch, FakePsutil([launcher, engine, unrelated]))
+    result = RasCmdr.cancel_plan_exact('01', ras_object=ras_obj)
+    if wrong_mapper:
+        assert result.cancellation_attempted is False
+        assert result.quiescence_confirmed is None
+        assert not launcher.terminated and not engine.terminated
+    else:
+        assert result.quiescence_confirmed is True
+        assert {p.pid for p in result.stopped} == {10, 11}
+    assert not unrelated.terminated and not unrelated.killed
+
+
 def test_cancel_exact_never_signals_shared_cwd_marker_without_project_identity(
     monkeypatch,
     tmp_path,

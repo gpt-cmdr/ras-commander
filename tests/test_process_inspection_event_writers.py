@@ -76,3 +76,38 @@ def test_missing_executable_metadata_still_requires_rasprocess_name_in_command()
 def test_unknown_engine_does_not_inherit_event_writer_signature():
     result = _match([EXE, 'CompleteEventConditions', TMP], name='RasGeomPreprocess.exe')
     assert result.complete is False and result.matched == ()
+
+
+@pytest.mark.parametrize('tail', [[], ['Units=US Customary'], ['Units=US', 'Customary']])
+def test_preprocessor_mapper_and_plan_signature_is_exact(tail):
+    result = _match([EXE, 'CompletePreProcess', 'C:/Models/Dam.rasmap', TMP, *tail])
+    assert result.complete is True
+    assert [p.pid for p in result.matched] == [42]
+
+
+@pytest.mark.parametrize('command', [
+    [EXE, 'CompletePreProcess', 'C:/Other/Dam.rasmap', TMP],
+    [EXE, 'CompletePreProcess', 'C:/Models/Other.rasmap', TMP],
+    [EXE, 'CompletePreProcess', TMP, 'C:/Models/Dam.rasmap'],
+    [EXE, 'CompleteEventConditions', 'C:/Models/Dam.rasmap', TMP],
+    [EXE, 'CompletePreProcess', 'C:/Models/Dam.rasmap', TMP, 'extra'],
+    [EXE, 'CompletePreProcess', 'C:/Models/Dam.rasmap', TMP, 'Units=SI'],
+    [EXE, 'CompletePreProcess', 'C:/Models/Dam.rasmap', TMP, 'Units=US Customary', 'extra'],
+    [EXE, 'CompletePreProcess', 'C:/Models/Dam.rasmap', TMP, TMP],
+    ['C:/Other/RasProcess.exe', 'CompletePreProcess', 'C:/Models/Dam.rasmap', TMP],
+])
+def test_ambiguous_mapper_preprocessor_signature_is_refused(command):
+    result = _match(command)
+    assert result.complete is False and result.matched == ()
+    assert result.query_errors[0].reason_code == 'plan_process_signature_unsupported'
+
+
+def test_mapper_signature_does_not_select_other_plan():
+    result = _match([EXE, 'CompletePreProcess', 'C:/Models/Dam.rasmap', 'C:/Models/Dam.p07.tmp.hdf'])
+    assert result.complete is True and result.matched == ()
+
+
+def test_relative_mapper_and_plan_need_exact_cwd():
+    command = [EXE, 'CompletePreProcess', 'Dam.rasmap', 'Dam.p06.tmp.hdf']
+    assert len(_match(command).matched) == 1
+    assert _match(command, working_directory='C:/Other').matched == ()
