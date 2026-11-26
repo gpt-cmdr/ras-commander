@@ -1842,10 +1842,18 @@ def _decode_hdf_text(value: Any) -> str:
 def _read_mesh_metadata_from_text(
     geom_text_path: Path,
 ) -> dict[str, dict[str, float | int | None]]:
-    """Read per-2D-area mesh seed count and spacing from geometry text."""
+    """Read per-2D-area mesh seed count and spacing from geometry text.
+
+    Only 2D flow areas are returned. A 1D storage area (``Storage Area
+    Is2D=0``) can keep point-generation data and computation points from an
+    earlier 2D definition; HEC-RAS never compiles it into
+    ``Geometry/2D Flow Areas``, so it is excluded. Blocks without an ``Is2D``
+    record keep the previous behavior.
+    """
     text = geom_text_path.read_text(encoding="utf-8", errors="replace")
     metadata: dict[str, dict[str, float | int | None]] = {}
     current_area: str | None = None
+    not_2d: set[str] = set()
 
     for line in text.splitlines():
         if line.startswith("Storage Area="):
@@ -1861,6 +1869,17 @@ def _read_mesh_metadata_from_text(
             continue
 
         if current_area is None:
+            continue
+
+        if line.startswith("Storage Area Is2D="):
+            try:
+                is_2d = int(line.split("=", 1)[1].strip()) == -1
+            except ValueError:
+                is_2d = False
+            if is_2d:
+                not_2d.discard(current_area)
+            else:
+                not_2d.add(current_area)
             continue
 
         if line.startswith("Storage Area Point Generation Data="):
@@ -1879,7 +1898,7 @@ def _read_mesh_metadata_from_text(
             except (IndexError, ValueError):
                 metadata[current_area]["seed_count"] = None
 
-    return metadata
+    return {name: area for name, area in metadata.items() if name not in not_2d}
 
 
 def _read_mesh_metadata_from_hdf(
