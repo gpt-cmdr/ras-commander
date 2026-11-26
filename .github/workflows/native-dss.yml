@@ -25,10 +25,36 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: native-dss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  native-dss:
-    name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
+  change-plan:
+    name: CI change plan
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64, clb-ci-linux]
+    timeout-minutes: 5
+    outputs:
+      heavy: ${{ steps.plan.outputs.heavy }}
+      public: ${{ steps.plan.outputs.public }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Verify conservative selection rules
+        run: python -m unittest discover -s .github/scripts -p test_ci_plan.py
+      - id: plan
+        env:
+          CI_FULL: ${{ vars.CLB_CI_FULL }}
+        run: python .github/scripts/ci_plan.py
+
+  native-dss:
+    needs: change-plan
+    name: native-dss (${{ matrix.os }}, ${{ matrix.backend }})
+    if: ${{ !cancelled() && (needs.change-plan.result != 'success' || needs.change-plan.outputs.heavy != 'false') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    timeout-minutes: 45
     runs-on: ${{ fromJSON(matrix.self_hosted) }}
     strategy:
       fail-fast: false
@@ -54,6 +80,12 @@ jobs:
       PYTHONUTF8: '1'
       RAS_COMMANDER_DSS_BACKEND: ${{ matrix.backend }}
     steps:
+      - name: Require a valid admission receipt
+        shell: bash
+        env:
+          PLAN_RESULT: ${{ needs.change-plan.result }}
+          PLAN_HEAVY: ${{ needs.change-plan.outputs.heavy }}
+        run: test "$PLAN_RESULT" = success && { test "$PLAN_HEAVY" = true || test "$PLAN_HEAVY" = false; }
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -64,7 +96,7 @@ jobs:
         shell: bash
         # pydsstools (in dss-native) needs NumPy 1.x on CPython 3.12.
         run: >-
-          python -m pip install "numpy<2" -e ".[dss-native]"
+          python .github/scripts/ci_time.py dependencies -- python -m pip install "numpy<2" -e ".[dss-native]"
           pytest nbformat requests setuptools matplotlib geopandas "shapely>=2.0"
           xarray rasterio scipy tqdm psutil
 
@@ -99,7 +131,7 @@ jobs:
           files=$(ls tests/test_*dss*.py tests/test_hec_monolith_logging.py \
             tests/test_precip_mrms*.py tests/test_compute_extra.py \
             tests/test_rascontrol_cleanup_console_encoding.py | grep -v hecras_acceptance)
-          python -m pytest $files -m "not real_ras" -q -rs -p no:cacheprovider \
+          python .github/scripts/ci_time.py native-dss-tests -- python -m pytest $files -m "not real_ras" -q -rs -p no:cacheprovider \
             --basetemp="$RUNNER_TEMP/pytest-dss" --junitxml="$RUNNER_TEMP/native-dss.xml"
 
       - name: Fail if the native tests did not run
