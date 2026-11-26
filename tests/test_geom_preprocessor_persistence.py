@@ -818,6 +818,9 @@ def test_child_cleanup_denial_is_retained(tmp_path, monkeypatch):
 
 
 def test_child_wait_thread_timeout_is_reported_as_timeout(tmp_path, monkeypatch):
+    # Portable psutil waiter (Wine/Linux); the Windows native-handle waiter
+    # is covered by tests/test_geom_preprocessor_child_exit.py.
+    monkeypatch.setattr(GP, "_NATIVE_EXIT_HANDLES", False)
     import threading
 
     import psutil
@@ -849,6 +852,9 @@ def test_child_wait_thread_timeout_is_reported_as_timeout(tmp_path, monkeypatch)
 
 
 def test_child_wait_raw_os_error_is_retained(monkeypatch):
+    # Portable psutil waiter (Wine/Linux); the Windows native-handle waiter
+    # is covered by tests/test_geom_preprocessor_child_exit.py.
+    monkeypatch.setattr(GP, "_NATIVE_EXIT_HANDLES", False)
     import threading
 
     class ImmediateThread:
