@@ -746,6 +746,7 @@ Storage area and 2D flow area geometry parsing and writing.
 - `set_2d_flow_area_settings(geom_file, area_name, **settings)` - Write 2D flow area settings (subgrid sampling, composite classification)
 - `write_2d_flow_area_perimeter(geom_file, area_name, coordinates, ...)` - Write 2D flow area perimeter
 - `plan_2d_flow_area_perimeter(coordinates=..., geometry=...)` - Plan native serialization without mutation. Removes only adjacent serialized XY pairs within the existing `GeomMesh.PERIMETER_NEAR_DUPLICATE_TOL` of 1e-6 source horizontal units, including closure. Uses the last retained point to bound chained removal; preserves distinct 0.003-unit edges. Returns original removed indexes, source/authored WKB hashes, tolerance, validity, boundary displacement and signed area change in source units (square units for area). The authored polygon must be valid, and removal-only displacement must stay within the near-duplicate tolerance. `set_2d_flow_area_perimeter()` uses this plan; callers retain their own final geometry/feature acceptance checks and canonical input artifacts.
+- `build_keyhole_perimeter(outer=..., holes=... | geometry=polygon)` - Build one keyhole ring for a 2D flow area with excluded areas. Each hole is joined to the boundary by a straight cut whose edge appears twice, once in each direction. Pass the ring to `set_2d_flow_area_perimeter(..., allow_keyhole=True)`, which accepts only a proper keyhole and still rejects other invalid rings. `get_storage_area_polygons()` returns a keyhole perimeter as its domain, a valid polygon with interior rings. HEC-RAS 7.0.1 `Ras.exe` did not mesh keyhole perimeters in qualification ("Error generating Mesh"), so treat this as authoring support only.
 - `replace_breaklines(geom_file, flow_area_name, breaklines, expected_existing_names=..., ...)` - Atomically replace the geometry-global breakline collection while preserving supplied near/far spacing, near-repeat, and protection-radius values.
 
 `GeomMesh.clip_refinement_regions()` accepts a valid, positive-area Polygon or
@@ -1125,6 +1126,7 @@ constitute hydraulic acceptance.
       heading_level: 3
       show_source: false
       members:
+        - build_keyhole_perimeter
         - clip_2d_flow_area
         - get_2d_flow_area_settings
         - get_elevation_volume
