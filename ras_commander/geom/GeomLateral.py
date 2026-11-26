@@ -17,6 +17,7 @@ List of Functions:
 - get_connection_gates() - Read gate definitions for connection
 - set_connection_gates() - Write gate definitions for connection
 - delete_connection() - Remove a connection block
+- delete_lateral_structure() - Remove a 1D lateral structure node and its plan breach blocks
 - set_connection_profile_from_terrain() - Sample terrain and write profile
 - get_bridge_data() - Read all bridge sub-records for a connection
 - get_bridge_deck() - Read deck geometry for bridge connection
@@ -2511,6 +2512,338 @@ class GeomLateral:
         except Exception as e:
             logger.error(f"Error deleting connection: {str(e)}")
             raise IOError(f"Failed to delete connection: {str(e)}")
+
+    # Top-level geometry records that can follow the last node of a reach.
+    _NODE_BLOCK_TERMINATORS = (
+        "Type RM Length L Ch R =",
+        "River Reach=",
+        "Junct Name=",
+        "Storage Area=",
+        "Connection=",
+        "SA/2D Area Conn=",
+        "BreakLine Name=",
+        "Lat Struct=",
+        "LCMann ",
+        "Chan Stop Cuts=",
+        "Use User Specified Reach Order=",
+        "User Specified Reach Order=",
+        "Reverse River Text=",
+        "GIS Ratio Cuts To Invert=",
+        "GIS Limit At Bridges=",
+        "Composite Channel Slope=",
+        "Reference Line Name=",
+        "BC Line Name=",
+    )
+    # Record prefixes that belong to a lateral structure node (type 6).
+    _LATERAL_RECORD_PREFIXES = (
+        "Node ",
+        "Lateral Weir",
+        "LW ",
+    )
+
+    @staticmethod
+    def _node_header(line: str) -> Optional[Tuple[str, str]]:
+        """Return ``(node_type, river_station)`` for a node header line."""
+        if not line.startswith("Type RM Length L Ch R ="):
+            return None
+        values = [
+            v.strip()
+            for v in GeomParser.extract_keyword_value(line, "Type RM Length L Ch R").split(",")
+        ]
+        if len(values) < 2:
+            return None
+        return values[0], values[1]
+
+    @staticmethod
+    def _find_lateral_structure_block(
+        lines: List[str], river: str, reach: str, rs: str
+    ) -> Tuple[int, int]:
+        """Locate one complete lateral structure node block.
+
+        Returns ``(start, end)`` line indexes, end exclusive. The block runs to
+        the next node header, reach header, or top-level geometry record, and
+        keeps its trailing blank separator. Every record inside it must belong
+        to lateral-structure grammar; otherwise the block extent is not proven
+        and ``ValueError`` is raised instead of deleting unknown content.
+        """
+        current = (None, None)
+        matches = []
+        available = []
+        for index, line in enumerate(lines):
+            if line.startswith("River Reach="):
+                values = GeomParser.extract_comma_list(line, "River Reach")
+                current = (values[0], values[1]) if len(values) >= 2 else (None, None)
+                continue
+            header = GeomLateral._node_header(line)
+            if header is None or current != (river, reach):
+                continue
+            node_type, station = header
+            if node_type == "6":
+                available.append(station)
+            if station == rs:
+                matches.append((index, node_type))
+        if not matches:
+            raise ValueError(
+                f"Lateral structure not found: {river!r}, {reach!r}, RS {rs!r}. "
+                f"Lateral structures in this reach: {available or 'none'}"
+            )
+        if len(matches) > 1:
+            raise ValueError(
+                f"River station {rs!r} identifies {len(matches)} nodes in {river!r}, {reach!r}"
+            )
+        start, node_type = matches[0]
+        if node_type != "6":
+            raise ValueError(
+                f"Node {river!r}, {reach!r}, RS {rs!r} is type {node_type}, "
+                "not a lateral structure (6)"
+            )
+        end = len(lines)
+        for index in range(start + 1, len(lines)):
+            if lines[index].startswith(GeomLateral._NODE_BLOCK_TERMINATORS):
+                end = index
+                break
+        in_description = False
+        in_gate_table = False
+        for line in lines[start + 1 : end]:
+            text = line.rstrip("\r\n")
+            if in_description:
+                in_description = not text.startswith("END DESCRIPTION")
+                continue
+            if text.startswith("BEGIN DESCRIPTION"):
+                in_description = True
+                continue
+            if not text.strip() or text[:1] in " -.0123456789":
+                continue  # blank separator or fixed-width data row
+            if text.startswith("LW Gate Name"):
+                in_gate_table = True
+                continue
+            if text.startswith(GeomLateral._LATERAL_RECORD_PREFIXES):
+                in_gate_table = False
+                continue
+            if in_gate_table and "," in text:
+                continue  # one gate definition row under its LW Gate Name header
+            raise ValueError(
+                f"Lateral structure RS {rs!r} contains an unrecognized record "
+                f"{text[:40]!r}; refusing to infer the block extent"
+            )
+        return start, end
+
+    @staticmethod
+    def _lateral_structure_references(
+        geom_file: Path, river: str, reach: str, rs: str, ras_object=None
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Find plan breach blocks and unsteady boundaries at one lateral structure.
+
+        Only plans whose geometry is ``geom_file`` are considered. Returns
+        ``(breach_blocks, unsteady_boundaries)``.
+        """
+        from ..RasBreach import RasBreach
+
+        geom_number = geom_file.suffix[2:]
+        plans: List[Tuple[Path, Optional[str]]] = []
+        if ras_object is not None:
+            ras_object.check_initialized()
+            df = ras_object.plan_df
+            selected = df[df["geometry_number"].astype(str) == geom_number]
+            for _, row in selected.iterrows():
+                unsteady = row.get("unsteady_number")
+                plans.append(
+                    (
+                        Path(row["full_path"]),
+                        str(unsteady) if isinstance(unsteady, str) and unsteady else None,
+                    )
+                )
+        else:
+            # No project DataFrame is available: read the plan files that sit
+            # beside this geometry and share its project name.
+            for plan_path in sorted(geom_file.parent.glob(f"{geom_file.stem}.p[0-9][0-9]")):
+                geom_ref = flow_ref = None
+                text = plan_path.read_text(encoding="utf-8", errors="replace")
+                for line in text.splitlines():
+                    if line.startswith("Geom File="):
+                        geom_ref = line.split("=", 1)[1].strip()
+                    elif line.startswith("Flow File="):
+                        flow_ref = line.split("=", 1)[1].strip()
+                if geom_ref and geom_ref.lower() == f"g{geom_number}":
+                    unsteady = (
+                        flow_ref[1:]
+                        if flow_ref and flow_ref.lower().startswith("u")
+                        else None
+                    )
+                    plans.append((plan_path, unsteady))
+
+        location = (river, reach, rs)
+        breaches = []
+        unsteady_numbers = set()
+        for plan_path, unsteady in plans:
+            if unsteady:
+                unsteady_numbers.add(unsteady)
+            if not plan_path.is_file():
+                continue
+            for block in RasBreach._read_breach_blocks_internal(plan_path):
+                loc = block.location
+                if (loc.river, loc.reach, loc.station) == location:
+                    breaches.append(
+                        {
+                            "plan_file": plan_path,
+                            "start_line": block.start_index,
+                            "end_line": block.end_index,
+                        }
+                    )
+        boundaries = []
+        for number in sorted(unsteady_numbers):
+            path = geom_file.parent / f"{geom_file.stem}.u{number}"
+            if not path.is_file():
+                continue
+            # Read-only detection of node boundaries (River, Reach, RS with no
+            # storage/2D/structure fields). Mutation stays with RasUnsteady.
+            u_lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            for index, line in enumerate(u_lines):
+                if not line.startswith("Boundary Location="):
+                    continue
+                parts = [part.strip() for part in line.split("=", 1)[1].split(",")]
+                if tuple(parts[:3]) == location and not any(parts[3:]):
+                    following = u_lines[index + 1] if index + 1 < len(u_lines) else ""
+                    boundaries.append(
+                        {
+                            "unsteady_file": path,
+                            "line": index + 1,
+                            "bc_type": following.split("=", 1)[0].strip(),
+                        }
+                    )
+        return breaches, boundaries
+
+    @staticmethod
+    @log_call
+    def delete_lateral_structure(
+        geom_file: Union[str, Path],
+        river: str,
+        reach: str,
+        rs: Union[str, float],
+        create_backup: bool = True,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """
+        Remove a 1D lateral structure node (type 6) from a plain-text geometry.
+
+        The complete node block is removed: the ``Type RM Length L Ch R = 6``
+        header and its ``Lateral Weir`` and ``LW`` records (weir profile,
+        centerline, tailwater stations, culverts, gate groups and the
+        rating-curve diversion), any description, and the blank line that
+        separates it from the next record. This applies to lateral structures
+        that connect a reach to a storage area, a 2D flow area, or another
+        reach.
+
+        Plan breach blocks (``Breach Loc=`` at the same river, reach and
+        station) in plans whose geometry is ``geom_file`` would dangle once the
+        structure is gone, so they are removed in the same call. An unsteady
+        boundary condition at the structure, such as a gate-opening time
+        series, would dangle too. Those are not edited here: the call raises
+        before writing anything, and the boundary must first be removed with
+        the staged :meth:`RasUnsteady.delete_boundary` workflow.
+
+        Edit a copy of the project when practical. The geometry HDF still
+        describes the removed structure until the geometry is preprocessed
+        again, for example with ``GeomPreprocessor.run_geometry_preprocessor``.
+
+        Args:
+            geom_file (Union[str, Path]): Plain-text geometry file (``.g##``).
+            river (str): River name, as in ``River Reach=``.
+            reach (str): Reach name, as in ``River Reach=``.
+            rs (Union[str, float]): River station of the lateral
+                structure node as written in the geometry, for example
+                ``"7300"``.
+            create_backup (bool): Write ``.bak`` copies of the geometry and of
+                every edited plan file before changing them. Default True.
+            ras_object (RasPrj, optional): Initialized project used to find the
+                plans bound to this geometry through ``plan_df``. Without it,
+                plan files named ``<project>.p##`` beside the geometry are read.
+
+        Returns:
+            Dict[str, Any]: ``geom_file``; ``removed_line_count``;
+            ``backup_path`` (geometry backup or None); and
+            ``removed_breach_blocks``, a list of ``{"plan_file", "backup_path"}``
+            records, one per removed plan breach block.
+
+        Raises:
+            FileNotFoundError: If the geometry file does not exist.
+            ValueError: If the station does not identify exactly one lateral
+                structure in the reach, the block contains records that are not
+                lateral-structure records, or an unsteady boundary condition
+                references the structure.
+
+        Example:
+            >>> from ras_commander import GeomLateral
+            >>> result = GeomLateral.delete_lateral_structure(
+            ...     "Muncie.g04", "White", "Muncie", "7300"
+            ... )
+            >>> result["removed_line_count"] > 0
+            True
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        rs = str(rs).strip()
+
+        with open(geom_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        start, end = GeomLateral._find_lateral_structure_block(lines, river, reach, rs)
+        breaches, boundaries = GeomLateral._lateral_structure_references(
+            geom_file, river, reach, rs, ras_object=ras_object
+        )
+        if boundaries:
+            listed = "; ".join(
+                f"{Path(b['unsteady_file']).name} ({b['bc_type']})" for b in boundaries
+            )
+            raise ValueError(
+                f"Unsteady boundary conditions reference lateral structure RS {rs!r}: "
+                f"{listed}. Remove them with RasUnsteady.delete_boundary before "
+                "deleting the structure."
+            )
+
+        removed_breaches = []
+        by_plan: Dict[Path, List[Dict[str, Any]]] = {}
+        for breach in breaches:
+            by_plan.setdefault(Path(breach["plan_file"]), []).append(breach)
+        for plan_path, plan_breaches in by_plan.items():
+            raw = plan_path.read_bytes()
+            text = raw.decode("utf-8", errors="replace")
+            plan_lines = text.splitlines()
+            backup = None
+            if create_backup:
+                backup = plan_path.with_name(plan_path.name + ".bak")
+                backup.write_bytes(raw)
+            for breach in sorted(plan_breaches, key=lambda b: b["start_line"], reverse=True):
+                del plan_lines[breach["start_line"] : breach["end_line"]]
+            _write_ras_text(plan_path, "\n".join(plan_lines) + "\n")
+            for _ in plan_breaches:
+                removed_breaches.append({"plan_file": plan_path, "backup_path": backup})
+            logger.info(
+                "Removed %d breach block(s) for RS %s from %s",
+                len(plan_breaches),
+                rs,
+                plan_path.name,
+            )
+
+        removed = end - start
+        del lines[start:end]
+        backup_path = GeomParser.safe_write_geometry(
+            geom_file, lines, create_backup=create_backup
+        )
+        logger.info(
+            "Removed lateral structure %s/%s RS %s (%d lines) from %s",
+            river,
+            reach,
+            rs,
+            removed,
+            geom_file.name,
+        )
+        return {
+            "geom_file": geom_file,
+            "removed_line_count": removed,
+            "backup_path": backup_path,
+            "removed_breach_blocks": removed_breaches,
+        }
 
     @staticmethod
     @log_call

@@ -654,6 +654,29 @@ assert records.RawBlock.tolist() == GeomLateral.get_connection_data(child).RawBl
 
 A runnable example is `scripts/sa2d_connection_roundtrip.py`.
 
+### Removing a 1D lateral structure
+
+`GeomLateral.delete_lateral_structure(geom_file, river, reach, rs)` removes a
+lateral structure node (`Type RM Length L Ch R = 6`) from a plain-text geometry.
+It removes the whole node block, including weir, culvert, gate and diversion
+records. It also removes `Breach Loc=` blocks at the same location from the plans
+that use the geometry. When an unsteady boundary condition still references the
+structure, for example a gate-opening time series, the call raises before
+writing anything. Remove that boundary first with `RasUnsteady.delete_boundary`.
+
+```python
+from ras_commander import GeomLateral, init_ras_project
+from ras_commander.geom import GeomPreprocessor
+
+ras = init_ras_project(project_copy, "7.0.1")
+GeomLateral.delete_lateral_structure(
+    project_copy / "Muncie.g04", "White", "Muncie", "7300", ras_object=ras
+)
+GeomPreprocessor.run_geometry_preprocessor("04", ras_object=ras)
+```
+
+The geometry HDF still lists the structure until the geometry is preprocessed again.
+
 ### Explicit physical authoring and clipping
 
 `GeomStorage.replace_breaklines()` preserves the supplied native protection
@@ -1160,6 +1183,7 @@ constitute hydraulic acceptance.
         - get_connection_gate_lines
         - remap_connection_areas
         - delete_connection
+        - delete_lateral_structure
         - get_bridge_approach_xs
         - get_bridge_data
         - get_bridge_deck
