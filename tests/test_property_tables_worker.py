@@ -52,8 +52,16 @@ def test_modern_property_computation_does_not_load_clr_in_parent(tmp_path, monke
         "load_clr",
         lambda *_: pytest.fail("h5py parent must not compute native tables"),
     )
+    report = SimpleNamespace(returncode=0, stdout="native stdout", stderr="native stderr")
     monkeypatch.setattr(
-        native, "_run_property_tables_worker", lambda *args: calls.append(args)
+        native,
+        "_run_property_tables_worker",
+        lambda *args: calls.append(args) or report,
+    )
+    monkeypatch.setattr(
+        native,
+        "_require_native_recompute_of_every_2d_area",
+        lambda *args: calls.append(args),
     )
     monkeypatch.setattr(
         native,
@@ -66,7 +74,11 @@ def test_modern_property_computation_does_not_load_clr_in_parent(tmp_path, monke
         )
         == geometry
     )
-    assert calls == [(tmp_path, geometry), geometry]
+    assert calls == [
+        (tmp_path, geometry),
+        (geometry, "native stdout", "native stderr"),
+        geometry,
+    ]
 
 
 def test_worker_command_uses_direct_file_and_geometry_working_directory(

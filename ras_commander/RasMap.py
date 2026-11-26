@@ -1650,9 +1650,17 @@ class RasMap:
         Recompute property tables with the selected native RASMapper version.
 
         Completion is required for every geometry. When 2D flow areas are
-        present, the native cell-volume and face-area table pairs must also be
-        nonempty before this method returns. A complete 1D-only geometry has
-        no 2D-array postcondition.
+        present, RASMapper must report every area's tables complete, and the
+        native cell-volume and face-area table pairs must also be nonempty
+        before this method returns. A complete 1D-only geometry has no
+        2D-array postcondition.
+
+        RASMapper exits successfully when it refuses an area, for example
+        because the associated land-cover raster is missing, and keeps that
+        area's previous tables. This method raises ``RuntimeError`` naming the
+        area and RASMapper's reason instead of returning those stale tables.
+        The geometry HDF's ``File Version`` attribute is not restamped by the
+        recompute and does not indicate the computing version.
 
         Set ``audit_mannings=True`` to require materially diverse, associated
         final Manning values after the native command.

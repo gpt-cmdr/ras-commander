@@ -12,6 +12,7 @@ import json
 import math
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -221,6 +222,80 @@ def _validate_property_tables_postcondition(
                 "2D hydraulic arrays: "
                 + ", ".join(incomplete)
             )
+
+
+_AREA_TABLES_COMPLETE = re.compile(r"^2D Flow Area '(?P<name>.*)' tables complete\b")
+# HEC-RAS 7.0.1 writes this refusal to stdout ("WARNING: NOTE! <area>: ...") or
+# to stderr ("<area>: ..."), depending on the reason; match it anywhere.
+_AREA_CANNOT_RECOMPUTE = re.compile(r"Cannot recompute 2D property tables because:")
+
+
+def _require_native_recompute_of_every_2d_area(
+    geometry_hdf_path: Union[str, Path],
+    native_stdout: str,
+    native_stderr: str,
+) -> None:
+    """Require RASMapper's completion report for every 2D flow area.
+
+    ``ComputePropertyTablesCommand`` exits 0 when it refuses an area, for
+    example because the associated land-cover raster is missing. It writes the
+    reason to stdout or stderr and leaves that area's previous tables in place,
+    which then pass the structural postcondition. The geometry HDF's
+    ``File Version`` is not a usable signal: the command does not restamp it.
+    The per-area completion line ("2D Flow Area '<name>' tables complete") was
+    observed from HEC-RAS 6.3.1, 6.4.1, 6.5, 6.6, and 7.0.1 once that area's
+    tables were written.
+    """
+    geometry_hdf_path = RasUtils.safe_resolve(Path(geometry_hdf_path))
+    with h5py.File(geometry_hdf_path, "r") as hdf:
+        flow_areas = hdf.get("Geometry/2D Flow Areas")
+        if not isinstance(flow_areas, h5py.Group):
+            return
+        areas = [
+            name.strip()
+            for name, item in flow_areas.items()
+            if isinstance(item, h5py.Group)
+        ]
+    if not areas:
+        return
+
+    lines = [
+        line.strip()
+        for line in f"{native_stdout or ''}\n{native_stderr or ''}".splitlines()
+    ]
+    completed = {
+        match.group("name").strip()
+        for match in map(_AREA_TABLES_COMPLETE.match, lines)
+        if match
+    }
+    missing = [name for name in areas if name not in completed]
+    if not missing:
+        return
+
+    diagnostics: list[str] = []
+    for index, line in enumerate(lines):
+        if _AREA_CANNOT_RECOMPUTE.search(line):
+            diagnostics.append(line)
+            # RASMapper continues the reason list on the following lines.
+            for follow in lines[index + 1:]:
+                if (
+                    not follow
+                    or _AREA_CANNOT_RECOMPUTE.search(follow)
+                    or _AREA_TABLES_COMPLETE.match(follow)
+                    or follow.startswith(("Computing 2D Flow Area", "LAYER=", "PROGRESS="))
+                ):
+                    break
+                diagnostics.append(follow)
+    detail = (
+        " Native diagnostics: " + " ".join(diagnostics)
+        if diagnostics
+        else " RASMapper reported no completion and no reason."
+    )
+    raise RuntimeError(
+        "Native property-table computation returned without recomputing 2D flow "
+        f"area(s) {', '.join(repr(name) for name in missing)}; any tables in "
+        f"{geometry_hdf_path.name} are the previous ones." + detail
+    )
 
 
 def _native_extent(
@@ -1590,7 +1665,10 @@ def recompute_property_tables(
                 f"{result.stderr.strip() or result.stdout.strip()}"
             )
     else:
-        _run_property_tables_worker(install, geometry_hdf_path)
+        result = _run_property_tables_worker(install, geometry_hdf_path)
+        _require_native_recompute_of_every_2d_area(
+            geometry_hdf_path, result.stdout, result.stderr
+        )
     _validate_property_tables_postcondition(geometry_hdf_path)
     return geometry_hdf_path
 
@@ -1598,8 +1676,13 @@ def recompute_property_tables(
 def _run_property_tables_worker(
     install: Path, geometry_hdf_path: Path, *, calibration_source: Path | None = None,
     bc_types_receipt: Path | None = None,
-) -> None:
-    """Keep HEC-RAS's native HDF5 runtime separate from h5py's loaded DLLs."""
+) -> subprocess.CompletedProcess:
+    """Keep HEC-RAS's native HDF5 runtime separate from h5py's loaded DLLs.
+
+    Returns the completed worker process. A zero exit does not prove that the
+    native command recomputed anything: property-table callers must pass its
+    output to ``_require_native_recompute_of_every_2d_area``.
+    """
     from ._gdal_runtime import configure_rasmapper_gdal_bridge
     from ._native_worker_environment import rasmapper_host_environment
 
@@ -1640,6 +1723,12 @@ def _run_property_tables_worker(
         )
     if result.stdout:
         logger.info("%s", result.stdout.strip())
+    if result.stderr and result.stderr.strip():
+        # RASMapper reports refused areas here while still exiting 0.
+        logger.warning(
+            "Native property-table worker diagnostics: %s", result.stderr.strip()
+        )
+    return result
 
 
 def associate_landcover_to_geometry(
@@ -1707,7 +1796,10 @@ def associate_landcover_to_geometry(
             validate=True,
         )
         if compute_property_tables:
-            _run_property_tables_worker(install, geometry_hdf_path)
+            result = _run_property_tables_worker(install, geometry_hdf_path)
+            _require_native_recompute_of_every_2d_area(
+                geometry_hdf_path, result.stdout, result.stderr
+            )
         expected_path = landcover_hdf_path
 
     if compute_property_tables:

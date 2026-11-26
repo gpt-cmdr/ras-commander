@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **`RasMap.recompute_property_tables()` no longer reports success when
+  RASMapper skipped a 2D area.** RasMapperLib's `ComputePropertyTablesCommand`
+  exits 0 when it refuses an area, for example when the associated land-cover
+  raster is missing, and keeps that area's previous tables. Those stale tables
+  passed the nonempty table check, so the call returned success with nothing
+  recomputed. The call now requires RASMapper's `2D Flow Area '<name>' tables
+  complete` report for every 2D flow area and otherwise raises `RuntimeError`
+  with the native reason. The geometry HDF's `File Version` is not used:
+  RASMapper does not restamp it after a recompute. Observed with HEC-RAS 7.0.1 on a HEC-RAS 6.5 geometry HDF
+  and on BaldEagleCrkMulti2D g09 (a HEC-RAS 6.2 geometry HDF) with its
+  land-cover raster removed. The completion report was confirmed for
+  HEC-RAS 6.3.1, 6.4.1, 6.5, 6.6, and 7.0.1. The HEC-RAS 5.x route is unchanged.
 - **Constant precipitation now runs on unsteady files without meteorology
   records.** `RasUnsteady.set_constant_precipitation()` and
   `set_met_precipitation_mode("Constant")` complete absent or blank

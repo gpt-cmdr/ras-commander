@@ -14,8 +14,13 @@ share reference-count changes with that exact DLL; version and thread-safety
 checks also run before computation. Installation, geometry, and recovery-source
 paths become absolute in the caller before the worker changes directories;
 mapped drive letters are preserved.
-The call raises on a native process failure or a 1,800-second timeout, then
-checks the existing complete-geometry and nonempty table-pair postconditions.
+The call raises on a native process failure or a 1,800-second timeout. A zero
+exit is not accepted as proof of a recompute: RASMapper exits 0 when it refuses
+an area (for example, a missing land-cover raster) and keeps that area's
+previous tables. The call therefore requires RASMapper's per-area completion
+report for every 2D flow area and raises with the native reason when one is
+missing. It then checks the existing complete-geometry and nonempty table-pair
+postconditions.
 It preserves the geometry's source CRS and units and does not establish
 hydraulic acceptance. The HEC-RAS 5.x route is unchanged.
 The isolated worker requires Windows Python, either on Windows or under Wine,
