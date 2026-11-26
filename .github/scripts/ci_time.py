@@ -13,7 +13,11 @@ def main():
     if command and command[0] == "--":
         command = command[1:]
     start = time.monotonic()
-    result = subprocess.run(command, check=False)
+    # Audited command-runner interface: argv comes from the reviewed workflow
+    # command, with the same privileges as that workflow step. No shell parses
+    # metacharacters or expands arguments. Do not join argv into a command string.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+    result = subprocess.run(command, check=False, shell=False)
     peak = None
     if sys.platform == "linux":
         import resource

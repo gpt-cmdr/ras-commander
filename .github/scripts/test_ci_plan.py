@@ -129,6 +129,36 @@ class TimingTests(unittest.TestCase):
             self.assertEqual(receipt["exit_code"], 7)
             self.assertGreaterEqual(receipt["seconds"], 0)
 
+    def test_shell_metacharacters_are_literal_arguments(self):
+        import os
+        from pathlib import Path
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "literal.txt"
+            marker = Path(folder) / "must-not-exist"
+            payload = f'literal & echo injected > "{marker}"'
+            probe = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("ci_time.py")),
+                    "literal-argv",
+                    "--",
+                    sys.executable,
+                    "-c",
+                    probe,
+                    str(output),
+                    payload,
+                ],
+                env=dict(os.environ, RUNNER_TEMP=folder),
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output.read_text(), payload)
+            self.assertFalse(marker.exists())
+
 
 class WorkflowAdmissionTests(unittest.TestCase):
     def test_actual_condition_and_receipt_fail_closed(self):
@@ -187,9 +217,26 @@ class WorkflowAdmissionTests(unittest.TestCase):
                 ast.Constant,
             )
             self.assertTrue(all(isinstance(node, allowed) for node in ast.walk(tree)))
-            self.assertEqual(
-                eval(compile(tree, "condition", "eval"), {"__builtins__": {}}), admitted
-            )
+
+            def evaluate(node):
+                if isinstance(node, ast.Expression):
+                    return evaluate(node.body)
+                if isinstance(node, ast.Constant):
+                    return node.value
+                if isinstance(node, ast.BoolOp):
+                    values = [evaluate(child) for child in node.values]
+                    return all(values) if isinstance(node.op, ast.And) else any(values)
+                if isinstance(node, ast.Compare):
+                    left = evaluate(node.left)
+                    for op, right_node in zip(node.ops, node.comparators):
+                        right = evaluate(right_node)
+                        if (left == right) != isinstance(op, ast.Eq):
+                            return False
+                        left = right
+                    return True
+                self.fail("Unsupported workflow expression")
+
+            self.assertEqual(evaluate(tree), admitted)
             bash = shutil.which("bash")
             if os.name == "nt":
                 git_bash = (
