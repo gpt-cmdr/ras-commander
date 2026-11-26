@@ -5310,9 +5310,10 @@ class RasUnsteady:
                 if any(parts[index] for index in range(len(parts)) if index != 5):
                     raise ValueError(f"Conflicting area-wide location fields for {area_name!r}")
                 candidates.append(block)
+        from .RasUtils import RasUtils
         result = {
-            "unsteady_file": str(unsteady_path.resolve()),
-            "geometry_file": str(geometry_path.resolve()),
+            "unsteady_file": str(RasUtils.safe_resolve(unsteady_path)),
+            "geometry_file": str(RasUtils.safe_resolve(geometry_path)),
             "area_2d": area_name, "created": False,
             "boundaries_df_refreshed": False,
         }
@@ -9631,9 +9632,10 @@ class RasUnsteady:
         boundary_count_before = len(boundary_locations)
 
         if exact_locations:
+            from .RasUtils import RasUtils
             result = {
-                "unsteady_file": str(unsteady_path.resolve()),
-                "geometry_file": str(geometry_path.resolve()),
+                "unsteady_file": str(RasUtils.safe_resolve(unsteady_path)),
+                "geometry_file": str(RasUtils.safe_resolve(geometry_path)),
                 "area_2d": area_name,
                 "bc_line": line_name,
                 "created": False,
@@ -9688,9 +9690,10 @@ class RasUnsteady:
             area_name,
             line_name,
         )
+        from .RasUtils import RasUtils
         return {
-            "unsteady_file": str(unsteady_path.resolve()),
-            "geometry_file": str(geometry_path.resolve()),
+            "unsteady_file": str(RasUtils.safe_resolve(unsteady_path)),
+            "geometry_file": str(RasUtils.safe_resolve(geometry_path)),
             "area_2d": area_name,
             "bc_line": line_name,
             "created": True,
@@ -9957,9 +9960,10 @@ class RasUnsteady:
             len(inserted_locations),
             unsteady_path.name,
         )
+        from .RasUtils import RasUtils
         return {
-            "unsteady_file": str(unsteady_path.resolve()),
-            "geometry_file": str(geometry_path.resolve()),
+            "unsteady_file": str(RasUtils.safe_resolve(unsteady_path)),
+            "geometry_file": str(RasUtils.safe_resolve(geometry_path)),
             "removed_locations": removed_locations,
             "inserted_locations": inserted_locations,
             "preserved_non_2d_block_count": preserved_block_count,

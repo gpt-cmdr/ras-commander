@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -1122,6 +1123,11 @@ def test_compute_plan_launch_uses_drive_preserving_resolved_paths(
 
     def drive_preserving_resolve(path):
         candidate = Path(path)
+        # Simulate the mapped drive only for the launch command built in
+        # RasCmdr. Artifact helpers also normalize with safe_resolve and must
+        # keep seeing the real project folder that holds this fixture.
+        if sys._getframe(1).f_globals.get("__name__") != rascmdr_module.__name__:
+            return original_safe_resolve(candidate)
         if candidate == local_project:
             return mapped_project
         if candidate == local_plan:
