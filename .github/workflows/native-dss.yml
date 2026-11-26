@@ -44,11 +44,11 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - name: Verify conservative selection rules
-        run: python -m unittest discover -s .github/scripts -p test_ci_plan.py
+        run: python3 -m unittest discover -s .github/scripts -p test_ci_plan.py
       - id: plan
         env:
           CI_FULL: ${{ vars.CLB_CI_FULL }}
-        run: python .github/scripts/ci_plan.py
+        run: python3 .github/scripts/ci_plan.py
 
   native-dss:
     needs: change-plan
