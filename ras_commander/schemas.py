@@ -149,7 +149,7 @@ DATAFRAME_SCHEMAS = {
         "columns": [
             {"name": "area", "dtype": "str", "description": "2D flow area name."},
             {"name": "dataset", "dtype": "str", "description": "Dataset path below the area group, e.g. 'Faces Area Elevation Values' or 'Infiltration/Curve Number'."},
-            {"name": "category", "dtype": "str", "description": "'product' (a preprocessing output) or 'input' (topology and other datasets neither side should change)."},
+            {"name": "category", "dtype": "str", "description": "'product' (a preprocessing output), 'input' (topology and other datasets neither side should change) or 'carried' (a Stage 2 family dataset the engine does not compute; it keeps the staged input and is not compared)."},
             {"name": "status", "dtype": "str", "description": "'bitwise', 'within_tolerance', 'matches_other_native_run', 'different', 'missing_native' or 'missing_rust'."},
             {"name": "passed", "dtype": "bool", "description": "Whether the dataset counts as equivalent."},
             {"name": "dtype", "dtype": "str", "description": "Stored dtype of the Rust dataset."},

@@ -1818,6 +1818,7 @@ class GeomPreprocessor:
         sort: str = "introsort",
         units: Optional[str] = None,
         restore_mtime: bool = True,
+        restamp_currency: bool = True,
         timeout: Optional[float] = 3600.0,
         keep_bundle: bool = False,
     ) -> "RustPreprocessResult":
@@ -1835,9 +1836,16 @@ class GeomPreprocessor:
         layers relative to it. The products are validated (finite, contiguous,
         monotone tables; each cell minimum at or below its face minima) and
         written into existing datasets only, with exact readback and a
-        backup that is restored on any failure. No attribute is written, so
-        ``Property Tables Last Computed`` and the layer hashes keep their
-        source values. 1D and mixed-model preprocessing are out of scope.
+        backup that is restored on any failure.
+
+        With ``restamp_currency=True`` (the default), each written area's
+        ``Property Tables Last Computed`` is set to the write time in native
+        HEC-RAS 7.0.1's format (local time, ``DDMONYYYY HH:MM:SS``), as a
+        native recompute does. ``Property Tables LC Hash`` is the only other
+        attribute native recomputation changes; it cannot be reproduced
+        exactly, so it keeps the source's value and an
+        :class:`ExperimentalWarning` says so. No other attribute is written
+        or created. 1D and mixed-model preprocessing are out of scope.
 
         Args:
             geom: Geometry HDF (``.g##.hdf``) or plain-text ``.g##`` path.
@@ -1861,14 +1869,18 @@ class GeomPreprocessor:
                 the mode), ``us``, ``si`` or ``root``.
             restore_mtime: Restore the geometry HDF's modification time after
                 writing.
+            restamp_currency: Restamp ``Property Tables Last Computed`` on
+                each written area (default ``True``). The choice, the stamp
+                and each area's before/after value are recorded in
+                ``result.currency`` and ``result.options``.
             timeout: Engine time limit in seconds.
             keep_bundle: Keep the engine's raw output bundle.
 
         Returns:
             RustPreprocessResult: Output path and provenance: engine path,
                 version and SHA-256, options, command, engine report, write-back
-                receipt (per-dataset validation and before/after hashes) and the
-                source SHA-256.
+                receipt (per-dataset validation and before/after hashes),
+                currency-attribute provenance and the source SHA-256.
 
         Raises:
             RustPreprocessNotFoundError: The engine executable was not found.
@@ -1892,7 +1904,8 @@ class GeomPreprocessor:
         return compute_rust_experimental(
             geom, engine_exe=engine_exe, out_path=out_path, in_place=in_place,
             threads=threads, native_compatible=native_compatible, sort=sort,
-            units=units, restore_mtime=restore_mtime, timeout=timeout,
+            units=units, restore_mtime=restore_mtime,
+            restamp_currency=restamp_currency, timeout=timeout,
             keep_bundle=keep_bundle,
         )
 
@@ -1933,7 +1946,9 @@ class GeomPreprocessor:
         2. **Rust.** Copy the staged project to ``work_dir/rust``, overwrite
            its stored float products with NaN (``isolate_inputs``, so the
            engine provably uses none of them), run the engine in
-           native-compatible mode and write its products back.
+           native-compatible mode and write its products back, restamping
+           ``Property Tables Last Computed`` as
+           :meth:`compute_rust_experimental` does.
         3. **Native.** Copy the staged project to ``work_dir/native`` and run
            :meth:`RasMap.recompute_property_tables` ``native_repeats`` times,
            each on a fresh, poisoned copy of the staged geometry HDF, and
@@ -1952,6 +1967,14 @@ class GeomPreprocessor:
         ``native_repeats > 1``, datasets on which native runs disagree are
         labeled N-1/N-2, and a Rust dataset equal to any native run passes.
         Faces with more than 1,000 profile points (L-1) are listed.
+
+        Coverage limits stated in every report: the engine's own
+        ``--compare`` checks Stage 2 only through ``Cells Center Manning's
+        n``, so Infiltration and Percent Impervious arrays are not in it (the
+        engine's workstream P, in progress, adds them). Family datasets the
+        engine does not compute keep the staged input and are listed as not
+        compared. The native reference is RAS Mapper recomputation only;
+        comparison against the plan-compute preprocessor is out of scope here.
 
         Args:
             project: Project folder or ``.prj`` file. Not modified.

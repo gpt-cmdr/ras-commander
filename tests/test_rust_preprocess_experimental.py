@@ -283,3 +283,101 @@ def test_compute_guards_and_warning(geom_hdf, tmp_path):
             GeomPreprocessor.compute_rust_experimental(geom_hdf, out_path=tmp_path / "o.g02.hdf")
         with pytest.raises(ValueError, match="sort"):
             rp._engine_options(True, "quick", None, None)
+
+
+# ---------------------------------------------------------------------------
+# Currency restamp (restamp_currency)
+# ---------------------------------------------------------------------------
+
+LC = rp.LAST_COMPUTED_ATTR
+
+
+def _stamp_type(path: Path):
+    with h5py.File(path, "r") as f:
+        aid = f[GROUP].attrs.get_id(LC)
+        t = aid.get_type()
+        return str(aid.dtype), aid.shape, t.get_size(), t.get_strpad(), t.get_cset()
+
+
+def test_native_timestamp_format():
+    from datetime import datetime
+
+    assert rp._native_timestamp(datetime(2026, 11, 27, 22, 59, 52)) == "27NOV2026 22:59:52"
+    assert rp._native_timestamp(datetime(2027, 1, 5, 3, 4, 5)) == "05JAN2027 03:04:05"
+    assert len(rp._native_timestamp()) == 18
+
+
+def test_write_bundle_restamps_last_computed_like_native(pair, tmp_path):
+    from datetime import datetime
+
+    _, rust = pair
+    _as_701(rust)
+    type_before = _stamp_type(rust)
+    with h5py.File(rust, "r") as f:
+        lc_hash_before = np.asarray(f[GROUP].attrs.get(rp.LC_HASH_ATTR)).tobytes()
+    bundle = _bundle_from(rust, tmp_path / "b")
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        receipt = rp.write_bundle(rust, bundle, stamp_time=datetime(2026, 11, 27, 23, 1, 2))
+    cur = receipt["currency"]
+    assert cur["restamp_currency"] and cur["stamp"] == "27NOV2026 23:01:02"
+    assert cur["areas"][AREA][LC]["status"] == "restamped"
+    # Only the stamp changed, among every attribute of every object.
+    assert cur["attributes_changed"] == [f"{GROUP}@{LC}"]
+    with h5py.File(rust, "r") as f:
+        assert bytes(f[GROUP].attrs[LC]) == b"27NOV2026 23:01:02"  # all 18 characters
+        assert np.asarray(f[GROUP].attrs.get(rp.LC_HASH_ATTR)).tobytes() == lc_hash_before
+    assert _stamp_type(rust) == type_before  # same fixed-length type, padding and charset
+    # Chippewa carries an LC hash: it is kept, reported and warned about.
+    assert rp.LC_HASH_ATTR in cur["not_restamped"][AREA]
+    assert any(rp.LC_HASH_ATTR in str(x.message) for x in w)
+
+
+def test_write_bundle_without_restamp_writes_no_attribute(pair, tmp_path):
+    _, rust = pair
+    _as_701(rust)
+    with h5py.File(rust, "r") as f:
+        before = bytes(f[GROUP].attrs[LC])
+    receipt = rp.write_bundle(rust, _bundle_from(rust, tmp_path / "b"), restamp_currency=False)
+    assert receipt["currency"]["restamp_currency"] is False
+    assert receipt["currency"]["attributes_changed"] == []
+    with h5py.File(rust, "r") as f:
+        assert bytes(f[GROUP].attrs[LC]) == before
+
+
+def test_write_bundle_never_creates_a_missing_stamp(pair, tmp_path):
+    _, rust = pair
+    _as_701(rust)
+    with h5py.File(rust, "r+") as f:
+        del f[GROUP].attrs[LC]
+    receipt = rp.write_bundle(rust, _bundle_from(rust, tmp_path / "b"))
+    assert receipt["currency"]["areas"][AREA][LC]["status"] == "absent"
+    assert receipt["currency"]["attributes_changed"] == []
+    with h5py.File(rust, "r") as f:
+        assert LC not in f[GROUP].attrs
+
+
+def test_report_states_stage2_coverage_and_attribute_meaning(pair, tmp_path):
+    native, rust = pair
+    with h5py.File(native, "r+") as f:
+        g = f[GROUP]
+        g.create_dataset("Infiltration/Curve Number", data=np.arange(5, dtype=np.float32))
+        g.create_dataset("Percent Impervious/Percent Impervious", data=np.zeros(5, np.float32))
+    shutil.copy2(native, rust)
+    with h5py.File(rust, "r+") as f:
+        f[GROUP].attrs.modify(LC, np.bytes_("01JAN2027 00:00:00"))
+    comparisons, attrs = rp.compare_geometry_hdfs(native, rust)
+    cov = rp._stage2_coverage(comparisons, {AREA: {"Infiltration/Curve Number"}})
+    assert cov[AREA]["compared"] == ["Infiltration/Curve Number"]
+    assert cov[AREA]["not_compared"] == ["Percent Impervious/Percent Impervious"]
+    carried = _by_name(comparisons)["Percent Impervious/Percent Impervious"]
+    assert carried.category == "carried" and any("not compared" in x for x in carried.labels)
+    rep = RustEquivalenceReport(
+        verdict="equivalent", project_folder=tmp_path, geometry="x.g01.hdf", hecras_version="7.0.1",
+        engine=None, options={}, tolerance=None, comparisons=comparisons,
+        attribute_differences=attrs, stage2_coverage=cov)
+    md = rep.to_markdown()
+    assert "Stage 2 infiltration and impervious coverage" in md
+    assert "workstream P" in md and "**not compared**" in md and "does **not** compare" in md
+    assert "(timestamp; expected)" in md
+    assert rep.to_dict()["stage2_coverage"] == cov

@@ -27,7 +27,20 @@ alone does not identify a development checkout.
   preprocessing: qualify the engine on your own model first. On
   BaldEagleCrkMulti2D g09 and on Muncie g02 with a polygon terrain modification,
   every product was bitwise equal to native; a rotated-ellipse modification was
-  refused with the layer named. See
+  refused with the layer named. `native_compatible=True` is the default, so a
+  qualified model gets the tables the harness proved. With
+  `restamp_currency=True` (the default), the write-back sets
+  `Property Tables Last Computed` as native HEC-RAS 7.0.1 does: local time,
+  `DDMONYYYY HH:MM:SS`, in the existing attribute's stored type. The choice and
+  the stamps are recorded in `result.currency`. `Property Tables LC Hash`, the
+  only other attribute native recomputation changes, cannot be reproduced
+  exactly. It is kept from the source with an `ExperimentalWarning`. On Muncie
+  and Bald Eagle, RAS Mapper and a `RasCmdr.compute_plan()` run both reported
+  the Rust tables as current. The harness report lists Infiltration and
+  Percent Impervious datasets that are present but not compared: the engine's
+  `--compare` covers Stage 2 only through cell Manning's n until its
+  workstream P lands. Comparison against the plan-compute preprocessor is out
+  of scope here. See
   [Experimental Rust geometry preprocessing](../user-guide/experimental-rust-geometry-preprocessing.md).
 
 - **Constant precipitation now runs on unsteady files without meteorology

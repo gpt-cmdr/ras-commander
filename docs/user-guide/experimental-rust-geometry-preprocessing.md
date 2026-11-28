@@ -89,7 +89,8 @@ The harness runs four steps:
 2. **Rust.** Copy the staged project to `work_dir/rust`. Overwrite every stored
    floating-point product with NaN, run the engine in native-compatible mode,
    and write its products back through the guarded writer described
-   [below](#use-the-products). Overwriting the stored products shows that the
+   [below](#use-the-products), restamping `Property Tables Last Computed`
+   as `compute_rust_experimental()` does. Overwriting the stored products shows that the
    engine computed every value it wrote: a product it read would turn its
    output non-finite and fail validation.
 3. **Native.** Copy the staged project to `work_dir/native` and run
@@ -130,8 +131,21 @@ The report also attaches:
 - the engine's own per-stage `--compare` check against native run 1
   (`engine_compare=True`);
 - area attributes that differ between the two files, for information.
-  The Rust write-back never writes attributes; native recomputation restamps
-  `Property Tables Last Computed` and `Property Tables LC Hash`;
+  Both sides stamp `Property Tables Last Computed` with their own completion
+  time, so it always differs. The Rust side keeps `Property Tables LC Hash`
+  from the staged input, so it differs whenever native's input-derived hash
+  differs from the input's (see [Currency attributes](#currency-attributes));
+- a **Stage 2 infiltration and impervious coverage** section whenever
+  `Infiltration/...` or `Percent Impervious/...` datasets are present. The
+  engine's `--compare` checks Stage 2 only through
+  `Cells Center Manning's n`, so it does not compare these arrays. The dataset
+  table compares the arrays the engine computed. A family dataset the engine
+  does not compute (for example `Infiltration/Properties`) keeps the staged
+  input on the Rust side. It is shown with category `carried` and listed as
+  not compared, because equal values there prove nothing about the engine.
+  The engine's workstream P (in progress) adds Stage 2 infiltration and
+  impervious coverage to `--compare` and the harness; until then, reports do
+  not cover those arrays through the engine's own check;
 - with `include_corrected=True`, the corrected mode's departure from native
   (D-4, D-5) as a separate table that does not affect the verdict.
 
@@ -142,16 +156,21 @@ The native and Rust geometry HDFs are kept beside them. With
 
 ### Results on the RasExamples projects
 
-The current engine build produced these results on 2026-11-27: `ras-preprocess
-0.1.0`, built from source revision `26ca082`, SHA-256 `f202292a…7040eb7`.
+The current engine build produced these results on 2026-11-28: `ras-preprocess
+0.1.0`, built from source revision `9ab2592`, SHA-256 `025b41df…4e6f07`.
 The native side was HEC-RAS 7.0.1. All three cases ran in the integration
 tests, `tests/test_rust_preprocess_integration.py`.
 
 | Model | Native runs | Datasets compared | Verdict | Wall time |
 |---|---:|---|---|---:|
-| BaldEagleCrkMulti2D g09 (19,597 cells, 37,594 faces; SCS infiltration and percent impervious) | 2 | 37 (21 products), all bitwise; corrected mode also bitwise (Composite LC and Multiple Face Mann n are off) | equivalent | 167 s |
-| Muncie g02 with a SetValue polygon terrain modification crossing 195 faces and 96 cells | 2 | 28 (12 products), all bitwise | equivalent | 26 s |
-| Muncie g02 with a rotated ellipse terrain modification (30°, 200 × 80 ft) | — | none | refused: ``Basin (Type="Circle" …): rotated ellipse (30 degrees, radii 200 x 80); its native Stage 1 face intersection is not reproduced`` | 13 s |
+| BaldEagleCrkMulti2D g09 (19,597 cells, 37,594 faces; SCS infiltration and percent impervious) | 2 | 37, all bitwise: 20 products, 16 inputs and `Infiltration/Properties` (carried, not computed by the engine); 8 of the 9 Stage 2 family datasets compared as engine output | equivalent | 224 s |
+| Muncie g02 with a SetValue polygon terrain modification crossing 195 faces and 96 cells | 1 | 28 (12 products), all bitwise | equivalent | 36 s |
+| Muncie g02 with a rotated ellipse terrain modification (30°, 200 × 80 ft) | — | none | refused: ``Basin (Type="Circle" …): rotated ellipse (30 degrees, radii 200 x 80); its native Stage 1 face intersection is not reproduced`` | 15 s |
+
+The previous build (`26ca082`) gave the same verdicts. On it, the corrected
+mode was also bitwise on Bald Eagle g09, where Composite LC and Multiple Face
+Mann n are off, and a second native run on the Muncie case agreed with the
+first. The host was shared with other HEC-RAS jobs during the `9ab2592` runs.
 
 Each wall time includes staging and the native 7.0.1 conversion of the
 geometry, which was authored in an earlier HEC-RAS version.
@@ -174,26 +193,103 @@ result.engine.sha256, result.options, result.writeback["datasets_changed"]
   relative to it. The products go into a copy at `out_path`.
   `in_place=True` writes the source itself, keeping a
   `<name>.pre-rust.bak` backup beside it.
-- `native_compatible=True` (the default) reproduces native HEC-RAS 7.0.1,
-  including defects D-4 and D-5. This is the mode the harness qualifies.
-  `native_compatible=False` uses the engine's corrected mode, which departs from
-  native wherever those defects act.
+- **Default mode: `native_compatible=True`.** It reproduces native HEC-RAS
+  7.0.1, including defects D-4 and D-5, and it is the mode the harness
+  qualifies, so a qualified model gets the tables the harness proved. The
+  engine's own default is its corrected mode; RAS Commander does not use it
+  unless you pass `native_compatible=False`, which departs from native
+  wherever those defects act.
+- **`restamp_currency=True` (the default)** sets each written area's
+  `Property Tables Last Computed` the way native recomputation does. See
+  [Currency attributes](#currency-attributes). The choice is recorded in
+  `result.options["restamp_currency"]`, and `result.currency` holds the
+  stamp and each area's before and after value.
 - The writer refuses any `File Version` other than `HEC-RAS 7.0.1 June 2026`
   and any geometry that is not `Complete Geometry=True`. It writes only
-  datasets that already exist, never creates a dataset, and never writes an
-  attribute. Before writing, it validates the products: finite, positive cell
+  datasets that already exist and never creates a dataset or an attribute.
+  The only attribute it writes is the currency stamp above. Before writing,
+  it validates the products: finite, positive cell
   Manning's n; contiguous `Info` tables; strictly increasing elevations;
   volume curves that start at 0; ghost-cell conventions; and every cell
   minimum at or below each adjacent face minimum. Every write is read back
   exactly. The receipt lists the SHA-256 of every dataset before and after,
-  which proves that no other dataset changed. The file is restored from its
-  backup on any failure.
+  which proves that no other dataset changed. It also lists a before/after
+  snapshot of every attribute in the file, which proves that only the
+  currency stamps changed. The file is restored from its backup on any
+  failure.
 - The result records the engine path, version and SHA-256, the options, the
   exact command, the engine's report, the write-back receipt and the source
   SHA-256.
 
-Because attributes are not written, `Property Tables Last Computed` and the
-layer hashes keep the values of the source geometry HDF.
+## Currency attributes
+
+When native HEC-RAS 7.0.1 recomputes property tables
+(`RasMap.recompute_property_tables`), it changes exactly two attributes. The
+evidence is an attribute-only diff of every object in the geometry HDF before
+and after two consecutive native runs, on Muncie g02 and Bald Eagle g09. No
+root, `Geometry` or layer attribute changes, and no dataset outside the
+products changes.
+
+| Attribute | Where | What native writes | Rust write-back (`restamp_currency=True`) |
+|---|---|---|---|
+| `Property Tables Last Computed` | each recomputed 2D area | The local wall-clock time at which the area's tables completed, `DDMONYYYY HH:MM:SS` with an upper-case English month (for example `27NOV2026 22:59:52`), stored as an 18-byte fixed-length string | **Restamped.** Set to the local time of the write-back, in the same format. It is written through the existing attribute, so its stored type is unchanged, and read back exactly. An area without the attribute is left without it. |
+| `Property Tables LC Hash` | areas with a land-cover association | A 32-byte SHA-256 derived from the land-cover inputs. Native rewrites it only when its value differs from the stored one. | **Kept from the source, with a warning.** |
+
+Native builds the LC hash over RasMapperLib's hash of the calibration-region
+feature layer, each region's class-to-n map, the land-cover names and the base
+n values. That construction is not specified exactly enough to reproduce, and
+the engine does not compute it, so RAS Commander does not guess it. When an
+area carries the hash, `compute_rust_experimental()` keeps the source value,
+records it in `result.currency["not_restamped"]` and emits
+`ExperimentalWarning`. The stored hash is a currency signal: native reports
+"Mesh property tables are current" only while it matches the inputs. A Rust
+result is therefore current exactly when its source geometry HDF was current.
+After a land-cover or calibration-region edit, run native preprocessing first.
+
+`restamp_currency=False` writes no attribute at all, as earlier builds of this
+feature did.
+
+### Evidence that HEC-RAS accepts the Rust tables
+
+These checks ran on HEC-RAS 7.0.1 on 2026-11-27, through RAS Commander APIs
+only, with engine build `9ab2592`:
+
+| Check | Muncie g02 (plan 03) | Bald Eagle g09 (plan 03) |
+|---|---|---|
+| `RasCurrency.is_geom_preprocessing_current()` after the write-back | current | current |
+| Native RAS Mapper on a copy of the Rust result | "Mesh property tables are current." | "Mesh property tables are current." |
+| `RasCmdr.compute_plan()` on the Rust result | "Mesh property tables are current."; completed | "BaldEagleCr: Mesh property tables are current."; completed |
+| Geometry HDF datasets and attributes after the plan compute | unchanged (restamp kept) | attributes unchanged (restamp and LC hash kept); 2D area datasets unchanged |
+| Plan HDF property tables | byte-identical to the Rust tables | byte-identical to the Rust tables |
+
+On Bald Eagle, the LC hash discriminates. The same Rust write-back applied
+to the geometry HDF straight from the native 7.0.1 conversion keeps that
+file's hash, and RAS Mapper then reports "Manning's n calibration regions have
+changed". Native behaves the same way on its own output: the first native plan
+compute writes a hash that the next native plan compute finds stale ("Refreshed
+association-derived tables without rebuilding cell volume tables"). The
+Rust result inherits whatever currency its source had. Every plan compute,
+native or Rust, also rewrites `Geometry/Land Cover (Manning's n)/Internal
+Cells`. That dataset lies outside the 2D area products and the Rust write-back
+does not touch it.
+
+Each case starts from the state native itself accepts. The geometry was
+converted to 7.0.1 with `GeomPreprocessor.run_geometry_preprocessor()`, as
+the harness stages it, and the plan was then computed natively twice. On
+Muncie, the second native compute reported the tables current. On Bald
+Eagle, it refreshed the association-derived tables and the LC hash, and the
+Rust write-back started from that refreshed file. The
+first native plan compute after a conversion rebuilds the tables itself
+("Property tables do not exist"), whatever they contain. On Muncie, a project
+plan-computed twice without the explicit conversion was still rebuilt on the
+second run. Check the compute messages of your own workflow. On Muncie, every check also passed with
+`restamp_currency=False`: HEC-RAS 7.0.1 does not compare
+`Property Tables Last Computed`, and it does not compare the file
+modification time either. The restamp keeps the stamp
+truthful rather than changing the verdict. On these models the Rust tables
+are bitwise equal to native, so the checks show that the write-back leaves the
+file in a state HEC-RAS accepts. They do not show what HEC-RAS does with
+tables that differ from native.
 
 ## Supported and refused inputs
 
@@ -234,7 +330,11 @@ labels these cases in its report rather than hiding them.
 
 Defects D-1 to D-3 concern the property-table currency hash, Green-Ampt
 optional variables and overlapping calibration regions. The engine keeps
-native behavior for them.
+native behavior for them. For D-1, the engine's register says the LC hash is
+never reported current. On Bald Eagle g09, a repeat native recompute did
+report it current (see [Currency attributes](#currency-attributes)). The hash
+a native plan compute writes on a freshly converted geometry is the one that
+reads as stale.
 
 With `native_repeats > 1`, the harness compares native runs with each other.
 It labels datasets on which they disagree (N-1, N-2) and passes a Rust dataset
@@ -243,10 +343,18 @@ cannot expose native nondeterminism.
 
 ## Limitations
 
-- **One HEC-RAS version.** The native reference is HEC-RAS 7.0.1 RAS Mapper
-  recomputation (`RasMap.recompute_property_tables`). The harness does not
-  compare against the plan-compute preprocessor, and does not run the
+- **One HEC-RAS version and one native producer.** The native reference is
+  HEC-RAS 7.0.1 RAS Mapper recomputation (`RasMap.recompute_property_tables`).
+  Comparison against the plan-compute preprocessor is out of scope for this
+  feature; it is being prepared separately. The harness does not run the
   unsteady solver.
+- **Stage 2 infiltration and impervious coverage.** The engine's `--compare`
+  covers Stage 2 only through `Cells Center Manning's n`. The engine's
+  workstream P (in progress) adds infiltration and impervious coverage to
+  `--compare` and the harness, so current reports do not cover those arrays
+  through the engine's own check. The report says so whenever those datasets
+  are present, and it lists any family dataset the engine does not compute as
+  not compared.
 - **Stale-success dependency.** RAS Mapper can exit successfully after
   skipping an area. The harness detects this independently by overwriting the
   stored products before each native run. The matching fix in
@@ -255,10 +363,10 @@ cannot expose native nondeterminism.
 - **2D only.** 1D cross sections, storage areas and 1D structure tables are
   not computed or compared. Datasets outside `Geometry/2D Flow Areas` are not
   compared.
-- **Attributes.** The write-back leaves the currency attributes of the source
-  file unchanged. Whether a later HEC-RAS plan compute accepts the tables as
-  current depends on those attributes. Confirm it in the compute messages
-  before relying on the tables.
+- **LC hash.** `Property Tables LC Hash` is kept from the source, not
+  recomputed (see [Currency attributes](#currency-attributes)). Use a source
+  geometry HDF that native preprocessing left current, and check the compute
+  messages for "Mesh property tables are current".
 
 ## Exceptions
 

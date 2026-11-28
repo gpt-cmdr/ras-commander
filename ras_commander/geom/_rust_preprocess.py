@@ -83,6 +83,43 @@ PRODUCT_DATASETS = (
 )
 LONG_FACE_POINTS = 1000  # L-1: native integrates these faces with a racy parallel loop
 
+# Currency attributes. A native HEC-RAS 7.0.1 RAS Mapper recompute
+# (``RasMap.recompute_property_tables``) changes exactly these attributes and
+# nothing else outside the product datasets, as an attribute-only diff of
+# every HDF object shows (Muncie g02 and Bald Eagle g09, two runs each):
+#
+# - ``Property Tables Last Computed`` on every recomputed 2D area: the local
+#   wall-clock time at which the area's tables completed, as a fixed-length
+#   ``|S18`` string ``DDMONYYYY HH:MM:SS`` with an upper-case English month.
+#   The Rust write-back restamps it the same way (see ``_native_timestamp``).
+# - ``Property Tables LC Hash`` (32-byte SHA-256) on areas with a land-cover
+#   association. Native rewrites it only when its input-derived value differs
+#   (a second recompute kept it and reported "Mesh property tables are
+#   current"). Its construction (a SHA-256 over RasMapperLib's calibration-
+#   region feature-layer hash, the region class maps, the land-cover names
+#   and the base n values) is not specified exactly enough to reproduce, and
+#   the engine does not compute it. The write-back therefore keeps the
+#   source's value and warns; it never guesses a hash.
+LAST_COMPUTED_ATTR = "Property Tables Last Computed"
+LC_HASH_ATTR = "Property Tables LC Hash"
+NOT_RESTAMPED_ATTRS = (LC_HASH_ATTR,)
+_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+# Classification families of Stage 2 whose coverage by the engine's own
+# ``--compare`` arrives with the engine's workstream P (in progress).
+STAGE2_FAMILIES = ("Infiltration", "Percent Impervious")
+
+
+def _native_timestamp(now: Optional[datetime] = None) -> str:
+    """Return ``now`` (default: local time) as native writes currency stamps.
+
+    Native HEC-RAS 7.0.1 writes ``Property Tables Last Computed`` as local
+    time in ``DDMONYYYY HH:MM:SS`` with an upper-case English month, for
+    example ``27NOV2026 22:59:52``. The month table is fixed, so the stamp
+    does not depend on the process locale.
+    """
+    now = now or datetime.now()
+    return f"{now.day:02d}{_MONTHS[now.month - 1]}{now.year:04d} {now:%H:%M:%S}"
+
 # Engine messages that mean "input outside the qualified scope" rather than a
 # crash. The engine names each refused layer and form in the message.
 _REFUSAL_MARKERS = (
@@ -470,16 +507,75 @@ def _restore(backup: Path, target: Path) -> None:
     raise RustPreprocessError(f"could not restore {target} from its backup {backup}; restore it manually")
 
 
-def write_bundle(geom_hdf: Path, bundle: Path, *, restore_mtime: bool = True) -> Dict[str, Any]:
+def _attribute_snapshot(path: Path) -> Dict[str, bytes]:
+    """``object@attribute`` -> stored type and raw value bytes, for every HDF object."""
+    import h5py
+
+    out: Dict[str, bytes] = {}
+    with h5py.File(path, "r") as f:
+        def rec(name, obj):
+            for k in obj.attrs:
+                aid = obj.attrs.get_id(k)
+                a = np.asarray(obj.attrs[k])
+                out[f"{name or '/'}@{k}"] = (str(aid.dtype).encode() + b"|" + str(a.shape).encode()
+                                            + b"|" + a.tobytes())
+        rec("", f)
+        f.visititems(rec)
+    return out
+
+
+def _restamp_area(g, stamp: str) -> Dict[str, Any]:
+    """Overwrite an area's existing ``Property Tables Last Computed`` in place.
+
+    The attribute is written through its existing HDF5 attribute, so its
+    stored type (fixed-length string size and padding) is unchanged. It is
+    never created: an area without it is left without it.
+    """
+    import h5py
+
+    if LAST_COMPUTED_ATTR not in g.attrs:
+        return {"status": "absent", "note": "not present in the source; not created"}
+    aid = g.attrs.get_id(LAST_COMPUTED_ATTR)
+    tid = aid.get_type()
+    if not isinstance(tid, h5py.h5t.TypeStringID) or tid.is_variable_str() or aid.shape not in ((), (1,)):
+        return {"status": "kept", "note": f"stored as {aid.dtype} {aid.shape}, not a fixed-length string; kept"}
+    size = tid.get_size()
+    raw = stamp.encode("ascii")
+    if len(raw) > size:
+        return {"status": "kept", "note": f"stamp needs {len(raw)} bytes, stored type holds {size}; kept"}
+    before = _decode(g.attrs[LAST_COMPUTED_ATTR])
+    # Write with the stored type as the memory type: no string conversion, so
+    # the bytes land as given. Native stores 18 characters in an 18-byte
+    # NULLTERM type (no terminator); a NULLPAD-to-NULLTERM conversion would
+    # truncate the last character.
+    aid.write(np.array(raw.ljust(size, b"\x00"), dtype=f"S{size}").reshape(aid.shape), mtype=tid)
+    return {"status": "restamped", "before": before, "after": stamp}
+
+
+def write_bundle(
+    geom_hdf: Path,
+    bundle: Path,
+    *,
+    restore_mtime: bool = True,
+    restamp_currency: bool = True,
+    stamp_time: Optional[datetime] = None,
+) -> Dict[str, Any]:
     """Write an engine bundle into ``geom_hdf`` in place, guarded, and return a receipt.
 
     Preconditions: a supported ``File Version``, ``Complete Geometry=True``,
     every target dataset already present with the same dtype (no dataset is
     created; one is resized only where its ``maxshape`` allows), and the
-    engine's area attributes equal to the file's (no attribute is written).
-    Products are validated first. A full-file backup is restored on any
-    failure, every write is read back exactly, and the receipt proves that
-    no dataset outside the bundle changed.
+    engine's area attributes equal to the file's. Products are validated
+    first. A full-file backup is restored on any failure, every write is
+    read back exactly, and the receipt proves that no dataset outside the
+    bundle changed.
+
+    With ``restamp_currency`` (the default), each written area's existing
+    ``Property Tables Last Computed`` is set to the write time in native's
+    format, as native recomputation does. No other attribute is written or
+    created; the receipt proves it with a before/after snapshot of every
+    attribute in the file. ``Property Tables LC Hash`` is kept (it cannot be
+    reproduced exactly) and reported under ``currency["not_restamped"]``.
     """
     import h5py
 
@@ -524,6 +620,16 @@ def write_bundle(geom_hdf: Path, bundle: Path, *, restore_mtime: bool = True) ->
             }
     rec["sha256_before"] = _sha256(geom_hdf)
     before = _dataset_hashes(geom_hdf)
+    attrs_before = _attribute_snapshot(geom_hdf)
+    stamp = _native_timestamp(stamp_time) if restamp_currency else None
+    currency: Dict[str, Any] = {
+        "restamp_currency": restamp_currency,
+        "stamp": stamp,
+        "clock": "local time at write-back" if restamp_currency else None,
+        "format": "DDMONYYYY HH:MM:SS, upper-case English month (native HEC-RAS 7.0.1)",
+        "areas": {},
+        "not_restamped": {},
+    }
     backup = geom_hdf.with_name(geom_hdf.name + ".pre-rust.bak")
     shutil.copy2(geom_hdf, backup)
     try:
@@ -535,21 +641,53 @@ def write_bundle(geom_hdf: Path, bundle: Path, *, restore_mtime: bool = True) ->
                     if d.shape != a.shape:
                         d.resize(a.shape)
                     d[...] = a.astype(d.dtype)
+                if restamp_currency:
+                    currency["areas"][area] = {LAST_COMPUTED_ATTR: _restamp_area(g, stamp)}
+                kept = {k: _jsonable(g.attrs[k]) for k in NOT_RESTAMPED_ATTRS if k in g.attrs}
+                if kept:
+                    currency["not_restamped"][area] = kept
         with h5py.File(geom_hdf, "r") as f:
             for area, t in by_area.items():
                 g = f[f"{AREAS}/{area}"]
                 for ds, a in t.items():
                     if g[ds][()].tobytes() != a.astype(g[ds].dtype).tobytes():
                         raise RustPreprocessError(f"{area}/{ds} failed exact readback")
+                st_ = currency["areas"].get(area, {}).get(LAST_COMPUTED_ATTR, {})
+                if st_.get("status") == "restamped" and _decode(g.attrs[LAST_COMPUTED_ATTR]) != stamp:
+                    raise RustPreprocessError(f"{area}/{LAST_COMPUTED_ATTR} failed exact readback")
         after = _dataset_hashes(geom_hdf)
         written = {f"{AREAS}/{a}/{ds}" for a, t in by_area.items() for ds in t}
         changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
         untouched_changed = [k for k in changed if k not in written]
         if untouched_changed:
             raise RustPreprocessError(f"datasets outside the bundle changed: {untouched_changed[:5]}")
+        attrs_after = _attribute_snapshot(geom_hdf)
+        stamped = {f"{AREAS}/{a}@{LAST_COMPUTED_ATTR}" for a, v in currency["areas"].items()
+                   if v[LAST_COMPUTED_ATTR]["status"] == "restamped"}
+        attrs_changed = sorted(k for k in attrs_before.keys() | attrs_after.keys()
+                               if attrs_before.get(k) != attrs_after.get(k))
+        unexpected = [k for k in attrs_changed if k not in stamped]
+        if unexpected:
+            raise RustPreprocessError(f"attributes other than the currency stamps changed: {unexpected[:5]}")
+        currency["attributes_changed"] = attrs_changed
+        currency["attributes_tracked"] = len(attrs_before)
     except Exception:
         _restore(backup, geom_hdf)
         raise
+    rec["currency"] = currency
+    if currency["not_restamped"]:
+        msg = (
+            f"{geom_hdf.name}: {LC_HASH_ATTR} was kept from the source in "
+            f"{sorted(currency['not_restamped'])}. Native HEC-RAS recomputes it from the "
+            "land-cover inputs; the Rust write-back cannot reproduce it exactly and does not "
+            "guess. HEC-RAS treats the tables as current only while the source's hash still "
+            "matches its inputs; check the compute messages for 'Mesh property tables are current'."
+        )
+        logger.warning(msg)
+        warnings.warn(msg, ExperimentalWarning, stacklevel=3)
+    for area, v in currency["areas"].items():
+        if v[LAST_COMPUTED_ATTR]["status"] != "restamped":
+            logger.warning("%s/%s: %s", area, LAST_COMPUTED_ATTR, v[LAST_COMPUTED_ATTR]["note"])
     if restore_mtime:
         os.utime(geom_hdf, ns=(st.st_atime_ns, st.st_mtime_ns))
     rec.update(
@@ -900,6 +1038,10 @@ class RustPreprocessResult:
         command: The exact engine command.
         engine_report: The engine's JSON report (per-area timings and counts).
         writeback: Write-back receipt (validation, dataset hashes, SHA-256).
+        currency: Currency-attribute provenance: whether
+            ``Property Tables Last Computed`` was restamped, the stamp, each
+            area's before/after value, the attributes kept from the source
+            (``Property Tables LC Hash``) and the attributes that changed.
         source_sha256: SHA-256 of the source geometry HDF before the run.
         elapsed_seconds: Wall time of the engine run and write-back.
         started_utc: ISO-8601 start time.
@@ -916,6 +1058,7 @@ class RustPreprocessResult:
     source_sha256: str
     elapsed_seconds: float
     started_utc: str
+    currency: Dict[str, Any] = field(default_factory=dict)
     experimental: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
@@ -931,6 +1074,7 @@ class RustPreprocessResult:
             "source_sha256": self.source_sha256,
             "elapsed_seconds": self.elapsed_seconds,
             "started_utc": self.started_utc,
+            "currency": self.currency,
             "writeback": self.writeback,
             "engine_report": self.engine_report,
         }
@@ -968,6 +1112,8 @@ class RustEquivalenceReport:
     timings: Dict[str, float] = field(default_factory=dict)
     started_utc: str = ""
     notes: List[str] = field(default_factory=list)
+    currency: Dict[str, Any] = field(default_factory=dict)
+    stage2_coverage: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     @property
     def equivalent(self) -> bool:
@@ -1009,6 +1155,8 @@ class RustEquivalenceReport:
             "native_nondeterminism": self.native_nondeterminism,
             "corrected_departure": [cmp(c) for c in self.corrected_departure],
             "attribute_differences": self.attribute_differences,
+            "currency": self.currency,
+            "stage2_coverage": self.stage2_coverage,
             "engine_compare": self.engine_compare,
             "labels": self.labels,
             "notes": self.notes,
@@ -1093,11 +1241,33 @@ class RustEquivalenceReport:
             lines.append("")
         if self.attribute_differences:
             lines += ["## Area attribute differences (informational)", "",
-                      "The Rust write-back never writes attributes; native recomputation may "
-                      "restamp dates and hashes.", ""]
+                      f"Both sides stamp `{LAST_COMPUTED_ATTR}` with their own completion time, so "
+                      f"it differs by the time between runs. The Rust write-back keeps `{LC_HASH_ATTR}` "
+                      "from the staged input, because the native hash cannot be reproduced exactly; "
+                      "native rewrites it when its input-derived value differs.", ""]
             for area, diffs in self.attribute_differences.items():
                 for k, v in diffs.items():
-                    lines.append(f"- `{area}` `{k}`: native `{v['native']}`, Rust `{v['rust']}`")
+                    why = {LAST_COMPUTED_ATTR: " (timestamp; expected)",
+                           LC_HASH_ATTR: " (kept from input by the Rust write-back; not reproduced)"}.get(k, "")
+                    lines.append(f"- `{area}` `{k}`: native `{v['native']}`, Rust `{v['rust']}`{why}")
+            lines.append("")
+        if any(c.get("present") for c in self.stage2_coverage.values()):
+            lines += ["## Stage 2 infiltration and impervious coverage", "",
+                      "Infiltration and Percent Impervious datasets are present. The engine's "
+                      "`--compare` checks Stage 2 only through `Cells Center Manning's n`, so it does "
+                      "**not** compare these arrays; that coverage arrives with the engine's "
+                      "workstream P (in progress). The dataset table above compares the arrays the "
+                      "engine computed. Arrays it did not compute keep the staged input and are listed "
+                      "here as not compared.", ""]
+            for area, c in self.stage2_coverage.items():
+                if not c.get("present"):
+                    continue
+                lines.append(f"- `{area}`: compared (engine output) {len(c['compared'])}: "
+                             f"{', '.join(f'`{d}`' for d in c['compared']) or 'none'}")
+                lines.append(f"- `{area}`: **not compared** (not computed by the engine; carried from "
+                             f"the input) {len(c['not_compared'])}: "
+                             f"{', '.join(f'`{d}`' for d in c['not_compared']) or 'none'}")
+                lines.append(f"- `{area}`: engine `--compare`: not covered ({len(c['present'])} datasets)")
             lines.append("")
         if self.engine_compare:
             lines += ["## Engine `--compare` against native run 1", "",
@@ -1184,6 +1354,7 @@ def compute_rust_experimental(
     sort: str = "introsort",
     units: Optional[str] = None,
     restore_mtime: bool = True,
+    restamp_currency: bool = True,
     timeout: Optional[float] = DEFAULT_ENGINE_TIMEOUT,
     keep_bundle: bool = False,
 ) -> RustPreprocessResult:
@@ -1230,7 +1401,8 @@ def compute_rust_experimental(
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
         try:
-            receipt = write_bundle(target, bundle, restore_mtime=restore_mtime)
+            receipt = write_bundle(target, bundle, restore_mtime=restore_mtime,
+                                   restamp_currency=restamp_currency)
         except Exception:
             if not in_place:
                 target.unlink(missing_ok=True)
@@ -1250,10 +1422,11 @@ def compute_rust_experimental(
         source_geometry_hdf=src,
         in_place=in_place,
         engine=engine,
-        options=options,
+        options={**options, "restamp_currency": restamp_currency},
         command=cmd,
         engine_report=report,
         writeback=receipt,
+        currency=receipt.get("currency", {}),
         source_sha256=source_sha,
         elapsed_seconds=time.perf_counter() - t0,
         started_utc=started,
@@ -1477,13 +1650,16 @@ def validate_rust_equivalence(
         lap("rust")
         report.write(work)
         return report
-    receipt = write_bundle(rust_hdf, bundle, restore_mtime=True)
+    receipt = write_bundle(rust_hdf, bundle, restore_mtime=True, restamp_currency=True)
     Path(receipt["backup"]).unlink(missing_ok=True)
     unwritten = sorted(set(poisoned) - {f"{a}/{d}" for a, v in receipt["areas"].items() for d in v["datasets"]})
     if unwritten:
         notes.append(f"Products the engine did not write (left NaN by isolation): {unwritten}")
     report.rust_geometry_hdf = rust_hdf
-    report.options = {**options, "command": cmd, "isolate_inputs": isolate_inputs}
+    report.options = {**options, "command": cmd, "isolate_inputs": isolate_inputs,
+                      "restamp_currency": True}
+    report.currency = receipt.get("currency", {})
+    written_sets = {a: set(v["datasets"]) for a, v in receipt["areas"].items()}
     lap("rust")
 
     # 3. Native side: RAS Commander only, on its own copy, repeated on request.
@@ -1573,6 +1749,7 @@ def validate_rust_equivalence(
         if meta["long_faces"]:
             notes.append(f"{a}: {len(meta['long_faces'])} faces have more than {LONG_FACE_POINTS} profile "
                          f"points (L-1); native output on them is not reproducible.")
+    report.stage2_coverage = _stage2_coverage(comparisons, written_sets)
     report.comparisons = comparisons
     lap("compare")
 
@@ -1622,6 +1799,35 @@ def validate_rust_equivalence(
     report.write(work)
     logger.info("Rust preprocessing equivalence for %s: %s", g_hdf.name, report.verdict)
     return report
+
+
+def _stage2_coverage(
+    comparisons: Sequence[RustDatasetComparison], written: Mapping[str, set]
+) -> Dict[str, Dict[str, Any]]:
+    """Per area: Stage 2 infiltration/impervious datasets present, compared and not compared.
+
+    A family dataset that the engine bundle did not write still holds the
+    staged input on the Rust side, so equal values prove nothing about the
+    engine. It is recategorized ``carried`` and labeled; it stays in the
+    table (and in the verdict, as an unchanged input) but is listed as not
+    compared.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for c in comparisons:
+        fam = c.dataset.split("/", 1)[0]
+        if "/" not in c.dataset or fam not in STAGE2_FAMILIES:
+            continue
+        cov = out.setdefault(c.area, {"present": [], "compared": [], "not_compared": [],
+                                      "engine_compare": "not covered (Stage 2 only through Cells Center Manning's n; "
+                                                        "workstream P in progress)"})
+        cov["present"].append(c.dataset)
+        if c.dataset in written.get(c.area, set()):
+            cov["compared"].append(c.dataset)
+        else:
+            cov["not_compared"].append(c.dataset)
+            c.category = "carried"
+            c.labels.append("not computed by the engine; carried from the input (not compared)")
+    return out
 
 
 def _flag(attrs, name: str) -> bool:
