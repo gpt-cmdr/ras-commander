@@ -65,10 +65,11 @@ with a finite Max Reach, for the ``"6.6"`` and ``"6.7"`` rules named ground
 lines, and for the ``"6.6"`` rule boundary elevations without a perimeter
 control point (6.6 samples the terrain even when a profile is stored).
 
-Engine forms (``engine_forms``): an engine release can reproduce forms that
-older engines refuse. The caller names the forms its engine supports (from
-:data:`ENGINE_FORMS`; ``_effective_terrain.engine_modification_forms``
-decides them from the engine), and only those refusals are lifted, and only
+Engine forms (``engine_forms``): an engine can reproduce forms that older
+engines refuse. The caller names the forms its engine supports (from
+:data:`ENGINE_FORMS`; ``_effective_terrain.engine_modification_forms`` takes
+them from the engine's advertised ``effective_terrain.supported_forms``, by
+form identifier and rule), and only those refusals are lifted, and only
 under the ``"7.0.1"`` rule, the one they were qualified for:
 
 * :data:`TERRAIN_SAMPLED_BOUNDARY`: a polygon with boundary elevations, no

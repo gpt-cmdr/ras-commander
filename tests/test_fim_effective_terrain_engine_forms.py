@@ -1,21 +1,24 @@
-"""Engine forms of ras-commander-fast-map 0.23.0 reaching the effective-terrain caller.
+"""Advertised engine forms reaching the effective-terrain caller.
 
 fast-map's ``feat/terrain-mods-native-parity`` branch (unreleased) reproduces
 four forms that older engines refuse: polygon boundary elevations sampled from
 the terrain, ground lines without a profile (RAS Mapper's default profile),
 consecutive repeated ground-line vertices, and a terrain source tagged with
 another NAD83 realization of the session's projection, pinned by its WKT hash.
-The caller lifts its own refusals for them only for an engine at
-``_effective_terrain.ENGINE_FORMS_MIN_VERSION`` and only under the 7.0.1 rule;
-an older engine keeps every refusal. Parity with RAS Mapper is qualified in
+The caller lifts its own refusal of a form only when the engine lists it in
+``effective_terrain.supported_forms`` (schema
+``rasmapper-effective-terrain-forms/1``), a modification form with the 7.0.1
+rule among its ``hecras_rules``, and only under the 7.0.1 rule; an engine
+without the field (0.22.0 and earlier) keeps every refusal. The engine
+version is not consulted. Parity with RAS Mapper is qualified in
 fast-map (``feature_dev_notes/effective_terrain_modifications``).
 
 The unit tests use synthetic HDFs. The real-data tests use the
 BaldEagleCrkMulti2D example terrain (``Terrain50``, two sources, EPSG:2271)
 and run only when ``RAS_COMMANDER_FIM_ENGINE_FORMS_ENGINE`` names a
-``ras2fim-batch`` built from that branch. A build of the branch still reports
-0.22.0, so those tests stand in the release number for it (and check that the
-real 0.22.0 report keeps the forms refused).
+``ras2fim-batch`` built from that branch (it advertises the forms; the tests
+strip the field from its record to check that an engine without it keeps the
+forms refused).
 """
 
 import json
@@ -40,7 +43,16 @@ from test_fim_terrain_mods import (  # noqa: E402
 from test_fim_terrain_scope_adr_velocity import _terrain  # noqa: E402
 
 ALL = _terrain_mods.ENGINE_FORMS
-MIN = ".".join(map(str, _effective_terrain.ENGINE_FORMS_MIN_VERSION))
+PIN_FORM = _effective_terrain.PINNED_NAD83_REALIZATION
+
+
+def _forms(rules=("7.0.1",), forms=ALL, pinned=True, schema=_effective_terrain.SUPPORTED_FORMS_SCHEMA):
+    entries = {f: {"kind": "modification", "hecras_rules": list(rules), "summary": f} for f in forms}
+    if pinned:
+        entries[PIN_FORM] = {"kind": "source", "summary": "pin"}
+    return {"schema": schema, "forms": entries}
+
+
 V2_RECORD = {
     "method_id": _effective_terrain.METHOD_ID_V2,
     "request_schemas": [_effective_terrain.SCHEMA, _effective_terrain.SCHEMA_V2],
@@ -164,26 +176,55 @@ def test_unknown_engine_form_is_a_value_error(tmp_path):
 
 # --- engine gate -------------------------------------------------------------------------------
 
-def _engine(monkeypatch, version, record=V2_RECORD):
+def _engine(monkeypatch, forms=None, record=V2_RECORD, version="0.23.0"):
+    """A fake engine whose effective-terrain record advertises ``forms`` (None: no field)."""
     monkeypatch.setattr(_effective_terrain._engine, "find_engine", lambda path=None: Path("engine.exe"))
-    method = {"effective_terrain": record}
-    if version is not None:
-        method["engine"] = {"package": "ras-commander-fast-map", "version": version}
+    record = dict(record)
+    if forms is not None:
+        record["supported_forms"] = forms
+    method = {"effective_terrain": record,
+              "engine": {"package": "ras-commander-fast-map", "version": version}}
     monkeypatch.setattr(_effective_terrain._engine, "engine_method", lambda engine: method)
 
 
-@pytest.mark.parametrize("version, record, expected", [
-    (None, V2_RECORD, frozenset()),
-    ("0.22.0", V2_RECORD, frozenset()),
-    ("0.22.9", V2_RECORD, frozenset()),
-    ("not a version", V2_RECORD, frozenset()),
-    (MIN, {"method_id": _effective_terrain.METHOD_ID}, frozenset()),
-    (MIN, V2_RECORD, frozenset((*ALL, _effective_terrain.PINNED_NAD83_REALIZATION))),
-    ("1.0.0-rc1", V2_RECORD, frozenset((*ALL, _effective_terrain.PINNED_NAD83_REALIZATION))),
+FULL = frozenset((*ALL, PIN_FORM))
+
+
+@pytest.mark.parametrize("forms, record, version, expected", [
+    # No field: none, whatever the version says (the version is not the contract).
+    (None, V2_RECORD, "0.22.0", frozenset()),
+    (None, V2_RECORD, "0.23.0", frozenset()),
+    (None, V2_RECORD, "9.9.9", frozenset()),
+    # Another schema, or a malformed field: none.
+    (_forms(schema="rasmapper-effective-terrain-forms/2"), V2_RECORD, "0.23.0", frozenset()),
+    ({"schema": _effective_terrain.SUPPORTED_FORMS_SCHEMA, "forms": []}, V2_RECORD, "0.23.0", frozenset()),
+    ("forms", V2_RECORD, "0.23.0", frozenset()),
+    # No /2 modifications record: none.
+    (_forms(), {"method_id": _effective_terrain.METHOD_ID}, "0.23.0", frozenset()),
+    # Advertised for 7.0.1: every form, whatever the version says.
+    (_forms(), V2_RECORD, "0.23.0", FULL),
+    (_forms(), V2_RECORD, "0.22.0", FULL),
+    (_forms(), V2_RECORD, "not a version", FULL),
+    # Advertised for other rules only: the modification forms stay refused.
+    (_forms(rules=("6.6", "6.7")), V2_RECORD, "0.23.0", frozenset((PIN_FORM,))),
+    # Only some forms advertised: only those.
+    (_forms(forms=(_terrain_mods.TERRAIN_SAMPLED_BOUNDARY,), pinned=False), V2_RECORD, "0.23.0",
+     frozenset((_terrain_mods.TERRAIN_SAMPLED_BOUNDARY,))),
+    # A form under the wrong kind is not that form.
+    ({"schema": _effective_terrain.SUPPORTED_FORMS_SCHEMA,
+      "forms": {_terrain_mods.DEFAULT_GROUND_LINE_PROFILE: {"kind": "source"},
+                PIN_FORM: {"kind": "modification", "hecras_rules": ["7.0.1"]}}},
+     V2_RECORD, "0.23.0", frozenset()),
 ])
-def test_engine_forms_follow_the_engine_release(monkeypatch, version, record, expected):
-    _engine(monkeypatch, version, record)
+def test_engine_forms_follow_the_advertised_forms(monkeypatch, forms, record, version, expected):
+    _engine(monkeypatch, forms, record, version)
     assert _effective_terrain.engine_modification_forms(Path("engine.exe")) == expected
+
+
+def test_forms_are_read_per_rule(monkeypatch):
+    _engine(monkeypatch, _forms(rules=("6.7", "7.0.1")))
+    assert _effective_terrain.engine_modification_forms(Path("engine.exe"), "6.6") == {PIN_FORM}
+    assert _effective_terrain.engine_modification_forms(Path("engine.exe"), "6.7") == FULL
 
 
 def _sampled_terrain(tmp_path):
@@ -196,9 +237,9 @@ def _sampled_terrain(tmp_path):
     return hdf
 
 
-def test_older_engine_refuses_the_forms_before_it_runs(tmp_path, monkeypatch):
+def test_engine_without_the_forms_refuses_them_before_it_runs(tmp_path, monkeypatch):
     hdf = _sampled_terrain(tmp_path)
-    _engine(monkeypatch, "0.22.0")
+    _engine(monkeypatch, None)
 
     def no_engine(*args, **kwargs):  # pragma: no cover - must not run
         raise AssertionError("engine called for a form it does not reproduce")
@@ -216,7 +257,7 @@ def test_engine_release_receives_the_forms_and_the_stitch_tin(tmp_path, monkeypa
     with h5py.File(hdf, "a") as f:
         f.create_dataset("Terrain/Stitch TIN Points", data=np.zeros((3, 4)))
         f.create_dataset("Terrain/Stitch TIN Triangles", data=np.array([[0, 1, 2]], np.int32))
-    _engine(monkeypatch, MIN)
+    _engine(monkeypatch, _forms())
     captured = _capture_request(monkeypatch)
     with pytest.raises(_Stop):
         RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", hecras_version="7.0.1")
@@ -277,9 +318,9 @@ def _two_source_terrain(tmp_path, second_epsg):
     return hdf, root
 
 
-def _fake_identity_engine(monkeypatch, version, hashes):
-    """An engine release whose terrain-info reports ``hashes[file name]``; runs stop at the build."""
-    _engine(monkeypatch, version)
+def _fake_identity_engine(monkeypatch, forms, hashes):
+    """An engine advertising ``forms`` whose terrain-info reports ``hashes[file name]``; runs stop at the build."""
+    _engine(monkeypatch, forms)
     monkeypatch.setattr(_effective_terrain._engine, "terrain_identity",
                         lambda *a, **k: {"epsg": 2271, "crs_identity": {"kind": "epsg"}})
     captured = {}
@@ -300,14 +341,14 @@ PIN = "0123456789abcdef"
 
 def test_a_source_in_another_nad83_realization_is_refused_without_a_pin(tmp_path, monkeypatch):
     hdf, _ = _two_source_terrain(tmp_path, 6563)
-    _fake_identity_engine(monkeypatch, MIN, {"T.second.tif": PIN})
+    _fake_identity_engine(monkeypatch, _forms(), {"T.second.tif": PIN})
     with pytest.raises(FimUnsupportedError, match="not in the first source's CRS.*source_crs_pins"):
         RasFim.build_effective_terrain(hdf, tmp_path / "out.tif")
 
 
 def test_a_verified_pin_reaches_the_engine(tmp_path, monkeypatch):
     hdf, _ = _two_source_terrain(tmp_path, 6563)
-    captured = _fake_identity_engine(monkeypatch, MIN, {"T.second.tif": PIN})
+    captured = _fake_identity_engine(monkeypatch, _forms(), {"T.second.tif": PIN})
     with pytest.raises(_Stop):
         RasFim.build_effective_terrain(hdf, tmp_path / "out.tif",
                                        source_crs_pins={"T.second.tif": PIN.upper()})
@@ -317,24 +358,26 @@ def test_a_verified_pin_reaches_the_engine(tmp_path, monkeypatch):
     assert "crs_identity" not in captured["sources"][0]
 
 
-@pytest.mark.parametrize("version, epsg, pins, error, match", [
+@pytest.mark.parametrize("forms, epsg, pins, error, match", [
     # An engine that does not draw such a source: refused before staging.
-    ("0.22.0", 6563, {"T.second.tif": PIN}, FimUnsupportedError, "source_crs_pins need an engine"),
+    (None, 6563, {"T.second.tif": PIN}, FimUnsupportedError, "source_crs_pins need an engine"),
+    (_forms(pinned=False), 6563, {"T.second.tif": PIN}, FimUnsupportedError,
+     "source_crs_pins need an engine"),
     # Not another NAD83 realization of the same projection and units.
-    (MIN, 6562, {"T.second.tif": PIN}, FimUnsupportedError, "axis units"),
-    (MIN, 32617, {"T.second.tif": PIN}, FimUnsupportedError, "NAD83 realization"),
+    (_forms(), 6562, {"T.second.tif": PIN}, FimUnsupportedError, "axis units"),
+    (_forms(), 32617, {"T.second.tif": PIN}, FimUnsupportedError, "NAD83 realization"),
     # The engine reads another WKT than the one the caller verified.
-    (MIN, 6563, {"T.second.tif": "fedcba9876543210"}, FimUnsupportedError, "does not match"),
+    (_forms(), 6563, {"T.second.tif": "fedcba9876543210"}, FimUnsupportedError, "does not match"),
     # Pins must name exactly one lower-priority source that needs one.
-    (MIN, 2271, {"T.second.tif": PIN}, ValueError, "nothing to pin"),
-    (MIN, 6563, {"T.first.tif": PIN}, ValueError, "first source"),
-    (MIN, 6563, {"T.other.tif": PIN}, ValueError, "not exactly one terrain source"),
-    (MIN, 6563, {"T.second.tif": "not-a-hash"}, ValueError, "16-digit"),
-    (MIN, 6563, {}, ValueError, "non-empty"),
+    (_forms(), 2271, {"T.second.tif": PIN}, ValueError, "nothing to pin"),
+    (_forms(), 6563, {"T.first.tif": PIN}, ValueError, "first source"),
+    (_forms(), 6563, {"T.other.tif": PIN}, ValueError, "not exactly one terrain source"),
+    (_forms(), 6563, {"T.second.tif": "not-a-hash"}, ValueError, "16-digit"),
+    (_forms(), 6563, {}, ValueError, "non-empty"),
 ])
-def test_pins_are_explicit_and_verified(tmp_path, monkeypatch, version, epsg, pins, error, match):
+def test_pins_are_explicit_and_verified(tmp_path, monkeypatch, forms, epsg, pins, error, match):
     hdf, _ = _two_source_terrain(tmp_path, epsg)
-    _fake_identity_engine(monkeypatch, version, {"T.second.tif": PIN, "T.first.tif": PIN})
+    _fake_identity_engine(monkeypatch, forms, {"T.second.tif": PIN, "T.first.tif": PIN})
     with pytest.raises(error, match=match):
         RasFim.build_effective_terrain(hdf, tmp_path / "out.tif", source_crs_pins=pins)
 
@@ -359,14 +402,22 @@ def bald_eagle_terrain(tmp_path_factory):
     return Path(project) / "Terrain"
 
 
-def _branch_release(monkeypatch):
-    """Report the branch build as the release that carries its forms."""
-    real = _effective_terrain.engine_version
-    engine = Path(_BRANCH_ENGINE)
-    assert real(engine) is not None
-    monkeypatch.setattr(
-        _effective_terrain, "engine_version",
-        lambda e: max(real(e), _effective_terrain.ENGINE_FORMS_MIN_VERSION))
+def _without_forms(monkeypatch):
+    """Serve the branch engine's real record without ``supported_forms`` (an older engine)."""
+    real = _effective_terrain._engine.engine_method
+
+    def method(engine):
+        m = json.loads(json.dumps(real(engine)))
+        m.get("effective_terrain", {}).pop("supported_forms", None)
+        return m
+
+    monkeypatch.setattr(_effective_terrain._engine, "engine_method", method)
+
+
+def _branch_advertises():
+    forms = _effective_terrain.engine_supported_forms(Path(_BRANCH_ENGINE))
+    assert {*ALL, PIN_FORM} <= set(forms), sorted(forms)
+    return forms
 
 
 def _valid_area(tif, size_px=60):
@@ -407,11 +458,13 @@ def test_real_engine_draws_the_forms_on_bald_eagle(tmp_path, bald_eagle_terrain,
         _ground_line(f.create_group("Stash"), "Repeat", 2, et=b"SetValue", width=40.0, reach=120.0,
                      lines=[[a, b, c]])
 
-    # The real 0.22.0 report keeps every form refused (the bare line is read first).
-    with pytest.raises(FimUnsupportedError, match="no stored profile and no control points"):
-        RasFim.build_effective_terrain(hdf, tmp_path / "refused.tif", engine_path=_BRANCH_ENGINE,
-                                       hecras_version="7.0.1")
-    _branch_release(monkeypatch)
+    _branch_advertises()
+    # Without the field the forms stay refused (the bare line is read first).
+    with monkeypatch.context() as m:
+        _without_forms(m)
+        with pytest.raises(FimUnsupportedError, match="no stored profile and no control points"):
+            RasFim.build_effective_terrain(hdf, tmp_path / "refused.tif", engine_path=_BRANCH_ENGINE,
+                                           hecras_version="7.0.1")
     # Under HEC-RAS 6.6 still refused, before the engine runs.
     with pytest.raises(FimUnsupportedError, match="no stored profile and no control points"):
         RasFim.build_effective_terrain(hdf, tmp_path / "refused.tif", engine_path=_BRANCH_ENGINE,
@@ -458,13 +511,15 @@ def test_real_engine_draws_a_pinned_nad83_2011_source_unchanged(tmp_path, bald_e
     assert info.get("epsg") == 6563 and pin
 
     kwargs = dict(engine_path=_BRANCH_ENGINE, threads=4, max_working_mib=6144)
-    # Without a pin, and with the real 0.22.0 report, the source is refused.
+    _branch_advertises()
+    # Without a pin the source is refused; without the field, also with one.
     with pytest.raises(FimUnsupportedError, match="not in the first source's CRS"):
         RasFim.build_effective_terrain(retagged / "Terrain50.hdf", tmp_path / "x.tif", **kwargs)
-    with pytest.raises(FimUnsupportedError, match="source_crs_pins need an engine"):
-        RasFim.build_effective_terrain(retagged / "Terrain50.hdf", tmp_path / "x.tif",
-                                       source_crs_pins={lower: pin}, **kwargs)
-    _branch_release(monkeypatch)
+    with monkeypatch.context() as m:
+        _without_forms(m)
+        with pytest.raises(FimUnsupportedError, match="source_crs_pins need an engine"):
+            RasFim.build_effective_terrain(retagged / "Terrain50.hdf", tmp_path / "x.tif",
+                                           source_crs_pins={lower: pin}, **kwargs)
     with pytest.raises(FimUnsupportedError, match="does not match"):
         RasFim.build_effective_terrain(retagged / "Terrain50.hdf", tmp_path / "x.tif",
                                        source_crs_pins={lower: "0" * 16}, **kwargs)

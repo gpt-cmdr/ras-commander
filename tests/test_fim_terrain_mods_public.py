@@ -162,7 +162,11 @@ def test_unmodified_and_skipped_terrains_are_none(tmp_path):
      "shapefile Z", "7.0.1"),
     (lambda m: (_polygon(m, "A", 0), _polygon(m, "B", 0)), "share a Priority", "7.0.1"),
 ])
-def test_refusals_carry_the_private_readers_reason(tmp_path, build, reason, version):
+def test_refusals_carry_the_private_readers_reason(tmp_path, monkeypatch, build, reason, version):
+    # An engine that advertises no supported forms, whatever engine is installed:
+    # a forms-advertising engine would stage the sampled polygon under 7.0.1.
+    monkeypatch.setattr(RasFim, "_engine_modification_forms",
+                        staticmethod(lambda engine_path=None: frozenset()))
     hdf = _hdf(tmp_path)
     with h5py.File(hdf, "a") as f:
         build(f["Modifications"])

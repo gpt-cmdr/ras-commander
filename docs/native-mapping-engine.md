@@ -1052,20 +1052,25 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   interior mass points, so a boundary polygon whose control points all lie
   inside needs a stored profile (and is refused under 6.6). Use the RAS Mapper
   export for those terrains.
-- With ras-commander-fast-map 0.23.0 or later and the 7.0.1 rule (HEC-RAS
+- With an engine that advertises them, and under the 7.0.1 rule (HEC-RAS
   7.0, 7.0.1 and 7.0.2), three more forms reach the engine: polygon boundary
   elevations sampled from the terrain (the request's stitch TIN is used by
   the engine's terrain profiler), unnamed ground lines with no stored profile
   in a layer without control points (RAS Mapper's default profile from the
   terrain at the end vertices) and consecutive repeated ground-line vertices
   (RAS Mapper drops them; a line with a single distinct vertex is still
-  refused). The caller detects the release from `ras2fim-batch method`
-  (`engine.version`), because the engine advertises these forms only in
-  prose under unchanged method and schema IDs. Older engines, and the 6.6
-  and 6.7 rules, keep the refusals.
+  refused). The caller reads them from `ras2fim-batch method`, record
+  `effective_terrain.supported_forms` (schema
+  `rasmapper-effective-terrain-forms/1`): each refusal is lifted only for a
+  form listed there as `terrain_sampled_boundary`,
+  `default_ground_line_profile` or `repeated_ground_line_vertices` with
+  `"7.0.1"` among its `hecras_rules`. The engine version is not consulted;
+  an engine without the field (ras-commander-fast-map 0.22.0 and earlier),
+  and the 6.6 and 6.7 rules, keep the refusals.
 - A lower-priority source whose CRS differs from the first source's is
-  refused. One exception must be requested explicitly: with
-  ras-commander-fast-map 0.23.0 or later, `source_crs_pins={"<source>.tif":
+  refused. One exception must be requested explicitly: with an engine that
+  advertises the `pinned_nad83_realization_source` form in
+  `effective_terrain.supported_forms`, `source_crs_pins={"<source>.tif":
   "<crs_wkt_fnv1a64>"}` draws a source tagged with another NAD83 realization
   of the same projection and units (for example `NAD83(2011) / Pennsylvania
   North (ftUS)` in a `NAD83 / Pennsylvania North (ftUS)` terrain) on the

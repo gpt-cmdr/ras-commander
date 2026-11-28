@@ -1494,7 +1494,8 @@ class RasFim:
                 RAS Mapper draws such a source on the terrain's grid without
                 reprojecting it, and so does the engine for a pinned source.
                 Each pin is verified before the engine runs: the engine must
-                be ras-commander-fast-map 0.23.0 or later; both CRSs must be
+                advertise ``pinned_nad83_realization_source`` in
+                ``effective_terrain.supported_forms``; both CRSs must be
                 projected, on NAD83 realizations, with the same ellipsoid,
                 projection method and parameters (the same zone) and axis
                 units; and the engine's hash must equal the pin. Otherwise,
@@ -1788,9 +1789,10 @@ class RasFim:
         polygons without boundary elevations; invalid geometry or control
         points; and project files in the folder that state different units
         when there are layers to stage.
-        With ras-commander-fast-map 0.23.0 or later (the engine found as
-        above) and the ``"7.0.1"`` rule only, three of these are staged
-        instead, as that engine reproduces them: polygon boundary elevations
+        When the engine found as above advertises them for the ``"7.0.1"``
+        rule in ``effective_terrain.supported_forms``, and under that rule
+        only, three of these are staged instead (each only if advertised):
+        polygon boundary elevations
         sampled from the terrain, unnamed ground lines with no stored profile
         in a layer without control points (RAS Mapper's default profile from
         the end vertices), and consecutive repeated ground-line vertices

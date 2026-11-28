@@ -111,43 +111,57 @@ def engine_supports_basis(engine: Path, basis: str) -> bool:
             and isinstance(stored, dict) and stored.get("rule_id") == STORED_MAP_RULE_ID)
 
 
-#: First ras-commander-fast-map release that reproduces the engine forms in
-#: :data:`._terrain_mods.ENGINE_FORMS` (terrain-sampled boundary elevations,
-#: default ground-line profiles, repeated ground-line vertices) and accepts a
-#: source pinned by ``caller_verified_wkt`` whose EPSG code differs from the
-#: session's (fast-map ``feat/terrain-mods-native-parity``, unreleased at the
-#: time of writing). The engine advertises these forms only in prose, with
-#: unchanged method and schema IDs, so the release is the contract: an older
-#: engine still has them refused here, before it runs.
-ENGINE_FORMS_MIN_VERSION = (0, 23, 0)
-#: Engine capability name for pinning a source in another NAD83 realization.
+#: Schema of the engine's ``effective_terrain.supported_forms`` record
+#: (ras-commander-fast-map ``feat/terrain-mods-native-parity``, unreleased at
+#: the time of writing): ``forms`` maps a stable form identifier to its
+#: ``kind`` (``"modification"`` or ``"source"``) and, for a modification, the
+#: ``hecras_rules`` under which the engine draws it.
+SUPPORTED_FORMS_SCHEMA = "rasmapper-effective-terrain-forms/1"
+#: Engine capability name for pinning a source in another NAD83 realization
+#: (an advertised ``kind: "source"`` form).
 PINNED_NAD83_REALIZATION = "pinned_nad83_realization_source"
 
 
-def engine_version(engine: Path) -> Optional[tuple]:
-    """The engine's ``(major, minor, patch)`` from ``ras2fim-batch method``, or None."""
-    import re
+def engine_supported_forms(engine: Path) -> dict:
+    """The engine's advertised forms, ``{form id: entry}``; empty when none.
 
-    try:
-        method = _engine.engine_method(engine)
-    except FileNotFoundError:
-        return None
-    text = ((method.get("engine") or {}) if isinstance(method, dict) else {}).get("version")
-    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", text) if isinstance(text, str) else None
-    return tuple(int(v) for v in match.groups()) if match else None
+    Empty for an engine without ``effective_terrain.supported_forms`` (every
+    engine before the field, including fast-map 0.22.0) or with another
+    schema than :data:`SUPPORTED_FORMS_SCHEMA`: the caller then assumes none
+    of the forms, so their refusals stay. The release number is not
+    consulted: the field is the contract.
+    """
+    record = _record(engine)
+    advertised = record.get("supported_forms") if isinstance(record, dict) else None
+    if not isinstance(advertised, dict) or advertised.get("schema") != SUPPORTED_FORMS_SCHEMA:
+        return {}
+    forms = advertised.get("forms")
+    if not isinstance(forms, dict):
+        return {}
+    return {k: v for k, v in forms.items() if isinstance(k, str) and isinstance(v, dict)}
 
 
-def engine_modification_forms(engine: Path) -> frozenset:
-    """Engine forms the engine reproduces: :data:`._terrain_mods.ENGINE_FORMS`
-    plus :data:`PINNED_NAD83_REALIZATION` for an engine at
-    :data:`ENGINE_FORMS_MIN_VERSION` or later with the ``/2`` modifications
-    record; otherwise none, so every one of them stays refused."""
+def engine_modification_forms(engine: Path, hecras_rule: str = _terrain_mods.ENGINE_FORMS_RULE) -> frozenset:
+    """Caller-known engine forms the engine advertises for ``hecras_rule``.
+
+    The forms of :data:`._terrain_mods.ENGINE_FORMS` that the engine lists in
+    ``supported_forms`` with ``kind: "modification"`` and ``hecras_rule`` in
+    their ``hecras_rules``, plus :data:`PINNED_NAD83_REALIZATION` when listed
+    with ``kind: "source"``. Needs the ``/2`` modifications record; otherwise,
+    or without the field, none, so every one of them stays refused.
+    """
     if not engine_supports(engine, modifications=True):
         return frozenset()
-    version = engine_version(engine)
-    if version is None or version < ENGINE_FORMS_MIN_VERSION:
-        return frozenset()
-    return frozenset((*_terrain_mods.ENGINE_FORMS, PINNED_NAD83_REALIZATION))
+    advertised = engine_supported_forms(engine)
+    forms = set()
+    for form in _terrain_mods.ENGINE_FORMS:
+        entry = advertised.get(form, {})
+        rules = entry.get("hecras_rules")
+        if entry.get("kind") == "modification" and isinstance(rules, list) and hecras_rule in rules:
+            forms.add(form)
+    if advertised.get(PINNED_NAD83_REALIZATION, {}).get("kind") == "source":
+        forms.add(PINNED_NAD83_REALIZATION)
+    return frozenset(forms)
 
 
 def _is_nad83(crs) -> bool:
@@ -366,7 +380,8 @@ def _pin_source(engine: Path, source: dict, path: Path, first, other, pin: str, 
     if PINNED_NAD83_REALIZATION not in forms:
         raise FimUnsupportedError(
             f"terrain source {path.name} is pinned, but the engine does not draw a source in another "
-            f"CRS (needs ras-commander-fast-map {'.'.join(map(str, ENGINE_FORMS_MIN_VERSION))}+)")
+            f"CRS (needs an engine that advertises {PINNED_NAD83_REALIZATION!r} in "
+            "effective_terrain.supported_forms)")
     mismatch = nad83_realization_mismatch(first, other)
     if mismatch is not None:
         raise FimUnsupportedError(
@@ -578,7 +593,8 @@ def build(
         if PINNED_NAD83_REALIZATION not in forms:
             raise FimUnsupportedError(
                 "source_crs_pins need an engine that draws a pinned source in another NAD83 "
-                f"realization (ras-commander-fast-map {'.'.join(map(str, ENGINE_FORMS_MIN_VERSION))}+); "
+                f"realization (advertised as {PINNED_NAD83_REALIZATION!r} in "
+                "effective_terrain.supported_forms); "
                 "use the RAS Mapper export")
         source_crs_pins = _check_pins(
             source_crs_pins, [{"path": name.replace("\\", "/")} for name in info["sources"]])
