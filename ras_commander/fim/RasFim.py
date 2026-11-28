@@ -1407,6 +1407,7 @@ class RasFim:
         hecras_version: Optional[str] = None,
         ras_object: Any = None,
         basis: str = "export",
+        source_crs_pins: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Build RAS Mapper's effective terrain in Rust, with qualified modifications.
 
@@ -1484,6 +1485,22 @@ class RasFim:
                 (one source, two channel ground lines, HEC-RAS 7.0.1 and 6.6
                 stored maps): Depth equals float32(WSE - terrain) on every wet
                 pixel.
+            source_crs_pins: Optional explicit pins for lower-priority
+                sources whose CRS differs from the first (top-priority)
+                source's only in the NAD83 realization, for example a
+                ``NAD83(2011) / <zone> (ftUS)`` source in a ``NAD83 / <zone>
+                (ftUS)`` terrain. ``{source TIFF file name: crs_wkt_fnv1a64}``,
+                the hash ``ras2fim-batch terrain-info <source>`` reports.
+                RAS Mapper draws such a source on the terrain's grid without
+                reprojecting it, and so does the engine for a pinned source.
+                Each pin is verified before the engine runs: the engine must
+                be ras-commander-fast-map 0.23.0 or later; both CRSs must be
+                projected, on NAD83 realizations, with the same ellipsoid,
+                projection method and parameters (the same zone) and axis
+                units; and the engine's hash must equal the pin. Otherwise,
+                and for a pin no source needs, the build is refused. Without
+                a pin, a source in another CRS is refused as before. Pinned
+                sources are listed in the receipt's ``source_crs_pins``.
 
         Returns:
             dict: Receipt with ``basis`` and ``basis_rule_id``, ``method_id`` (the method the engine reports:
@@ -1532,6 +1549,7 @@ class RasFim:
             threads=threads, max_working_mib=max_working_mib, timeout=timeout,
             terrain_crs_fnv1a64=terrain_crs_fnv1a64,
             hecras_version=hecras_version, ras_object=ras_object, basis=basis,
+            source_crs_pins=source_crs_pins,
         )
 
     @staticmethod
@@ -1573,6 +1591,18 @@ class RasFim:
             return None
         table = (record or {}).get("hecras_versions")
         return table if isinstance(table, dict) else None
+
+    @staticmethod
+    def _engine_modification_forms(engine_path: Optional[PathLike] = None) -> frozenset:
+        """The engine forms :func:`_terrain_mods.read_layers` may lift, or none."""
+        from . import _effective_terrain, _engine, _terrain_mods
+        from .errors import FimError
+
+        try:
+            forms = _effective_terrain.engine_modification_forms(_engine.find_engine(engine_path))
+        except (FimError, OSError, ValueError):
+            return frozenset()
+        return forms & frozenset(_terrain_mods.ENGINE_FORMS)
 
     @staticmethod
     @log_call
@@ -1744,7 +1774,7 @@ class RasFim:
         ``Encroachment Polygon``, ``Levee1``, ``Pier``, ``Tree``); a missing or
         shared ``Priority``; an unknown ground-line subtype or an unqualified
         elevation type; ground lines with no stored profile and no control
-        points; a NaN ``Top Width`` with a finite ``Max Reach``; named ground
+        points; ground lines with a repeated vertex; a NaN ``Top Width`` with a finite ``Max Reach``; named ground
         lines with control points, a NaN template or under HEC-RAS 6.6 or 6.7;
         multi-part ground lines; polygon features with more than one ring
         (holes or separate/overlapping parts), refused up front with
@@ -1758,6 +1788,13 @@ class RasFim:
         polygons without boundary elevations; invalid geometry or control
         points; and project files in the folder that state different units
         when there are layers to stage.
+        With ras-commander-fast-map 0.23.0 or later (the engine found as
+        above) and the ``"7.0.1"`` rule only, three of these are staged
+        instead, as that engine reproduces them: polygon boundary elevations
+        sampled from the terrain, unnamed ground lines with no stored profile
+        in a layer without control points (RAS Mapper's default profile from
+        the end vertices), and consecutive repeated ground-line vertices
+        (dropped by RAS Mapper; a single distinct vertex is still refused).
         An engine can still refuse a staged terrain; compare the layers with
         the engine's ``modifications`` capability record.
 
@@ -1823,7 +1860,8 @@ class RasFim:
                     return record
             record.update(length_units=units, length_units_basis=units_basis)
             layers = _terrain_mods.read_layers(
-                terrain_path, length_units=units, hecras_version=version)
+                terrain_path, length_units=units, hecras_version=version,
+                engine_forms=RasFim._engine_modification_forms(engine_path))
         except FimUnsupportedError as exc:
             if strict:
                 raise

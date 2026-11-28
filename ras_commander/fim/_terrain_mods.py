@@ -24,7 +24,8 @@ Load rules followed (RasMapperLib 6.6, 6.7 Beta 4/5, 7.0, 7.0.1 and 7.0.2):
 * Ground-line profiles come from ``Profile Info`` + ``Profile Values``
   (float32). A dataset named ``Profile`` is never read by RAS Mapper. Without
   control points, a feature needs a stored profile of two or more stations:
-  RAS Mapper samples the terrain at the line ends otherwise, which is refused.
+  RAS Mapper samples the terrain at the line ends otherwise, which is refused
+  unless the engine reproduces that default profile (see *Engine forms*).
 * Ground-line features carry ``System Name`` (named features take RAS
   Mapper's system path, which the engine reproduces), ``Transition Percent``
   and ``Elev Pt Tolerance``. Template values (``Top Width``, slopes, ``Max
@@ -57,11 +58,33 @@ overlapping parts; reason code ``multi_ring_polygon`` on the error's
 that cannot be reproduced as a rule; shape-Z polygons without boundary
 elevations (vertex Z storage is not export-measured), boundary elevations
 sampled from the terrain (a polygon with boundary elevations, no control point
-outside its ring within Elev Pt Tolerance and no stored profile), named ground
+outside its ring within Elev Pt Tolerance and no stored profile; unless the
+engine reproduces it, below), named ground
 lines in a layer with control points or with a NaN template, a NaN Top Width
 with a finite Max Reach, for the ``"6.6"`` and ``"6.7"`` rules named ground
 lines, and for the ``"6.6"`` rule boundary elevations without a perimeter
 control point (6.6 samples the terrain even when a profile is stored).
+
+Engine forms (``engine_forms``): an engine release can reproduce forms that
+older engines refuse. The caller names the forms its engine supports (from
+:data:`ENGINE_FORMS`; ``_effective_terrain.engine_modification_forms``
+decides them from the engine), and only those refusals are lifted, and only
+under the ``"7.0.1"`` rule, the one they were qualified for:
+
+* :data:`TERRAIN_SAMPLED_BOUNDARY`: a polygon with boundary elevations, no
+  stored profile and no perimeter control point (RAS Mapper samples the
+  unmodified terrain along the ring; the engine uses the stitch TIN the
+  caller already stages).
+* :data:`DEFAULT_GROUND_LINE_PROFILE`: an unnamed ground line with no stored
+  profile in a layer without control points (RAS Mapper's default profile:
+  the terrain at the two end vertices). A one-station profile and a named
+  feature without a profile stay refused.
+* :data:`REPEATED_GROUND_LINE_VERTICES`: consecutive repeated ground-line
+  vertices, which RAS Mapper drops. A line with a single distinct vertex
+  stays refused. The points are sent as stored; the engine drops the
+  repeats.
+
+With no forms (the default) each of them is refused as before.
 
 ``hecras_version`` is the engine rule that reproduces a HEC-RAS release's
 export: ``"7.0.1"`` (HEC-RAS 7.0, 7.0.1 and 7.0.2), ``"6.6"`` (6.6; the engine
@@ -109,6 +132,15 @@ HECRAS_RELEASE_RULES = {
 }
 #: Refusal reason code for a HEC-RAS release without a qualified engine rule.
 UNQUALIFIED_HECRAS_VERSION = "unqualified_hecras_version"
+#: Engine forms (``read_layers(engine_forms=...)``): each lifts one refusal
+#: under the ``"7.0.1"`` rule when the engine reproduces the form.
+TERRAIN_SAMPLED_BOUNDARY = "terrain_sampled_boundary"
+DEFAULT_GROUND_LINE_PROFILE = "default_ground_line_profile"
+REPEATED_GROUND_LINE_VERTICES = "repeated_ground_line_vertices"
+ENGINE_FORMS = (TERRAIN_SAMPLED_BOUNDARY, DEFAULT_GROUND_LINE_PROFILE,
+                REPEATED_GROUND_LINE_VERTICES)
+#: The only rule under which the engine forms are qualified.
+ENGINE_FORMS_RULE = "7.0.1"
 
 
 def _text(value) -> str:
@@ -210,7 +242,13 @@ def _profiles(group, count, name) -> list:
     return profiles
 
 
-def _ground_line_layer(name, group, priority, length_units, hecras_version) -> dict:
+def _lifted(form, engine_forms, hecras_version) -> bool:
+    """Whether the engine reproduces ``form`` under this rule."""
+    return form in engine_forms and hecras_version == ENGINE_FORMS_RULE
+
+
+def _ground_line_layer(name, group, priority, length_units, hecras_version,
+                       engine_forms=frozenset()) -> dict:
     subtype = _text(group.attrs.get("Subtype", b"")).strip()
     if subtype not in ("Levee", "Channel"):
         raise FimUnsupportedError(
@@ -236,14 +274,23 @@ def _ground_line_layer(name, group, priority, length_units, hecras_version) -> d
         if n < 2:
             raise FimUnsupportedError(f"{what}: needs >= 2 vertices")
         if not control_points and len(profile) < 2:
-            raise FimUnsupportedError(
-                f"{what}: no stored profile and no control points (RAS Mapper samples the terrain "
-                "at the line ends; not qualified)"
-            )
+            # RAS Mapper's default profile (the terrain at the end vertices):
+            # an engine that reproduces it takes an unnamed feature with no
+            # stored profile at all; a one-station profile stays refused.
+            if not (len(profile) == 0 and not system_name
+                    and _lifted(DEFAULT_GROUND_LINE_PROFILE, engine_forms, hecras_version)):
+                raise FimUnsupportedError(
+                    f"{what}: no stored profile and no control points (RAS Mapper samples the terrain "
+                    "at the line ends; not qualified)"
+                )
         if not np.isfinite(xy).all():
             raise FimUnsupportedError(f"{what}: non-finite geometry")
-        if np.any(np.all(np.diff(xy, axis=0) == 0, axis=1)):
-            raise FimUnsupportedError(f"{what}: repeated vertex")
+        repeats = np.all(np.diff(xy, axis=0) == 0, axis=1)
+        if np.any(repeats):
+            if not _lifted(REPEATED_GROUND_LINE_VERTICES, engine_forms, hecras_version):
+                raise FimUnsupportedError(f"{what}: repeated vertex")
+            if np.all(repeats):
+                raise FimUnsupportedError(f"{what}: a single distinct vertex")
         template = {
             key: _nullable(_float(row, column), f"{what}: {column}")
             for key, column in (("top_width", "Top Width"), ("left_slope", "Left Slope"),
@@ -346,7 +393,8 @@ def _perimeter_control_points(ring, control_points, shape_z, tolerance) -> int:
     return count
 
 
-def _polygon_layer(name, group, priority, length_units, hecras_version) -> dict:
+def _polygon_layer(name, group, priority, length_units, hecras_version,
+                   engine_forms=frozenset()) -> dict:
     control_points = _control_points(group, name)
     attrs = group["Attributes"][()]
     info = group["Polygon Info"][()]
@@ -401,7 +449,7 @@ def _polygon_layer(name, group, priority, length_units, hecras_version) -> dict:
                     f"{what}: HEC-RAS 6.6 samples boundary elevations from the terrain when no "
                     "control point lies outside the ring within Elev Pt Tolerance (not qualified)"
                 )
-            if not profiles[i]:
+            if not profiles[i] and not _lifted(TERRAIN_SAMPLED_BOUNDARY, engine_forms, hecras_version):
                 raise FimUnsupportedError(
                     f"{what}: boundary elevations sampled from the terrain (no stored profile, "
                     "no control point outside the ring within Elev Pt Tolerance) are not qualified"
@@ -683,7 +731,7 @@ def has_layers(terrain_hdf) -> bool:
 
 
 def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
-                hecras_version: str = "7.0.1") -> list:
+                hecras_version: str = "7.0.1", engine_forms=()) -> list:
     """Every modification layer of ``terrain_hdf`` as engine request layers.
 
     Args:
@@ -694,6 +742,9 @@ def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
         hecras_version: An engine rule from :data:`HECRAS_VERSIONS` (see
             :func:`hecras_version_for`); forms the engine refuses under that
             rule are refused here.
+        engine_forms: Forms from :data:`ENGINE_FORMS` the engine
+            reproduces (default none). Each lifts its refusal under the
+            ``"7.0.1"`` rule only; every other refusal is unchanged.
 
     Raises:
         FimUnsupportedError: a layer or feature is not a qualified form.
@@ -704,6 +755,10 @@ def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
         raise ValueError(f"length_units must be one of {LENGTH_UNITS}")
     if hecras_version not in HECRAS_VERSIONS:
         raise ValueError(f"hecras_version must be one of {HECRAS_VERSIONS}")
+    engine_forms = frozenset(engine_forms or ())
+    unknown = sorted(engine_forms - set(ENGINE_FORMS))
+    if unknown:
+        raise ValueError(f"engine_forms must be among {ENGINE_FORMS}, not {unknown}")
     layers = []
     with h5py.File(Path(terrain_hdf), "r") as hdf:
         group = hdf.get("Modifications")
@@ -733,9 +788,11 @@ def read_layers(terrain_hdf, length_units: Optional[str] = "feet",
                 raise FimUnsupportedError(f"modification {name!r} has no Priority")
             priority = int(np.asarray(priority))
             if kind == "Levee":
-                staged = _ground_line_layer(name, layer, priority, length_units, hecras_version)
+                staged = _ground_line_layer(name, layer, priority, length_units, hecras_version,
+                                            engine_forms)
             elif kind == "Polygon":
-                staged = _polygon_layer(name, layer, priority, length_units, hecras_version)
+                staged = _polygon_layer(name, layer, priority, length_units, hecras_version,
+                                        engine_forms)
             else:
                 staged = _ellipse_layer(name, layer, priority)
             if staged["features"]:

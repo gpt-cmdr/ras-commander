@@ -1052,6 +1052,30 @@ receipt["method_id"], receipt["hecras_version"], receipt["modification_layers"]
   interior mass points, so a boundary polygon whose control points all lie
   inside needs a stored profile (and is refused under 6.6). Use the RAS Mapper
   export for those terrains.
+- With ras-commander-fast-map 0.23.0 or later and the 7.0.1 rule (HEC-RAS
+  7.0, 7.0.1 and 7.0.2), three more forms reach the engine: polygon boundary
+  elevations sampled from the terrain (the request's stitch TIN is used by
+  the engine's terrain profiler), unnamed ground lines with no stored profile
+  in a layer without control points (RAS Mapper's default profile from the
+  terrain at the end vertices) and consecutive repeated ground-line vertices
+  (RAS Mapper drops them; a line with a single distinct vertex is still
+  refused). The caller detects the release from `ras2fim-batch method`
+  (`engine.version`), because the engine advertises these forms only in
+  prose under unchanged method and schema IDs. Older engines, and the 6.6
+  and 6.7 rules, keep the refusals.
+- A lower-priority source whose CRS differs from the first source's is
+  refused. One exception must be requested explicitly: with
+  ras-commander-fast-map 0.23.0 or later, `source_crs_pins={"<source>.tif":
+  "<crs_wkt_fnv1a64>"}` draws a source tagged with another NAD83 realization
+  of the same projection and units (for example `NAD83(2011) / Pennsylvania
+  North (ftUS)` in a `NAD83 / Pennsylvania North (ftUS)` terrain) on the
+  terrain's grid without reprojection, as RAS Mapper does. The hash is the
+  one `ras2fim-batch terrain-info <source>` reports. Before the engine runs,
+  the caller checks that both CRSs are projected, on NAD83 realizations, with
+  the same ellipsoid, projection method and parameters and axis units, and
+  that the engine's hash equals the pin. The receipt's `source_crs_pins`
+  records each pinned source with both CRSs and the hash. A pin that no
+  source needs is an error.
 - A polygon feature with more than one ring (a hole in either winding, or
   separate or overlapping parts) is refused while the layers are read, before
   the engine runs. RAS Mapper joins and triangulates such rings in a way that

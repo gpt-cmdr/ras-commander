@@ -111,6 +111,101 @@ def engine_supports_basis(engine: Path, basis: str) -> bool:
             and isinstance(stored, dict) and stored.get("rule_id") == STORED_MAP_RULE_ID)
 
 
+#: First ras-commander-fast-map release that reproduces the engine forms in
+#: :data:`._terrain_mods.ENGINE_FORMS` (terrain-sampled boundary elevations,
+#: default ground-line profiles, repeated ground-line vertices) and accepts a
+#: source pinned by ``caller_verified_wkt`` whose EPSG code differs from the
+#: session's (fast-map ``feat/terrain-mods-native-parity``, unreleased at the
+#: time of writing). The engine advertises these forms only in prose, with
+#: unchanged method and schema IDs, so the release is the contract: an older
+#: engine still has them refused here, before it runs.
+ENGINE_FORMS_MIN_VERSION = (0, 23, 0)
+#: Engine capability name for pinning a source in another NAD83 realization.
+PINNED_NAD83_REALIZATION = "pinned_nad83_realization_source"
+
+
+def engine_version(engine: Path) -> Optional[tuple]:
+    """The engine's ``(major, minor, patch)`` from ``ras2fim-batch method``, or None."""
+    import re
+
+    try:
+        method = _engine.engine_method(engine)
+    except FileNotFoundError:
+        return None
+    text = ((method.get("engine") or {}) if isinstance(method, dict) else {}).get("version")
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", text) if isinstance(text, str) else None
+    return tuple(int(v) for v in match.groups()) if match else None
+
+
+def engine_modification_forms(engine: Path) -> frozenset:
+    """Engine forms the engine reproduces: :data:`._terrain_mods.ENGINE_FORMS`
+    plus :data:`PINNED_NAD83_REALIZATION` for an engine at
+    :data:`ENGINE_FORMS_MIN_VERSION` or later with the ``/2`` modifications
+    record; otherwise none, so every one of them stays refused."""
+    if not engine_supports(engine, modifications=True):
+        return frozenset()
+    version = engine_version(engine)
+    if version is None or version < ENGINE_FORMS_MIN_VERSION:
+        return frozenset()
+    return frozenset((*_terrain_mods.ENGINE_FORMS, PINNED_NAD83_REALIZATION))
+
+
+def _is_nad83(crs) -> bool:
+    datum = getattr(crs.datum, "name", None) if crs.datum is not None else None
+    return isinstance(datum, str) and (datum == "North American Datum 1983" or datum.startswith("NAD83"))
+
+
+def nad83_realization_mismatch(first, other) -> Optional[str]:
+    """Why ``other`` cannot be drawn unchanged in ``first``'s grid, or None.
+
+    None only when both are projected (not compound) CRSs on a NAD83
+    realization (NAD83, NAD83(HARN), NAD83(2011), ...) with the same
+    ellipsoid and prime meridian, the same projection method and parameters
+    (the same zone) and the same axis units and directions. Only the datum
+    realization may differ: RAS Mapper draws such a source without
+    reprojecting it (fast-map corpus L, HEC-RAS 7.0.1), which cannot be told
+    apart from a null datum shift, so nothing wider is accepted.
+    """
+    from pyproj import CRS
+
+    first, other = CRS.from_user_input(first), CRS.from_user_input(other)
+    for crs in (first, other):
+        if crs.is_compound or not crs.is_projected:
+            return f"{crs.name} is not a projected 2D CRS"
+        if not _is_nad83(crs):
+            return f"{crs.name} is not on a NAD83 realization (datum {getattr(crs.datum, 'name', None)!r})"
+    e1, e2 = first.ellipsoid, other.ellipsoid
+    if e1 is None or e2 is None or not (np.isclose(e1.semi_major_metre, e2.semi_major_metre, rtol=0, atol=1e-6)
+                                        and np.isclose(e1.inverse_flattening, e2.inverse_flattening,
+                                                       rtol=1e-12, atol=0)):
+        return "the ellipsoids differ"
+    pm1, pm2 = first.prime_meridian, other.prime_meridian
+    if pm1 is None or pm2 is None or pm1.longitude != pm2.longitude:
+        return "the prime meridians differ"
+    op1, op2 = first.coordinate_operation, other.coordinate_operation
+    if op1 is None or op2 is None or op1.method_name != op2.method_name:
+        return "the projection methods differ"
+
+    def params(op):
+        return {p.name: (float(p.value), p.unit_name, float(p.unit_conversion_factor or 1.0))
+                for p in op.params}
+
+    p1, p2 = params(op1), params(op2)
+    if p1.keys() != p2.keys():
+        return "the projection parameters differ"
+    for name, (v1, u1, f1) in p1.items():
+        v2, u2, f2 = p2[name]
+        if not np.isclose(v1 * f1, v2 * f2, rtol=1e-12, atol=1e-9):
+            return f"projection parameter {name!r} differs ({v1} {u1} vs {v2} {u2})"
+
+    def axes(crs):
+        return [(a.direction, a.unit_name, round(float(a.unit_conversion_factor), 12)) for a in crs.axis_info]
+
+    if axes(first) != axes(other):
+        return "the axis units or directions differ"
+    return None
+
+
 def _input_identity(path: Path) -> dict:
     """``{"path", "size", "mtime_ns"}`` of a build input."""
     stat = Path(path).stat()
@@ -170,12 +265,49 @@ def _write_mask(dataset, path: Path) -> list:
     return shape
 
 
-def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None:
+def _check_pins(pins, sources) -> dict:
+    """``source_crs_pins`` as ``{source file name: lower-case hash}``.
+
+    Keys are source TIFF file names (as registered, or their base name);
+    each must name exactly one lower-priority source. Values are the
+    16-digit hexadecimal ``crs_wkt_fnv1a64`` that ``ras2fim-batch
+    terrain-info`` reports for that source.
+    """
+    import re
+
+    if pins is None:
+        return {}
+    if not isinstance(pins, dict) or not pins:
+        raise ValueError("source_crs_pins must be a non-empty dict of source file name -> WKT hash")
+    names = [Path(source["path"]).name for source in sources]
+    checked = {}
+    for key, value in pins.items():
+        name = Path(str(key).replace("\\", "/")).name
+        if names.count(name) != 1:
+            raise ValueError(f"source_crs_pins names {key!r}, which is not exactly one terrain source")
+        if names.index(name) == 0:
+            raise ValueError(f"source_crs_pins names {key!r}, the first source, whose CRS is the terrain's")
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{16}", value):
+            raise ValueError(f"source_crs_pins[{key!r}] must be a 16-digit hexadecimal WKT hash")
+        checked[name] = value.lower()
+    return checked
+
+
+def _source_identities(engine: Path, sources: list, crs, identity: dict, pins=None,
+                       forms=frozenset()) -> list:
     """Pin each lower-priority source's own WKT hash when its CRS equals the first's.
 
     RAS terrain sources often store the same CRS with different WKT text; the
     engine compares WKT hashes, so each source carries its caller-verified hash.
-    Sources whose CRS differs (by rasterio/PROJ equality) are refused.
+    Sources whose CRS differs (by rasterio/PROJ equality) are refused, except
+    a source the caller pins explicitly in ``pins`` (``{file name: hash}``):
+    the engine must advertise :data:`PINNED_NAD83_REALIZATION`, the first
+    identity must be ``epsg`` or ``caller_verified_wkt``, the two CRSs may
+    differ only in the NAD83 realization (:func:`nad83_realization_mismatch`)
+    and the engine's ``crs_wkt_fnv1a64`` for the source must equal the pin.
+    Such a source is then drawn on the session grid as it is (no
+    reprojection), as RAS Mapper draws it. Returns one record per pinned
+    source for the receipt; a pin that no source needs is an error.
 
     With ``crs_geokeys`` (a CRS without an EPSG code): when the first source
     carries no CRS (``untagged``), every source must carry none; otherwise a
@@ -185,8 +317,13 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
     import rasterio
     from pyproj import CRS
 
+    pins = dict(pins or {})
     kind = identity["crs_identity"].get("kind")
     first = CRS.from_user_input(crs)
+    if pins and kind not in ("epsg", "caller_verified_wkt"):
+        raise FimUnsupportedError(
+            f"source_crs_pins need a terrain CRS with an EPSG code (crs_identity {kind!r})")
+    pinned = []
     for source in sources[1:]:
         path = Path(source["path"])
         with rasterio.open(path) as src:
@@ -197,8 +334,14 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
                     f"terrain source {path.name} carries a CRS but the first source carries none")
             source["crs_identity"] = {"kind": "untagged"}
             continue
+        if other is not None and other != first and path.name in pins:
+            pinned.append(_pin_source(engine, source, path, first, other, pins.pop(path.name), forms))
+            continue
         if other is None or other != first:
-            raise FimUnsupportedError(f"terrain source {path.name} is not in the first source's CRS")
+            raise FimUnsupportedError(
+                f"terrain source {path.name} is not in the first source's CRS"
+                + (" (a source on another NAD83 realization of the same projection can be "
+                   "pinned with source_crs_pins)" if other is not None else ""))
         info = _engine._json_stdout(
             _engine.run_engine([str(engine), "terrain-info", str(path)], "terrain-info"),
             "ras2fim-batch terrain-info",
@@ -212,6 +355,36 @@ def _source_identities(engine: Path, sources: list, crs, identity: dict) -> None
             continue
         if kind == "caller_verified_wkt" and fnv:
             source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
+    if pins:
+        raise ValueError(
+            f"source_crs_pins {sorted(pins)} name sources in the first source's CRS; nothing to pin")
+    return pinned
+
+
+def _pin_source(engine: Path, source: dict, path: Path, first, other, pin: str, forms) -> dict:
+    """Verify and apply one explicit ``source_crs_pins`` entry."""
+    if PINNED_NAD83_REALIZATION not in forms:
+        raise FimUnsupportedError(
+            f"terrain source {path.name} is pinned, but the engine does not draw a source in another "
+            f"CRS (needs ras-commander-fast-map {'.'.join(map(str, ENGINE_FORMS_MIN_VERSION))}+)")
+    mismatch = nad83_realization_mismatch(first, other)
+    if mismatch is not None:
+        raise FimUnsupportedError(
+            f"terrain source {path.name} ({other.name}) cannot be pinned to {first.name}: {mismatch}. "
+            "Only another NAD83 realization of the same projection and units is drawn unchanged.")
+    info = _engine._json_stdout(
+        _engine.run_engine([str(engine), "terrain-info", str(path)], "terrain-info"),
+        "ras2fim-batch terrain-info",
+    )
+    fnv = info.get("crs_wkt_fnv1a64")
+    if not isinstance(fnv, str) or fnv.lower() != pin:
+        raise FimUnsupportedError(
+            f"source_crs_pins[{path.name!r}]={pin} does not match the engine's WKT hash {fnv!r}")
+    source["crs_identity"] = {"kind": "caller_verified_wkt", "fnv1a64": fnv}
+    return {"source": path.name, "fnv1a64": fnv, "source_crs": other.to_wkt(), "terrain_crs": first.to_wkt(),
+            "source_epsg": other.to_epsg(), "terrain_epsg": first.to_epsg(),
+            "source_datum": other.datum.name, "terrain_datum": first.datum.name,
+            "basis": "nad83_realization_same_projection_and_units", "reprojected": False}
 
 
 def _registers(hdf, tif) -> bool:
@@ -366,6 +539,7 @@ def build(
     hecras_version: Optional[str] = None,
     ras_object=None,
     basis: str = BASIS_EXPORT,
+    source_crs_pins: Optional[dict] = None,
 ) -> dict:
     """Write the effective terrain GeoTIFF; return the receipt (also written as JSON)."""
     import rasterio
@@ -399,6 +573,15 @@ def build(
             f"({STORED_MAP_COMPOSITION_ID}, ras-commander-fast-map 0.21.0+); "
             f"{info['terrain_hdf'].name} has {len(info['sources'])} sources (use basis='export')"
         )
+    forms = engine_modification_forms(engine)
+    if source_crs_pins is not None:
+        if PINNED_NAD83_REALIZATION not in forms:
+            raise FimUnsupportedError(
+                "source_crs_pins need an engine that draws a pinned source in another NAD83 "
+                f"realization (ras-commander-fast-map {'.'.join(map(str, ENGINE_FORMS_MIN_VERSION))}+); "
+                "use the RAS Mapper export")
+        source_crs_pins = _check_pins(
+            source_crs_pins, [{"path": name.replace("\\", "/")} for name in info["sources"]])
     layers = []
     version, version_basis = None, None
     if info["modified"]:
@@ -436,6 +619,7 @@ def build(
             length_units=_terrain_mods.project_length_units(
                 info["terrain_hdf"], rasmap_path, ras_object),
             hecras_version=version,
+            engine_forms=forms & set(_terrain_mods.ENGINE_FORMS),
         )
     v2 = engine_supports(engine, modifications=True)
     with rasterio.open(info["tif"]) as src:
@@ -474,8 +658,10 @@ def build(
             crs_record = ({"kind": "epsg", "code": int(identity["epsg"])} if identity["epsg"] is not None
                           else {"kind": "geokeys", "basis": "source_tiff_geokeys",
                                 "source_identity": "geokeys"})
+        pinned = []
         if v2 or declared is not None:
-            _source_identities(engine, staged["sources"], crs or declared, identity)
+            pinned = _source_identities(engine, staged["sources"], crs or declared, identity,
+                                        source_crs_pins, forms)
         request = {
             "schema": SCHEMA_V2 if v2 else SCHEMA,
             "sources": staged["sources"],
@@ -543,6 +729,11 @@ def build(
             "rasmap_warnings": info["rasmap_warnings"],
             "output": str(output_path),
             "crs": crs_record,
+            # Sources drawn unchanged in another NAD83 realization, each
+            # verified and pinned by its WKT hash (source_crs_pins).
+            "source_crs_pins": pinned,
+            # Engine forms the caller let through for this engine release.
+            "engine_forms": sorted(forms),
             "nodata": NODATA,
             "seconds": time.perf_counter() - started,
             # Size and mtime of the terrain HDF and each source as built, so a

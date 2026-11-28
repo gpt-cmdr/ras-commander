@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **The native effective terrain accepts four more forms with
+  ras-commander-fast-map 0.23.0.** Under the 7.0.1 rule,
+  `RasFim.build_effective_terrain()` and `RasFim.read_terrain_modifications()`
+  now stage polygon boundary elevations sampled from the terrain, unnamed
+  ground lines without a stored profile (RAS Mapper's default profile) and
+  ground lines with consecutive repeated vertices, instead of refusing them.
+  A new `source_crs_pins` argument draws a lower-priority source tagged with
+  another NAD83 realization of the same projection and units without
+  reprojection. Each pin is explicit and verified, and it is recorded in the
+  receipt. Engines before 0.23.0 and the 6.6 and 6.7 rules keep every refusal.
+  Callers that route modified terrains to RAS Mapper, such as ras2cng, are
+  unchanged.
 - **Constant precipitation now runs on unsteady files without meteorology
   records.** `RasUnsteady.set_constant_precipitation()` and
   `set_met_precipitation_mode("Constant")` complete absent or blank
