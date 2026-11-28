@@ -1013,6 +1013,46 @@ constitute hydraulic acceptance.
         - invalidate_legacy_geometry_hdf_preprocessor_cache
         - run_geometry_preprocessor
 
+### Experimental Rust geometry preprocessing
+
+!!! warning "Experimental"
+    `compute_rust_experimental()` and `validate_rust_equivalence()` drive the
+    external, non-public `ras-preprocess` engine. Neither is a drop-in
+    replacement for native preprocessing: qualify the engine on your own
+    model with `validate_rust_equivalence()` before any production use. See
+    [Experimental Rust geometry preprocessing](../user-guide/experimental-rust-geometry-preprocessing.md)
+    for the qualification workflow, the supported and refused inputs and the
+    native defect register.
+
+The engine path comes from `engine_exe`, then `RAS_COMMANDER_PREPROCESS_EXE`,
+then `ras-preprocess` on `PATH`. Both methods emit `ExperimentalWarning`.
+`RustEquivalenceReport.to_dataframe()` follows the
+`rust_preprocess_equivalence` schema in `ras_commander/schemas.py`.
+
+::: ras_commander.geom.GeomPreprocessor.GeomPreprocessor
+    options:
+      show_root_heading: false
+      heading_level: 4
+      show_source: false
+      members:
+        - compute_rust_experimental
+        - validate_rust_equivalence
+
+::: ras_commander.geom._rust_preprocess
+    options:
+      show_root_heading: false
+      heading_level: 4
+      show_source: false
+      members:
+        - RustPreprocessResult
+        - RustEquivalenceReport
+        - RustDatasetComparison
+        - RustEngineInfo
+        - ExperimentalWarning
+        - RustPreprocessError
+        - RustPreprocessNotFoundError
+        - RustPreprocessRefusedError
+
 ### GeomLandCover source reference
 
 ::: ras_commander.geom.GeomLandCover.GeomLandCover

@@ -9,6 +9,27 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+- **Experimental: Rust 2D geometry preprocessing and an equivalence harness.**
+  `GeomPreprocessor.validate_rust_equivalence()` runs native HEC-RAS 7.0.1
+  preprocessing (`RasMap.recompute_property_tables`) and the external
+  `ras-preprocess` engine on separate copies of a project. It compares every
+  dataset of every 2D flow area and reports the verdict (`equivalent`,
+  `not equivalent` or `refused`), per-dataset differences with the differing
+  cell and face IDs, and labels for known native defects (D-4, D-5, L-1, N-1,
+  N-2). Evidence is written as JSON and markdown. Stored products are
+  overwritten with NaN before each side runs, so the engine provably reads none
+  of them and a native area that RAS Mapper skips while reporting success fails
+  loudly. `GeomPreprocessor.compute_rust_experimental()` writes the engine's
+  products into a copy of a 7.0.1 geometry HDF through a validated, backed-up
+  write-back, with engine version, SHA-256 and options as provenance. The engine
+  is not distributed; pass `engine_exe` or set `RAS_COMMANDER_PREPROCESS_EXE`.
+  Both methods emit `ExperimentalWarning`, and neither replaces native
+  preprocessing: qualify the engine on your own model first. On
+  BaldEagleCrkMulti2D g09 and on Muncie g02 with a polygon terrain modification,
+  every product was bitwise equal to native; a rotated-ellipse modification was
+  refused with the layer named. See
+  [Experimental Rust geometry preprocessing](../user-guide/experimental-rust-geometry-preprocessing.md).
+
 - **Constant precipitation now runs on unsteady files without meteorology
   records.** `RasUnsteady.set_constant_precipitation()` and
   `set_met_precipitation_mode("Constant")` complete absent or blank

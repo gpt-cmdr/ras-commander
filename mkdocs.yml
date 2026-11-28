@@ -92,6 +92,7 @@ plugins:
           - native-mapping-engine.md
           - user-guide/2d-profile-and-reference-workflows.md
           - user-guide/geometry-operations.md
+          - user-guide/experimental-rust-geometry-preprocessing.md
           - user-guide/boundary-conditions.md
         API Reference:
           - api/index.md
@@ -225,6 +226,7 @@ nav:
       - Architecture: https://rascommander.info/fasthdf/architecture/
       - Developer Documentation: https://rascommander.info/fasthdf/
       - Source (GitHub): https://github.com/gpt-cmdr/ras-commander-fast-hdf
+    - Experimental Geometry Preprocessor: user-guide/experimental-rust-geometry-preprocessing.md
     - Mapping Engine:
       - Guide: native-mapping-engine.md
       - Performance and Qualification: https://rascommander.info/ras/development/fim-mapping-performance/
@@ -265,6 +267,7 @@ nav:
       - Container HPC Design: user-guide/container-hpc-design.md
     - Geometry & Spatial:
       - Geometry Operations: user-guide/geometry-operations.md
+      - Experimental Rust Geometry Preprocessing: user-guide/experimental-rust-geometry-preprocessing.md
       - Spatial Data & RASMapper: user-guide/spatial-data.md
       - Flowline Refinement Regions: user-guide/flowline-refinement-regions.md
     - Flow & Boundary Conditions:
