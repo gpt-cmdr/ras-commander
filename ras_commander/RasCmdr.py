@@ -113,6 +113,10 @@ class _RuntimeDeadlineExceeded(TimeoutError):
     """Internal marker for the public ``max_runtime`` deadline."""
 
 
+class IncompletePlanResultError(RuntimeError):
+    """Internal marker: HEC-RAS exited but left no complete plan result."""
+
+
 
 def _require_process_supervision(api_name: str) -> None:
     """Fail before launch when psutil, required to supervise Ras.exe, is absent."""
@@ -1948,11 +1952,277 @@ class RasCmdr:
                     logger.warning(f"Verification failed: {parsed['error_count']} errors found in {hdf_path.name}")
                     return False
 
+            # A run that stops early can still leave a readable HDF and a
+            # completion line. The stored output clock must reach the
+            # simulation end, within one output interval.
+            window = RasCmdr._inspect_simulation_window(hdf_path)
+            if window["window_complete"] is False:
+                logger.warning(
+                    "Verification failed: results in %s %s",
+                    hdf_path.name,
+                    window["detail"],
+                )
+                return False
+
             logger.debug(f"Verification passed for {hdf_path.name}")
             return True
         except Exception as e:
             logger.warning(f"Error verifying completion for {hdf_path}: {e}")
             return False
+
+    @staticmethod
+    def _inspect_simulation_window(hdf_source: Any) -> Dict[str, Any]:
+        """Compare the stored output clock with the declared simulation window.
+
+        ``hdf_source`` is a plan-HDF path or an open ``h5py.File``. The run is
+        short when the last stored output time is earlier than the declared
+        end by more than one output interval. That allowance keeps a
+        completed run whose end time falls between output times. A run with
+        a single output row has no interval, so its allowance is zero.
+
+        Returns:
+            dict: JSON-safe fields ``status`` and ``reason`` (from
+            ``HdfCompletion.inspect_time_coverage``), ``declared_end``,
+            ``observed_end``, ``row_count``, ``output_interval_seconds``,
+            ``shortfall_seconds``, ``window_complete`` (True, False, or None
+            when the clock cannot be judged) and ``detail``.
+        """
+        from .hdf.HdfCompletion import HdfCompletion
+
+        evidence: Dict[str, Any] = {
+            "status": None,
+            "reason": None,
+            "declared_end": None,
+            "observed_end": None,
+            "row_count": 0,
+            "output_interval_seconds": None,
+            "shortfall_seconds": None,
+            "window_complete": None,
+            "detail": None,
+        }
+        if isinstance(hdf_source, (str, Path)):
+            import h5py
+
+            with h5py.File(str(hdf_source), "r") as hdf_file:
+                return RasCmdr._inspect_simulation_window(hdf_file)
+
+        coverage = HdfCompletion.inspect_time_coverage(hdf_source)
+        declared_start = coverage.get("declared_start")
+        declared_end = coverage.get("declared_end")
+        observed_start = coverage.get("observed_start")
+        observed_end = coverage.get("observed_end")
+        row_count = int(coverage.get("row_count") or 0)
+        evidence.update(
+            status=coverage.get("status"),
+            reason=coverage.get("reason"),
+            declared_end=(
+                declared_end.isoformat() if declared_end is not None else None
+            ),
+            observed_end=(
+                observed_end.isoformat() if observed_end is not None else None
+            ),
+            row_count=row_count,
+        )
+        if coverage.get("status") == "covered":
+            evidence.update(
+                window_complete=True,
+                shortfall_seconds=0.0,
+                detail="output clock reaches the simulation end",
+            )
+            return evidence
+        if coverage.get("status") != "not_covered":
+            # Steady results have no clock; malformed or absent clocks are
+            # not evidence either way.
+            evidence["detail"] = (
+                f"output clock not judged ({coverage.get('reason')})"
+            )
+            return evidence
+        if coverage.get("reason") != "end_not_observed" or None in (
+            declared_start,
+            declared_end,
+            observed_start,
+            observed_end,
+        ):
+            evidence["detail"] = (
+                f"output clock not judged ({coverage.get('reason')})"
+            )
+            return evidence
+
+        interval = 0.0
+        if row_count > 1:
+            interval = (
+                (observed_end - observed_start).total_seconds()
+                / (row_count - 1)
+            )
+        shortfall = (declared_end - observed_end).total_seconds()
+        evidence.update(
+            output_interval_seconds=round(interval, 3),
+            shortfall_seconds=round(shortfall, 3),
+        )
+        if shortfall <= interval:
+            evidence.update(
+                window_complete=True,
+                detail=(
+                    "output clock ends within one output interval of the "
+                    "simulation end"
+                ),
+            )
+            return evidence
+        simulated = (observed_end - declared_start).total_seconds()
+        requested = (declared_end - declared_start).total_seconds()
+        evidence.update(
+            window_complete=False,
+            detail=(
+                f"end at {observed_end.isoformat()}, "
+                f"{simulated / 3600.0:.2f} h of the "
+                f"{requested / 3600.0:.2f} h simulation window ending "
+                f"{declared_end.isoformat()}"
+            ),
+        )
+        return evidence
+
+    @staticmethod
+    def _inspect_hdf_completion_evidence(hdf_path: Path) -> Dict[str, Any]:
+        """Collect read-only evidence that a modern plan run finished.
+
+        Used by ``compute_plan`` after the launcher exits and the solver is
+        confirmed stopped, whether or not ``verify`` was requested. A zero
+        launcher exit code is not enough on its own: HEC-RAS can exit
+        normally after the solver stopped early and left a truncated plan
+        HDF. The run is incomplete (``complete`` is False) when any of these
+        hold:
+
+        - the plan HDF cannot be opened, for example a truncated file;
+        - ``Plan Data/Plan Information`` is missing;
+        - compute messages exist but have no ``Complete Process`` record;
+        - the stored output clock stops short of the simulation end by more
+          than one output interval.
+
+        A missing plan HDF gives ``complete`` None with a ``note``: without
+        ``verify=True``, ``compute_plan`` has always accepted a zero exit
+        with no HDF, and ``verify=True`` still rejects it. Missing compute
+        messages, steady results and clocks that cannot be judged are
+        recorded but do not fail the run, because they are not evidence of
+        an incomplete run. ``verify=True`` adds the stricter checks of
+        ``_verify_completion``.
+
+        Returns:
+            dict: JSON-safe evidence. ``complete`` is True, False or None;
+            ``failure_reason`` is a short code (``result_hdf_unreadable``,
+            ``plan_information_missing``, ``complete_process_missing`` or
+            ``simulation_window_incomplete``) or None; ``failure_detail``
+            explains it.
+        """
+        hdf_path = Path(hdf_path)
+        evidence: Dict[str, Any] = {
+            "result_hdf": hdf_path.name,
+            "hdf_exists": hdf_path.is_file(),
+            "hdf_size_bytes": None,
+            "hdf_readable": None,
+            "hdf_open_error": None,
+            "plan_information_present": None,
+            "compute_messages_present": None,
+            "complete_process_record": None,
+            "simulation_window": None,
+            "complete": False,
+            "failure_reason": None,
+            "failure_detail": None,
+            "note": None,
+        }
+
+        def incomplete(reason: str, detail: str) -> Dict[str, Any]:
+            evidence.update(
+                complete=False,
+                failure_reason=reason,
+                failure_detail=detail,
+            )
+            return evidence
+
+        if not evidence["hdf_exists"]:
+            evidence["complete"] = None
+            evidence["note"] = (
+                f"no plan HDF ({hdf_path.name}) to judge; verify=True "
+                "requires one"
+            )
+            return evidence
+        try:
+            evidence["hdf_size_bytes"] = int(hdf_path.stat().st_size)
+        except OSError:
+            pass
+
+        import h5py
+
+        try:
+            hdf_file = h5py.File(str(hdf_path), "r")
+        except Exception as exc:
+            evidence.update(hdf_readable=False, hdf_open_error=str(exc))
+            return incomplete(
+                "result_hdf_unreadable",
+                f"plan HDF {hdf_path.name} cannot be opened, so HEC-RAS did "
+                f"not finish writing it: {exc}",
+            )
+        try:
+            evidence["hdf_readable"] = True
+            plan_info = hdf_file.get("Plan Data/Plan Information")
+            evidence["plan_information_present"] = plan_info is not None
+            if plan_info is None:
+                return incomplete(
+                    "plan_information_missing",
+                    f"plan HDF {hdf_path.name} has no "
+                    "'Plan Data/Plan Information' group (partial HDF)",
+                )
+            try:
+                evidence["simulation_window"] = (
+                    RasCmdr._inspect_simulation_window(hdf_file)
+                )
+            except Exception as exc:
+                evidence["simulation_window"] = {
+                    "window_complete": None,
+                    "detail": f"output clock not judged ({exc})",
+                }
+        finally:
+            hdf_file.close()
+
+        from .hdf.HdfResultsPlan import HdfResultsPlan
+        from .results.ResultsParser import ResultsParser
+
+        try:
+            messages = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path)
+        except Exception as exc:
+            logger.debug(
+                "Could not read compute messages for %s: %s",
+                hdf_path.name,
+                exc,
+            )
+            messages = ""
+        if messages and messages.strip():
+            evidence["compute_messages_present"] = True
+            evidence["complete_process_record"] = (
+                ResultsParser._has_complete_process_record(messages)
+            )
+        else:
+            evidence["compute_messages_present"] = False
+
+        if evidence["complete_process_record"] is False:
+            last_lines = [
+                line.strip() for line in messages.splitlines() if line.strip()
+            ]
+            last_line = last_lines[-1] if last_lines else ""
+            return incomplete(
+                "complete_process_missing",
+                "compute messages have no 'Complete Process' record; the "
+                f"last message line is {last_line[:200]!r}",
+            )
+
+        window = evidence["simulation_window"] or {}
+        if window.get("window_complete") is False:
+            return incomplete(
+                "simulation_window_incomplete",
+                f"stored results {window.get('detail')}",
+            )
+
+        evidence.update(complete=True, failure_reason=None, failure_detail=None)
+        return evidence
 
     @staticmethod
     def _rasunsteady_process_running_for_tmp_hdf(
@@ -3107,6 +3377,12 @@ class RasCmdr:
             verify (bool, optional): If True, verify the selected result family
                 after execution. Defaults to False.
                 Returns False if verification fails even if subprocess returned success.
+                Without verify, a modern (HDF) run still fails when its plan
+                HDF shows the run did not finish: the file cannot be opened
+                (for example truncated), it lacks Plan Information, its
+                compute messages lack ``Complete Process``, or its output
+                clock stops short of the simulation end by more than one
+                output interval. See ``execution_details["completion_evidence"]``.
             stream_callback (Callable, optional): Callback object for real-time execution progress monitoring.
                 Must implement ExecutionCallback protocol methods (all methods optional):
                 - on_prep_start(plan_number): Called before geometry preprocessing
@@ -3169,7 +3445,10 @@ class RasCmdr:
                 finalization, including exact preparation and finalization
                 cleanup records. In those records, ``result_format`` names the
                 family targeted for deletion. Calculated success requires
-                every terminal gate.
+                every terminal gate. For modern runs, ``completion_evidence``
+                records the plan-HDF completion check; a run that fails it
+                has ``failure_stage`` ``"result_completion"``, and
+                ``ComputeResult.failure_reason`` states the cause.
 
         Raises:
             TypeError: If ``disable_omp_affinity`` is not a bool.
@@ -3295,7 +3574,30 @@ class RasCmdr:
             "artifact_preparation_cleanup": None,
             "artifact_finalization_cleanup": None,
             "artifact_finalization_failure": None,
+            "completion_evidence": None,
         }
+
+        def _require_complete_hdf_result() -> Dict[str, Any]:
+            """Fail the run unless the plan HDF shows that HEC-RAS finished."""
+            nonlocal _active_failure_stage
+            _active_failure_stage = "result_completion"
+            evidence = RasCmdr._inspect_hdf_completion_evidence(
+                RasCmdr._get_hdf_path(plan_number, compute_ras)
+            )
+            _execution_details["completion_evidence"] = evidence
+            if evidence["complete"] is False:
+                logger.error(
+                    "Plan %s did not complete: %s",
+                    plan_number,
+                    evidence["failure_detail"],
+                )
+                raise IncompletePlanResultError(
+                    f"Plan {plan_number} did not complete "
+                    f"({evidence['failure_reason']}): "
+                    f"{evidence['failure_detail']}"
+                )
+            return evidence
+
         if disable_omp_affinity:
             _execution_details["openmp_environment_overrides"] = {"KMP_AFFINITY": "disabled"}
         _compute_env = None
@@ -3932,6 +4234,34 @@ class RasCmdr:
                     plan_number=plan_number,
                     max_runtime_seconds=max_runtime_seconds,
                 )
+                if _execution_result_format == "hdf":
+                    # A zero launcher exit code does not prove completion:
+                    # HEC-RAS can exit normally after the solver stopped and
+                    # left a truncated or partial plan HDF.
+                    try:
+                        _require_complete_hdf_result()
+                    except IncompletePlanResultError:
+                        if stream_callback and hasattr(
+                            stream_callback, "on_exec_complete"
+                        ):
+                            # The flag reports the launcher exit, which was 0.
+                            _active_failure_stage = "on_exec_complete_callback"
+                            stream_callback.on_exec_complete(
+                                str(plan_number), True, run_time
+                            )
+                        if verify:
+                            _completion_verified = False
+                            if stream_callback and hasattr(
+                                stream_callback, "on_verify_result"
+                            ):
+                                _active_failure_stage = (
+                                    "on_verify_result_callback"
+                                )
+                                stream_callback.on_verify_result(
+                                    str(plan_number), False
+                                )
+                        _active_failure_stage = "result_completion"
+                        raise
                 if async_verified is True:
                     if verify:
                         _completion_verified = True
@@ -4059,6 +4389,11 @@ class RasCmdr:
                     plan_number=plan_number,
                     max_runtime_seconds=max_runtime_seconds,
                 )
+                if async_verified is True and _execution_result_format == "hdf":
+                    try:
+                        _require_complete_hdf_result()
+                    except IncompletePlanResultError:
+                        async_verified = False
                 if async_verified is True:
                     if verify:
                         _completion_verified = True
