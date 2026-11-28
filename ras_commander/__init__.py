@@ -309,6 +309,7 @@ _LAZY_EXPORTS = {
         name: ('.geom', name)
         for name in (
             'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
+            'ExperimentalWarning', 'RustPreprocessError', 'RustPreprocessNotFoundError', 'RustPreprocessRefusedError', 'RustEngineInfo', 'RustPreprocessResult', 'RustDatasetComparison', 'RustEquivalenceReport',
             'ManningsFromLandCover', 'GeomCrossSection',
             'CrossSectionBankStations', 'CrossSectionBuildInput',
             'CrossSectionBuildResult', 'CrossSectionManningsN',
@@ -515,6 +516,8 @@ __all__ = [
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover', 'ManningsFromLandCover',
+    # Experimental Rust 2D geometry preprocessing
+    'ExperimentalWarning', 'RustPreprocessError', 'RustPreprocessNotFoundError', 'RustPreprocessRefusedError', 'RustEngineInfo', 'RustPreprocessResult', 'RustDatasetComparison', 'RustEquivalenceReport',
     'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomProjection', 'GeomLateral',

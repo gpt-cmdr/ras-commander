@@ -45,6 +45,16 @@ Example:
 
 from .GeomParser import GeomParser
 from .GeomPreprocessor import GeomPreprocessor
+from ._rust_preprocess import (
+    ExperimentalWarning,
+    RustPreprocessError,
+    RustPreprocessNotFoundError,
+    RustPreprocessRefusedError,
+    RustEngineInfo,
+    RustPreprocessResult,
+    RustDatasetComparison,
+    RustEquivalenceReport,
+)
 from .GeomLandCover import GeomLandCover
 from .GeomCrossSection import (
     CrossSectionBankStations,
@@ -85,6 +95,14 @@ from .GeomMeshDataclasses import (
 __all__ = [
     'GeomParser',
     'GeomPreprocessor',
+    'ExperimentalWarning',
+    'RustPreprocessError',
+    'RustPreprocessNotFoundError',
+    'RustPreprocessRefusedError',
+    'RustEngineInfo',
+    'RustPreprocessResult',
+    'RustDatasetComparison',
+    'RustEquivalenceReport',
     'GeomLandCover',
     'ManningsFromLandCover',
     'GeomCrossSection',

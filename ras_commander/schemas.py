@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.34"
+SCHEMA_VERSION = "1.35"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -135,6 +135,34 @@ DATAFRAME_SCHEMAS = {
                 "description": "Authored seed point; not a compiled mesh cell. All declarations are retained in attrs.declared_counts."
             }
         ]
+    },
+    "rust_preprocess_equivalence": {
+        "description": (
+            "EXPERIMENTAL. One row per 2D flow-area dataset compared between a native HEC-RAS "
+            "geometry HDF and the Rust preprocessor's geometry HDF, from the equivalence harness. "
+            "Values keep the datasets' own units; tolerances are absolute in those units."
+        ),
+        "accessor": "GeomPreprocessor.validate_rust_equivalence(project, geom, work_dir=...).to_dataframe()",
+        "source": "ras_commander.geom._rust_preprocess.RustEquivalenceReport.to_dataframe()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "area", "dtype": "str", "description": "2D flow area name."},
+            {"name": "dataset", "dtype": "str", "description": "Dataset path below the area group, e.g. 'Faces Area Elevation Values' or 'Infiltration/Curve Number'."},
+            {"name": "category", "dtype": "str", "description": "'product' (a preprocessing output) or 'input' (topology and other datasets neither side should change)."},
+            {"name": "status", "dtype": "str", "description": "'bitwise', 'within_tolerance', 'matches_other_native_run', 'different', 'missing_native' or 'missing_rust'."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the dataset counts as equivalent."},
+            {"name": "dtype", "dtype": "str", "description": "Stored dtype of the Rust dataset."},
+            {"name": "values", "dtype": "int64", "description": "Number of values compared."},
+            {"name": "n_different", "dtype": "int64", "description": "Values that are not bitwise equal."},
+            {"name": "max_abs_diff", "dtype": "float64", "description": "Largest absolute difference, in dataset units; inf for shape or row-count mismatches."},
+            {"name": "max_ulp", "dtype": "int64", "description": "Largest float32 units-in-the-last-place distance (0 for non-float32 datasets)."},
+            {"name": "id_kind", "dtype": "str", "description": "'cell', 'face', 'facepoint' or 'row': what ids_different indexes."},
+            {"name": "n_ids_different", "dtype": "int64", "description": "Cells, faces or face points with any difference (Info/Values tables are compared per owner)."},
+            {"name": "ids_different", "dtype": "list[int]", "description": "First differing IDs, up to max_ids."},
+            {"name": "tolerance", "dtype": "float64 | None", "description": "Absolute tolerance applied; None means bitwise."},
+            {"name": "labels", "dtype": "list[str]", "description": "Known native behaviours bearing on the dataset (D-4, D-5, L-1, N-1/N-2) and alternate-native-run matches."},
+        ],
     },
     "taudem_streams": {
         "description": "TauDEM StreamNet stream links, one row per link, in the DEM CRS.",

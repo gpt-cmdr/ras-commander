@@ -13,6 +13,8 @@ List of Functions:
 - invalidate_legacy_geometry_hdf_preprocessor_cache() - Backup-first,
   explicitly acknowledged recovery for exact HEC-RAS 5.x/6.x schemas
 - clear_geompre_hdf() - Deprecated compatibility wrapper for guarded recovery
+- compute_rust_experimental() - EXPERIMENTAL Rust 2D preprocessing into a geometry HDF copy
+- validate_rust_equivalence() - EXPERIMENTAL native vs Rust equivalence harness
 
 Example Usage:
     >>> from ras_commander import GeomPreprocessor, RasPlan
@@ -37,7 +39,7 @@ import tempfile
 import time
 import warnings
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 from .._ras_text import _write_ras_text
 from ..ComputeResults import GeometryPreprocessResult
@@ -49,6 +51,9 @@ from ..RasPlan import RasPlan
 from ..RasPrj import ras
 from ..RasUtils import RasUtils
 from ..results.ResultsParser import ResultsParser
+
+if TYPE_CHECKING:
+    from ._rust_preprocess import RustEquivalenceReport, RustPreprocessResult
 
 logger = get_logger(__name__)
 
@@ -1795,3 +1800,210 @@ class GeomPreprocessor:
         except Exception as e:
             logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise
+
+    # ------------------------------------------------------------------
+    # Experimental: Rust 2D geometry preprocessor
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def compute_rust_experimental(
+        geom: Union[str, Path],
+        *,
+        engine_exe: Union[str, Path, None] = None,
+        out_path: Union[str, Path, None] = None,
+        in_place: bool = False,
+        threads: Optional[int] = None,
+        native_compatible: bool = True,
+        sort: str = "introsort",
+        units: Optional[str] = None,
+        restore_mtime: bool = True,
+        timeout: Optional[float] = 3600.0,
+        keep_bundle: bool = False,
+    ) -> "RustPreprocessResult":
+        """EXPERIMENTAL: compute 2D property tables with the Rust preprocessor.
+
+        Runs the external ``ras-preprocess`` engine on a HEC-RAS 7.0.1 geometry
+        HDF and writes its 2D flow-area products (face profiles, face-point
+        elevations, Manning's n and classification families, face area tables
+        and cell volume tables) into a copy of that HDF. This is not a
+        drop-in replacement for native preprocessing: prove equivalence on your
+        own model with :meth:`validate_rust_equivalence` before any production
+        use. Every call emits :class:`ExperimentalWarning`.
+
+        The engine opens ``geom`` read-only and resolves its terrain and
+        layers relative to it. The products are validated (finite, contiguous,
+        monotone tables; each cell minimum at or below its face minima) and
+        written into existing datasets only, with exact readback and a
+        backup that is restored on any failure. No attribute is written, so
+        ``Property Tables Last Computed`` and the layer hashes keep their
+        source values. 1D and mixed-model preprocessing are out of scope.
+
+        Args:
+            geom: Geometry HDF (``.g##.hdf``) or plain-text ``.g##`` path.
+                It must be a complete HEC-RAS 7.0.1 geometry HDF with 2D areas.
+            engine_exe: ``ras-preprocess`` executable. Default: the
+                ``RAS_COMMANDER_PREPROCESS_EXE`` environment variable, then
+                ``PATH``. The engine is not distributed with RAS Commander.
+            out_path: New geometry HDF to write. Required unless ``in_place``.
+            in_place: Write the products into ``geom`` itself (a backup is
+                kept beside it as ``<name>.pre-rust.bak``).
+            threads: Engine worker threads (default: all logical CPUs; the
+                output does not depend on the thread count).
+            native_compatible: ``True`` (default) reproduces native HEC-RAS
+                7.0.1 bitwise, including defects D-4 and D-5; this is the mode
+                :meth:`validate_rust_equivalence` qualifies. ``False`` uses the
+                engine's corrected mode, which departs from native where those
+                defects act.
+            sort: Stage 1 sort tie order, ``introsort`` (fresh RASMapper and
+                plan-compute producers) or ``legacy``.
+            units: Stage 3 conveyance constant: ``None`` (engine default for
+                the mode), ``us``, ``si`` or ``root``.
+            restore_mtime: Restore the geometry HDF's modification time after
+                writing.
+            timeout: Engine time limit in seconds.
+            keep_bundle: Keep the engine's raw output bundle.
+
+        Returns:
+            RustPreprocessResult: Output path and provenance: engine path,
+                version and SHA-256, options, command, engine report, write-back
+                receipt (per-dataset validation and before/after hashes) and the
+                source SHA-256.
+
+        Raises:
+            RustPreprocessNotFoundError: The engine executable was not found.
+            RustPreprocessRefusedError: The engine refused the input (for
+                example an unsupported terrain-modification form); the message
+                names what was refused. There is no fallback.
+            RustPreprocessError: Unsupported geometry version, engine failure,
+                or output that failed validation.
+
+        Example:
+            >>> from ras_commander import GeomPreprocessor
+            >>> result = GeomPreprocessor.compute_rust_experimental(
+            ...     "copy/BaldEagleDamBrk.g09.hdf",
+            ...     out_path="copy/rust/BaldEagleDamBrk.g09.hdf",
+            ...     engine_exe=r"D:/tools/ras-preprocess.exe",
+            ... )
+            >>> result.engine.sha256
+        """
+        from ._rust_preprocess import compute_rust_experimental
+
+        return compute_rust_experimental(
+            geom, engine_exe=engine_exe, out_path=out_path, in_place=in_place,
+            threads=threads, native_compatible=native_compatible, sort=sort,
+            units=units, restore_mtime=restore_mtime, timeout=timeout,
+            keep_bundle=keep_bundle,
+        )
+
+    @staticmethod
+    @log_call
+    def validate_rust_equivalence(
+        project: Union[str, Path],
+        geom: Union[str, int, Path],
+        *,
+        work_dir: Union[str, Path],
+        engine_exe: Union[str, Path, None] = None,
+        hecras_version: str = "7.0.1",
+        plan_number: Optional[str] = None,
+        tolerance: Union[None, float, dict] = None,
+        native_repeats: int = 1,
+        include_corrected: bool = False,
+        engine_compare: bool = True,
+        threads: Optional[int] = None,
+        sort: str = "introsort",
+        units: Optional[str] = None,
+        isolate_inputs: bool = True,
+        max_ids: int = 20,
+        keep_work: bool = True,
+        timeout: Optional[float] = 3600.0,
+    ) -> "RustEquivalenceReport":
+        """EXPERIMENTAL: prove Rust/native preprocessing equivalence on your model.
+
+        This is the qualification step for the experimental Rust
+        preprocessor. It runs native HEC-RAS preprocessing and the Rust engine
+        side by side on separate copies of the project and compares every
+        dataset of every 2D flow area of the two geometry HDFs.
+
+        1. **Stage.** Copy the project into ``work_dir/staged`` (plan result
+           HDFs are not copied). If its geometry HDF is not a complete
+           HEC-RAS 7.0.1 HDF, convert it with
+           :meth:`run_geometry_preprocessor` (``plan_number`` or the first
+           plan that uses the geometry). The source project is never written.
+        2. **Rust.** Copy the staged project to ``work_dir/rust``, overwrite
+           its stored float products with NaN (``isolate_inputs``, so the
+           engine provably uses none of them), run the engine in
+           native-compatible mode and write its products back.
+        3. **Native.** Copy the staged project to ``work_dir/native`` and run
+           :meth:`RasMap.recompute_property_tables` ``native_repeats`` times,
+           each on a fresh, poisoned copy of the staged geometry HDF, and
+           require every poisoned value to be recomputed. HEC-RAS runs only
+           through RAS Commander.
+        4. **Compare.** Per dataset: bitwise flag, values differing, maximum
+           absolute difference, maximum float32 ulp, and the count and first
+           IDs of differing cells, faces or face points (``Info``/``Values``
+           tables are compared per owner). Topology datasets are compared
+           too and must be identical.
+
+        Known native behaviours are labeled, never hidden: D-4 (Composite LC)
+        and D-5 (Multiple Face Mann n) are reproduced by native-compatible
+        mode; with ``include_corrected=True`` the corrected mode's departure is
+        reported separately and does not affect the verdict. With
+        ``native_repeats > 1``, datasets on which native runs disagree are
+        labeled N-1/N-2, and a Rust dataset equal to any native run passes.
+        Faces with more than 1,000 profile points (L-1) are listed.
+
+        Args:
+            project: Project folder or ``.prj`` file. Not modified.
+            geom: Geometry number (``"09"``), or ``.g##`` / ``.g##.hdf`` name.
+            work_dir: New or empty folder for the copies and reports, outside
+                the project folder.
+            engine_exe: ``ras-preprocess`` executable (else
+                ``RAS_COMMANDER_PREPROCESS_EXE``, then ``PATH``).
+            hecras_version: Native HEC-RAS version. The engine reproduces
+                7.0.1 only.
+            plan_number: Plan used for native 7.0.1 conversion, if needed.
+            tolerance: ``None`` (bitwise, the default), an absolute tolerance
+                for floating-point values in dataset units (for example
+                ``0.01`` ft), or a mapping by dataset path or leaf name with an
+                optional ``"*"`` default. Integer datasets are always exact.
+            native_repeats: Native runs (>= 1); more runs detect native
+                nondeterminism.
+            include_corrected: Also run corrected mode and report its
+                departure from native (informational).
+            engine_compare: Also run the engine's ``--compare`` against native
+                run 1 and attach its per-stage parity report.
+            threads: Engine worker threads (see :meth:`compute_rust_experimental`).
+            sort: Stage 1 sort tie order (see :meth:`compute_rust_experimental`).
+            units: Stage 3 conveyance constant (see :meth:`compute_rust_experimental`).
+            isolate_inputs: Overwrite stored float products with NaN in both
+                copies before each side runs. On the Rust side this proves the
+                engine reads none of them; on the native side, any value
+                RASMapper leaves unrecomputed (a skipped area reported as
+                success) raises instead of being compared as native output.
+            max_ids: Differing IDs listed per dataset.
+            keep_work: Keep the project copies (the geometry HDFs and reports
+                are always kept).
+            timeout: Engine time limit in seconds per run.
+
+        Returns:
+            RustEquivalenceReport: ``verdict`` (``"equivalent"``,
+                ``"not equivalent"`` or ``"refused"``), per-dataset comparisons
+                (``to_dataframe()``), labels, provenance, and the paths of the
+                JSON and markdown reports written to ``work_dir``.
+
+        Raises:
+            RustPreprocessNotFoundError: The engine executable was not found.
+            RustPreprocessError: Staging, conversion or engine failure.
+            RuntimeError: Native recomputation failed.
+        """
+        from ._rust_preprocess import validate_rust_equivalence
+
+        return validate_rust_equivalence(
+            project, geom, work_dir=work_dir, engine_exe=engine_exe,
+            hecras_version=hecras_version, plan_number=plan_number,
+            tolerance=tolerance, native_repeats=native_repeats,
+            include_corrected=include_corrected, engine_compare=engine_compare,
+            threads=threads, sort=sort, units=units, isolate_inputs=isolate_inputs,
+            max_ids=max_ids, keep_work=keep_work, timeout=timeout,
+        )
