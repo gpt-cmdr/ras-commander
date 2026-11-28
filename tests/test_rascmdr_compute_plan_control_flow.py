@@ -15,6 +15,8 @@ import h5py
 import pandas as pd
 import pytest
 
+from _plan_hdf_doubles import write_minimal_plan_hdf
+
 from ras_commander.ComputeResults import ComputeResult
 from ras_commander.ExecutionArtifacts import (
     PlanExecutionCleanup,
@@ -782,7 +784,7 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
             return self.results_df
 
     def complete_run():
-        hdf_path.write_text("computed\n", encoding="utf-8")
+        write_minimal_plan_hdf(hdf_path)
 
     monkeypatch.setattr(
         rascmdr_module.RasPlan,
@@ -983,6 +985,7 @@ def test_compute_plan_smart_skip_fires_when_results_are_current(monkeypatch, tmp
         "artifact_finalization_failure": None,
         "artifact_preparation_cleanup": None,
         "artifact_finalization_cleanup": None,
+        "completion_evidence": None,
     }
 
 
@@ -1105,6 +1108,25 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
             ras_object=ras_obj,
             include_message_sidecars=False,
         ).to_dict(),
+        # The launcher double writes no HDF: recorded, not judged.
+        "completion_evidence": {
+            "result_hdf": "TestProject.p01.hdf",
+            "hdf_exists": False,
+            "hdf_size_bytes": None,
+            "hdf_readable": None,
+            "hdf_open_error": None,
+            "plan_information_present": None,
+            "compute_messages_present": None,
+            "complete_process_record": None,
+            "simulation_window": None,
+            "complete": None,
+            "failure_reason": None,
+            "failure_detail": None,
+            "note": (
+                "no plan HDF (TestProject.p01.hdf) to judge; verify=True "
+                "requires one"
+            ),
+        },
     }
 
 
@@ -2340,7 +2362,7 @@ def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
     hdf_path = tmp_path / "TestProject.p01.hdf"
     prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
     plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
-    hdf_path.write_text("computed\n", encoding="utf-8")
+    write_minimal_plan_hdf(hdf_path)
 
     ras_obj = _DummyRas()
     ras_obj.project_folder = tmp_path
@@ -2470,7 +2492,7 @@ def test_compute_plan_treats_verified_hdf_after_normal_return_as_success(
     hdf_path = tmp_path / "TestProject.p01.hdf"
     prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
     plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
-    hdf_path.write_text("computed\n", encoding="utf-8")
+    write_minimal_plan_hdf(hdf_path)
 
     ras_obj = _DummyRas()
     ras_obj.project_folder = tmp_path
@@ -4050,3 +4072,210 @@ def test_compute_plan_openmp_override_reaches_only_engine_environment(monkeypatc
     assert shim_environment['KMP_AFFINITY'] == 'compact'
     assert rascmdr_module.os.environ['KMP_AFFINITY'] == 'scatter'
     assert result.execution_details['openmp_environment_overrides'] == {'KMP_AFFINITY': 'disabled'}
+
+
+# --- Incomplete-run detection after a zero launcher exit -------------------
+#
+# A HEC-RAS 7.0.1 run once exited 0 after its solver stopped 2.4 h into a
+# 48 h window, leaving a truncated plan HDF, and compute_plan reported
+# success. These offline tests pin the wiring; the real-HEC-RAS regressions
+# live in tests/test_compute_plan_incomplete_result.py.
+
+_RUN_START = pd.Timestamp("2000-01-01 00:00:00").to_pydatetime()
+
+
+def _write_plan_hdf_with_clock(
+    path,
+    *,
+    declared_hours=48.0,
+    output_hours=48.0,
+    output_minutes=60,
+    complete_process=True,
+):
+    """Write a plan HDF whose output clock covers ``output_hours``."""
+    from datetime import timedelta
+
+    import numpy as np
+
+    end = _RUN_START + timedelta(hours=declared_hours)
+    steps = int(round(output_hours * 60 / output_minutes))
+    stamps = [
+        _RUN_START + timedelta(minutes=output_minutes * index)
+        for index in range(steps + 1)
+    ]
+    with h5py.File(path, "w") as hdf:
+        info = hdf.create_group("Plan Data/Plan Information")
+        info.attrs["Simulation Start Time"] = _RUN_START.strftime(
+            "%d%b%Y %H:%M:%S"
+        )
+        info.attrs["Simulation End Time"] = end.strftime("%d%b%Y %H:%M:%S")
+        clock = hdf.create_group(
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series"
+        )
+        clock["Time"] = np.asarray(
+            [(stamp - _RUN_START).total_seconds() / 86400.0 for stamp in stamps]
+        )
+        clock["Time Date Stamp"] = np.asarray(
+            [stamp.strftime("%d%b%Y %H:%M:%S") for stamp in stamps],
+            dtype="S19",
+        )
+        messages = b"Starting Unsteady Flow Computations\r\n"
+        if complete_process:
+            messages += (
+                b"Finished Unsteady Flow Simulation\r\nComplete Process\t1\r\n"
+            )
+        hdf.require_group("Results/Summary").create_dataset(
+            "Compute Messages (text)", data=np.array([messages])
+        )
+    return path
+
+
+def _truncate(path, fraction=0.5):
+    size = path.stat().st_size
+    with open(path, "r+b") as stream:
+        stream.truncate(int(size * fraction))
+    return path
+
+
+def _run_scenario(monkeypatch, tmp_path, write_result, *, verify=False):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    hdf_path = tmp_path / "TestProject.p01.hdf"
+    _patch_compute_launcher(
+        monkeypatch,
+        tmp_path,
+        ras_obj,
+        on_wait=lambda: write_result(hdf_path),
+    )
+    cancellations = []
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(
+            lambda *args, **kwargs: cancellations.append(args)
+            or _cancellation_outcome()
+        ),
+    )
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        verify=verify,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+    return result, cancellations
+
+
+@pytest.mark.synthetic_hdf_layout
+@pytest.mark.parametrize("verify", [False, True])
+def test_compute_plan_fails_zero_exit_with_truncated_plan_hdf(
+    monkeypatch, tmp_path, verify
+):
+    """Before the fix, verify=False returned success for this run."""
+    result, _ = _run_scenario(
+        monkeypatch,
+        tmp_path,
+        lambda path: _truncate(_write_plan_hdf_with_clock(path)),
+        verify=verify,
+    )
+
+    assert result.success is False
+    details = result.execution_details
+    assert details["launcher_returncode"] == 0
+    assert details["failure_stage"] == "result_completion"
+    assert details["failure_type"] == "IncompletePlanResultError"
+    evidence = details["completion_evidence"]
+    assert evidence["complete"] is False
+    assert evidence["failure_reason"] == "result_hdf_unreadable"
+    assert evidence["hdf_readable"] is False
+    assert "truncated" in evidence["hdf_open_error"]
+    assert "result_hdf_unreadable" in result.failure_reason
+    assert result.completion_verified is (False if verify else None)
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_compute_plan_fails_zero_exit_with_short_simulation_window(
+    monkeypatch, tmp_path
+):
+    """A readable HDF that stops 2.4 h into a 48 h window is not a success."""
+    result, _ = _run_scenario(
+        monkeypatch,
+        tmp_path,
+        lambda path: _write_plan_hdf_with_clock(
+            path, output_hours=2.4, output_minutes=12
+        ),
+    )
+
+    assert result.success is False
+    evidence = result.execution_details["completion_evidence"]
+    assert evidence["failure_reason"] == "simulation_window_incomplete"
+    window = evidence["simulation_window"]
+    assert window["window_complete"] is False
+    assert window["observed_end"] == "2000-01-01T02:24:00"
+    assert window["declared_end"] == "2000-01-03T00:00:00"
+    assert "2.40 h of the 48.00 h" in result.failure_reason
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_compute_plan_fails_zero_exit_without_complete_process(
+    monkeypatch, tmp_path
+):
+    result, _ = _run_scenario(
+        monkeypatch,
+        tmp_path,
+        lambda path: _write_plan_hdf_with_clock(path, complete_process=False),
+    )
+
+    assert result.success is False
+    evidence = result.execution_details["completion_evidence"]
+    assert evidence["failure_reason"] == "complete_process_missing"
+    assert "Starting Unsteady Flow Computations" in evidence["failure_detail"]
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_compute_plan_accepts_complete_plan_hdf_after_zero_exit(
+    monkeypatch, tmp_path
+):
+    result, cancellations = _run_scenario(
+        monkeypatch, tmp_path, _write_plan_hdf_with_clock
+    )
+
+    assert result.success is True
+    assert result.failure_reason is None
+    assert cancellations == []
+    evidence = result.execution_details["completion_evidence"]
+    assert evidence["complete"] is True
+    assert evidence["complete_process_record"] is True
+    assert evidence["simulation_window"]["window_complete"] is True
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_simulation_window_allows_an_end_between_output_times(tmp_path):
+    """HEC-RAS completes a 17-minute run whose 5-minute output stops at 15."""
+    path = _write_plan_hdf_with_clock(
+        tmp_path / "offcadence.p01.hdf",
+        declared_hours=17 / 60,
+        output_hours=15 / 60,
+        output_minutes=5,
+    )
+
+    window = RasCmdr._inspect_simulation_window(path)
+
+    assert window["status"] == "not_covered"
+    assert window["window_complete"] is True
+    assert window["shortfall_seconds"] == 120.0
+    assert window["output_interval_seconds"] == 300.0
+    assert RasCmdr._inspect_hdf_completion_evidence(path)["complete"] is True
+
+
+@pytest.mark.synthetic_hdf_layout
+def test_verify_completion_rejects_short_simulation_window(tmp_path):
+    """skip_existing and verify=True must not credit a run that stopped early."""
+    path = _write_plan_hdf_with_clock(
+        tmp_path / "short.p01.hdf", output_hours=2.4, output_minutes=12
+    )
+
+    assert RasCmdr._verify_completion(path) is False
+    assert RasCmdr._verify_completion(
+        _write_plan_hdf_with_clock(tmp_path / "full.p01.hdf")
+    ) is True

@@ -209,13 +209,47 @@ running for manual review.
   report the exact removed and already-missing target paths before and after
   execution; and
 - `result_artifacts_finalized` plus `artifact_finalization_failure`, which keep
-  a cleanup defect separate from an earlier timeout or execution failure.
+  a cleanup defect separate from an earlier timeout or execution failure; and
+- `completion_evidence`, the plan-HDF completion check described below.
 
 Within either cleanup record, `result_format` is the result family targeted for
 deletion—the opposing family—not the run's selected output format. On a
 successful cleanup, `removed_paths` and `missing_paths` are disjoint and their
 union is the complete plan-scoped target set. Both cleanup fields are `None`
 when calculation is skipped before cleanup.
+
+### Completion Evidence After a Zero Exit Code
+
+A zero launcher exit code does not prove that HEC-RAS finished. The solver can
+stop early while `Ras.exe` still exits normally and leaves a truncated plan HDF.
+After every modern (HDF) run, with or without `verify=True`, `compute_plan()`
+inspects the plan HDF and returns `success=False` when:
+
+| `failure_reason` | Evidence |
+|---|---|
+| `result_hdf_unreadable` | The plan HDF cannot be opened, for example a truncated file |
+| `plan_information_missing` | `Plan Data/Plan Information` is missing |
+| `complete_process_missing` | Compute messages exist but have no `Complete Process` record |
+| `simulation_window_incomplete` | The stored output clock ends before the simulation end by more than one output interval |
+
+The one-interval allowance accepts a completed run whose end time falls between
+output times. The evidence is recorded in
+`execution_details["completion_evidence"]`. A failed run has `failure_stage`
+`result_completion`, and `ComputeResult.failure_reason` gives a readable cause:
+
+```python
+result = RasCmdr.compute_plan("01", force_rerun=True)
+if not result:
+    print(result.failure_reason)
+    evidence = result.execution_details["completion_evidence"]
+    print(evidence["failure_reason"], evidence["simulation_window"])
+```
+
+Without `verify=True`, a run that writes no plan HDF, or whose compute messages
+or output clock cannot be read, is recorded but not failed, as before.
+`verify=True` still requires a current plan HDF with a `Complete Process`
+record and no compute-message errors, and it also applies the output-window
+check. Legacy `.O##` runs are not inspected by this check.
 
 `completion_verified` is independent of overall `ComputeResult.success`. For
 example, a complete HDF may verify and then result-family finalization may fail;

@@ -9,8 +9,11 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import h5py
 import pandas as pd
 import pytest
+
+from _plan_hdf_doubles import write_minimal_plan_hdf
 
 from ras_commander import (
     RasCmdr,
@@ -275,7 +278,7 @@ def test_modern_compute_removes_legacy_before_and_after_run(
     def fake_run(*_args, **_kwargs):
         assert not legacy.exists()
         assert not sidecar.exists()
-        hdf.write_bytes(b"new hdf")
+        write_minimal_plan_hdf(hdf, marker="new hdf")
         legacy.write_bytes(b"modern HEC-RAS recreated this")
         sidecar.write_text("new message\n", encoding="ascii")
         return SimpleNamespace(returncode=0)
@@ -322,7 +325,7 @@ def test_modern_cleanup_runs_after_prelaunch_plan_preparation(
     def fake_run(*_args, **_kwargs):
         assert not legacy.exists()
         assert not sidecar.exists()
-        hdf.write_bytes(b"new hdf")
+        write_minimal_plan_hdf(hdf, marker="new hdf")
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
@@ -409,7 +412,10 @@ def test_compute_cleanup_uses_selected_engine_not_plan_declaration(
 
     def fake_run(*_args, **_kwargs):
         assert not opposing.exists()
-        selected.write_bytes(b"new selected result")
+        if selected.suffix.lower() == ".hdf":
+            write_minimal_plan_hdf(selected, marker="new selected result")
+        else:
+            selected.write_bytes(b"new selected result")
         opposing.write_bytes(b"HEC-RAS recreated opposing result")
         return SimpleNamespace(returncode=0)
 
@@ -423,7 +429,12 @@ def test_compute_cleanup_uses_selected_engine_not_plan_declaration(
     )
 
     assert result.success is True
-    assert selected.read_bytes() == b"new selected result"
+    if selected.suffix.lower() == ".hdf":
+        with h5py.File(selected, "r") as written:
+            marker = written["Plan Data/Plan Information"].attrs["Test Marker"]
+        assert marker == "new selected result"
+    else:
+        assert selected.read_bytes() == b"new selected result"
     assert not opposing.exists()
 
 
@@ -733,7 +744,7 @@ def test_compute_unknown_solver_state_skips_final_cleanup(
     )
 
     def fake_run(*_args, **_kwargs):
-        hdf.write_bytes(b"new hdf")
+        write_minimal_plan_hdf(hdf, marker="new hdf")
         legacy.write_bytes(b"possibly active writer")
         return SimpleNamespace(returncode=0)
 
@@ -772,7 +783,7 @@ def test_compute_skip_existing_reruns_ambiguous_plan(
     def fake_run(*_args, **_kwargs):
         called.append(True)
         assert not legacy.exists()
-        hdf.write_bytes(b"new hdf")
+        write_minimal_plan_hdf(hdf, marker="new hdf")
         legacy.write_bytes(b"recreated")
         return SimpleNamespace(returncode=0)
 
@@ -787,7 +798,8 @@ def test_compute_skip_existing_reruns_ambiguous_plan(
 
     assert result.success is True
     assert called == [True]
-    assert hdf.read_bytes() == b"new hdf"
+    with h5py.File(hdf, "r") as written:
+        assert written["Plan Data/Plan Information"].attrs["Test Marker"] == "new hdf"
     assert not legacy.exists()
 
 

@@ -612,6 +612,24 @@ class ComputeResult:
     def __bool__(self) -> bool:
         return self.success
 
+    @property
+    def failure_reason(self) -> Optional[str]:
+        """Why the run failed, or None when it succeeded.
+
+        Reads ``execution_details["failure_detail"]``. For a run whose plan
+        HDF shows it did not finish, the text comes from
+        ``execution_details["completion_evidence"]``.
+        """
+        if self.success:
+            return None
+        detail = self.execution_details.get("failure_detail")
+        if detail:
+            return str(detail)
+        evidence = self.execution_details.get("completion_evidence")
+        if isinstance(evidence, Mapping) and evidence.get("failure_detail"):
+            return str(evidence["failure_detail"])
+        return None
+
     def __repr__(self) -> str:
         status = 'SUCCESS' if self.success else 'FAILED'
         has_row = self.results_df_row is not None
